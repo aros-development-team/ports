@@ -1,0 +1,45 @@
+diff -Naur abcm2ps-8.14.6-orig/abcm2ps.h abcm2ps-8.14.6/abcm2ps.h
+--- abcm2ps-8.14.6-orig/abcm2ps.h	2019-12-09 22:09:54.773161673 +0100
++++ abcm2ps-8.14.6/abcm2ps.h	2019-12-09 22:13:02.312187545 +0100
+@@ -3,7 +3,9 @@
+ #include <stdio.h>
+ #include <time.h>
+ 
++#ifdef HAVE_CONFIG_H
+ #include "config.h"
++#endif
+ 
+ #define MAXVOICE 32	/* max number of voices */
+ 
+@@ -98,7 +100,7 @@
+ #define BEAM_FLATFAC	0.6	/* factor to decrease slope of long beams */
+ #define BEAM_THRESH	0.06	/* flat beam if slope below this threshold */
+ #define BEAM_SLOPE	0.5	/* max slope of a beam */
+-#define BEAM_STUB	7.0	/* length of stub for flag under beam */ 
++#define BEAM_STUB	7.0	/* length of stub for flag under beam */
+ #define SLUR_SLOPE	1.0	/* max slope of a slur */
+ #define GSTEM		15	/* grace note stem length */
+ #define GSTEM_XOFF	2.3	/* x offset for grace note stem */
+diff -Naur abcm2ps-8.14.6-orig/abcparse.c abcm2ps-8.14.6/abcparse.c
+--- abcm2ps-8.14.6-orig/abcparse.c	2019-12-09 22:09:54.773161673 +0100
++++ abcm2ps-8.14.6/abcparse.c	2019-12-09 22:12:48.872256725 +0100
+@@ -12,7 +12,10 @@
+  * (at your option) any later version.
+  */
+ 
++#ifdef HAVE_CONFIG_H
+ #include "config.h"
++#endif
++
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -571,7 +574,7 @@
+ 
+ 		if (clef < 0)
+ 			clef = line_tb[(pit + 7) % 7];
+-	
++
+ 		switch (clef) {
+ 		default:
+ 			l = 20 + 4;

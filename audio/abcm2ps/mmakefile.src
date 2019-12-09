@@ -17,15 +17,15 @@ REPOSITORIES := \
     https://github.com/leesavide/abcm2ps/archive \
     http://ftp.dei.uc.pt/pub/linux/gentoo/distfiles/
 
-ARCHBASE     := abcm2ps-8.13.13
+ARCHBASE     := 8.14.6
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/Abcm2ps
 
 NOWARN_FLAGS := $(NOWARN_UNINITIALIZED)
 USER_CFLAGS  := $(NOWARN_FLAGS) \
     -DA4_FORMAT=1 \
     -DDEFAULT_FDIR="\"PROGDIR:Formats\"" \
-    -DVERSION="\"8.13.13\"" \
-    -DVDATE="\"July 31, 2017\""
+    -DVERSION="\"8.14.6\"" \
+    -DVDATE="\"2019-11-05\""
 
 FILES := \
     abcm2ps \
@@ -48,9 +48,9 @@ FILES := $(addprefix $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/,$(FILES))
     uselibs=""
 
 
-%fetch mmake=ports-audio-abcm2ps-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/abcm2ps \
+%fetch mmake=ports-audio-abcm2ps-fetch archive=v$(ARCHBASE) destination=$(PORTSDIR)/abcm2ps \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
-    patches_specs=$(ARCHBASE)-aros.diff:abcm2ps-$(ARCHBASE):-p1
+    patches_specs=abcm2ps-$(ARCHBASE)-aros.diff:abcm2ps-$(ARCHBASE):-p1
 
 
 FORMATFILES := flute.fmt landscape.fmt musicfont.fmt

@@ -17,13 +17,13 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM  ports-graphics-zunepaint-quick : ports-graphics-zunepaint-fetch
 
 REPOSITORIES := sf://zunetools
-ARCHBASE     := ZunePaint_v0.14
+ARCHBASE     := ZunePaint_v0.15
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/ZunePaint
 
 NOWARN_FLAGS :=
 USER_CFLAGS  := $(NOWARN_FLAGS) -DZUNEPAINT -DAROS_ABI_V1
 USER_INCLUDES:= -I$(PORTSDIR)/zunepaint/$(ARCHBASE)/zunepaint/src
- 
+
 FILES := \
     SupportFunctions \
     Picture_Filter \

@@ -1,0 +1,95 @@
+diff -Naur rocksndiamonds-4.1.1.0-orig/src/libgame/platform.h rocksndiamonds-4.1.1.0/src/libgame/platform.h
+--- rocksndiamonds-4.1.1.0-orig/src/libgame/platform.h	2019-12-10 21:28:55.521329745 +0100
++++ rocksndiamonds-4.1.1.0/src/libgame/platform.h	2019-12-10 21:40:20.480728497 +0100
+@@ -41,6 +41,12 @@
+ #define PLATFORM_STRING "AmigaOS"
+ #endif
+ 
++#if defined(__AROS__)
++#define PLATFORM_AROS
++#undef  PLATFORM_STRING
++#define PLATFORM_STRING "AROS"
++#endif
++
+ #if defined(__BEOS__)
+ #define PLATFORM_BEOS
+ #undef  PLATFORM_STRING
+diff -Naur rocksndiamonds-4.1.1.0-orig/src/libgame/setup.c rocksndiamonds-4.1.1.0/src/libgame/setup.c
+--- rocksndiamonds-4.1.1.0-orig/src/libgame/setup.c	2019-12-10 21:28:55.521329745 +0100
++++ rocksndiamonds-4.1.1.0/src/libgame/setup.c	2019-12-10 21:43:24.467594068 +0100
+@@ -1264,7 +1264,7 @@
+ 
+   node_new->next = cloneTreeNode(node_top, node_parent, node->next,
+ 				 skip_sets_without_levels);
+-  
++
+   return node_new;
+ }
+ 
+@@ -1445,6 +1445,8 @@
+     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, dir)))
+       strcpy(dir, ".");
+   }
++#elif defined(PLATFORM_AROS)
++  dir = "/PROGDIR";
+ #elif defined(PLATFORM_UNIX)
+   if (dir == NULL)
+   {
+@@ -3848,7 +3850,7 @@
+     if (i == LEVELINFO_TOKEN_AUTHOR ||
+ 	i == LEVELINFO_TOKEN_FIRST_LEVEL ||
+ 	(use_artwork_set && i == LEVELINFO_TOKEN_READONLY))
+-      fprintf(file, "\n");	
++      fprintf(file, "\n");
+   }
+ 
+   token_value_position = TOKEN_VALUE_POSITION_DEFAULT;
+diff -Naur rocksndiamonds-4.1.1.0-orig/src/main.c rocksndiamonds-4.1.1.0/src/main.c
+--- rocksndiamonds-4.1.1.0-orig/src/main.c	2019-12-10 21:28:55.521329745 +0100
++++ rocksndiamonds-4.1.1.0/src/main.c	2019-12-10 21:46:09.466595011 +0100
+@@ -7655,11 +7655,13 @@
+ 	  sdl_version.minor,
+ 	  sdl_version.patch);
+ 
++#if !defined(__AROS__)
+     SDL_IMAGE_VERSION(&sdl_version);
+     Print("- SDL_image %d.%d.%d\n",
+ 	  sdl_version.major,
+ 	  sdl_version.minor,
+ 	  sdl_version.patch);
++#endif
+ 
+     SDL_MIXER_VERSION(&sdl_version);
+     Print("- SDL_mixer %d.%d.%d\n",
+diff -Naur rocksndiamonds-4.1.1.0-orig/src/screens.c rocksndiamonds-4.1.1.0/src/screens.c
+--- rocksndiamonds-4.1.1.0-orig/src/screens.c	2019-12-10 21:28:55.521329745 +0100
++++ rocksndiamonds-4.1.1.0/src/screens.c	2019-12-10 21:47:46.122015755 +0100
+@@ -2878,7 +2878,7 @@
+   int pad_left = xstart - SX;
+   int pad_right = MENU_SCREEN_INFO_SPACE_RIGHT;
+   int max_chars_per_line = (SXSIZE - pad_left - pad_right) / font_width;
+-  int max_lines_per_text = 2;    
++  int max_lines_per_text = 2;
+   char *text = NULL;
+ 
+   if (action != -1 && direction != -1)		/* element.action.direction */
+@@ -3672,8 +3672,10 @@
+ 	    sdl_version_linked->patch);
+   ystart += ystep_line;
+ 
++#if !defined(__AROS__)
+   SDL_IMAGE_VERSION(&sdl_version_compiled);
+   sdl_version_linked = IMG_Linked_Version();
++#endif
+ 
+   DrawTextF(xstart1, ystart, font_text, "SDL_image");
+   DrawTextF(xstart2, ystart, font_text, "%d.%d.%d",
+@@ -4543,7 +4545,7 @@
+   SetDrawDeactivationMask(REDRAW_NONE);
+   SetDrawBackgroundMask(REDRAW_FIELD);
+ 
+-  if (highlight_position < 0) 
++  if (highlight_position < 0)
+     LoadScore(level_nr);
+   else
+     SetAnimStatus(GAME_MODE_PSEUDO_SCORESNEW);

@@ -1,0 +1,39 @@
+diff -Naur ZunePaint_v0.15-orig/ZunePaint/src/Picture_Paint.c ZunePaint_v0.15/ZunePaint/src/Picture_Paint.c
+--- ZunePaint_v0.15-orig/ZunePaint/src/Picture_Paint.c	2019-12-23 17:00:55.708731766 +0100
++++ ZunePaint_v0.15/ZunePaint/src/Picture_Paint.c	2019-12-23 17:02:25.820242475 +0100
+@@ -1,7 +1,7 @@
+ /*
+-**       $HeadURL: https://svn.code.sf.net/p/zunetools/code/ZunePaint/src/Picture_Paint.c $
+-**       $Revision: 249 $
+-**       $Date: 2019-09-28 15:55:30 +0200 (sam., 28 sept. 2019) $
++**       $HeadURL: file:///svn/p/zunetools/code/ZunePaint/src/Picture_Paint.c $
++**       $Revision: 257 $
++**       $Date: 2019-12-21 09:49:22 +0000 (Sat, 21 Dec 2019) $
+ **       $Author: yannickaros $
+ **
+ **       AROS Public License
+@@ -106,11 +106,6 @@
+ 
+ void MyBlendPixel(struct ImageData *Image, LONG x, LONG y, ULONG Color, ULONG Mode)
+ {
+-	ULONG BGColor  = getpixel(Image, x, y);
+-	ULONG dstA = (ULONG)EXTRACT_A(BGColor);
+-	ULONG dstR = (ULONG)EXTRACT_R(BGColor);
+-	ULONG dstG = (ULONG)EXTRACT_G(BGColor);
+-	ULONG dstB = (ULONG)EXTRACT_B(BGColor);
+ 	ULONG srcA = (ULONG)EXTRACT_A(Color);
+ 	ULONG srcR = (ULONG)EXTRACT_R(Color);
+ 	ULONG srcG = (ULONG)EXTRACT_G(Color);
+@@ -119,6 +114,12 @@
+ 	
+ 	if (!(x < 0 || x>= Image->Width || y < 0 || y >= Image->Height || srcA == 0x00))
+ 	{
++		ULONG BGColor  = getpixel(Image, x, y);
++		ULONG dstA = (ULONG)EXTRACT_A(BGColor);
++		ULONG dstR = (ULONG)EXTRACT_R(BGColor);
++		ULONG dstG = (ULONG)EXTRACT_G(BGColor);
++		ULONG dstB = (ULONG)EXTRACT_B(BGColor);
++		
+ 		switch(Mode)
+ 		{
+ 			case MODE_BLEND:

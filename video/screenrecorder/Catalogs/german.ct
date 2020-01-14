@@ -19,7 +19,7 @@ Stoppe _Aufnahme:
 ; Stop _recording:
 ;
 MSG_MATCH_PATTERN_GAD
-Übereinsti_mmender Fenstertitel:
+Ãœbereinsti_mmender Fenstertitel:
 ; _Match window title:
 ;
 MSG_IGNORE_RECORDER_WINDOWS_GAD
@@ -51,11 +51,11 @@ _Skalierung:
 ; _Scaling:
 ;
 MSG_PRIORITY_GAD
-_Priorität:
+_PrioritÃ¤t:
 ; _Priority:
 ;
 MSG_QUALITY_GAD
-_Qualität:
+_QualitÃ¤t:
 ; _Quality:
 ;
 MSG_MOUSE_CAPTURE_ZONE_GAD
@@ -95,7 +95,7 @@ Status
 ; Status
 ;
 MSG_RECORDING
-Aufzeichnung läuft
+Aufzeichnung lÃ¤uft
 ; recording
 ;
 MSG_STANDARD_DISPLAY_ENGINE
@@ -127,7 +127,7 @@ Screen Recorder
 ; Screen Recorder
 ;
 MSG_SETTINGS_GLOBAL_KEYDEFS
-Globale Tastenkürzel
+Globale TastenkÃ¼rzel
 ; Global key shortcuts
 ;
 MSG_FPS_NORMAL
@@ -135,11 +135,11 @@ Normal
 ; Normal
 ;
 MSG_FPS_HALF
-Halbe Größe
+Halbe GrÃ¶ÃŸe
 ; Halve
 ;
 MSG_FPS_QUARTER
-Viertel Größe
+Viertel GrÃ¶ÃŸe
 ; Quarter
 ;
 MSG_FPS_10
@@ -159,31 +159,31 @@ Keine Skalierung
 ; No scaling
 ;
 MSG_SCALING_HALF
-Halbe Größe
+Halbe GrÃ¶ÃŸe
 ; Half size
 ;
 MSG_SCALING_QUARTER
-Viertel Größe
+Viertel GrÃ¶ÃŸe
 ; Quarter size
 ;
 MSG_SCALING_1024X768
-1024×768
+1024Ã—768
 ; 1024x768
 ;
 MSG_SCALING_800X600
-800×600
+800Ã—600
 ; 800x600
 ;
 MSG_SCALING_640X480
-640×480
+640Ã—480
 ; 640x480
 ;
 MSG_SCALING_320X240
-320×240
+320Ã—240
 ; 320x240
 ;
 MSG_SCALING_160X120
-160×120
+160Ã—120
 ; 160x120
 ;
 MSG_VIDEO_FORMAT_MJPEG
@@ -231,7 +231,7 @@ Projekt
 ; Project
 ;
 MSG_MENU_PROJECT_ABOUT
-?\0Über ...
+?\0Ãœber ...
 ; ?\0About
 ;
 MSG_MENU_PROJECT_QUIT
@@ -251,7 +251,7 @@ MUI ...
 ; MUI...
 ;
 MSG_DIR_NOT_ACCESSIBLE
-Kann die Aufnahme nicht starten, weil das Verzeichnis\n%s unzugänglich ist.
+Kann die Aufnahme nicht starten, weil das Verzeichnis\n%s unzugÃ¤nglich ist.
 ; Can not start recording because directory\n%s\nis not accessible.
 ;
 MSG_ABOUT
@@ -259,7 +259,7 @@ MSG_ABOUT
 ; \033c%s\n\nWritten by %s\n%s\n\nIcon by %s
 ;
 MSG_MINIMUM_REQUIREMENTS
-Dieses Programm benötigt einen Amiga mit 68020 und FPU oder besser.
+Dieses Programm benÃ¶tigt einen Amiga mit 68020 und FPU oder besser.
 ; This program requires an AMIGA with 68020 and FPU or better.
 ;
 MSG_WINDOW_TITLE_SETTINGS

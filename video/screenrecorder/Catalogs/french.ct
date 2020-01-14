@@ -1,5 +1,5 @@
 ## version $VER: ScreenRecoder.catalog 1.0 (10.05.2015)
-## language français
+## language franÃ§ais
 ## codeset 0
 ;
 MSG_OK_REQ_GAD
@@ -19,15 +19,15 @@ Cesser d'en_registrer :
 ; Stop _recording:
 ;
 MSG_MATCH_PATTERN_GAD
-_Titre de la fenêtre :
+_Titre de la fenÃªtre :
 ; _Match window title:
 ;
 MSG_IGNORE_RECORDER_WINDOWS_GAD
-_Ignorer les fenêtres de ScreenRecorder
+_Ignorer les fenÃªtres de ScreenRecorder
 ; _Ignore recorder windows
 ;
 MSG_RECORD_ONLY_WHEN_SCREEN_VISIBLE_GAD
-N'enregistrer que lorsque l'écran est _visible
+N'enregistrer que lorsque l'Ã©cran est _visible
 ; Record only when screen is _visible
 ;
 MSG_RECORD_MOUSE_GAD
@@ -35,7 +35,7 @@ Enregistrer autour du _pointeur
 ; Record around _mouse
 ;
 MSG_ACTIVE_RECORDING_GAD
-N'enregistrer que depuis l'écran _actif
+N'enregistrer que depuis l'Ã©cran _actif
 ; Record always from an _active screen
 ;
 MSG_RECORDING_FORMAT_GAD
@@ -51,7 +51,7 @@ Echelle_s :
 ; _Scaling:
 ;
 MSG_PRIORITY_GAD
-_Priorité :
+_PrioritÃ© :
 ; _Priority:
 ;
 MSG_QUALITY_GAD
@@ -63,7 +63,7 @@ _Zone de capture du pointeur :
 ; Mouse capture _zone:
 ;
 MSG_RECORDING_DIR_GAD
-Répertoire _d'enregistrement
+RÃ©pertoire _d'enregistrement
 ; Record _dir
 ;
 MSG_START_RECORDING_GAD
@@ -103,7 +103,7 @@ standard
 ; Standard
 ;
 MSG_ENHANCED_DISPLAY_ENGINE
-amélioré
+amÃ©liorÃ©
 ; Enhanced
 ;
 MSG_DEFAULT_SCREEN_TITLE
@@ -119,7 +119,7 @@ MSG_SCREEN_FRAMERATE_FORMAT
 ; %3d.%02d Hz
 ;
 MSG_DESCRIPTION
-Enregistre des vidéos
+Enregistre des vidÃ©os
 ; Record videos
 ;
 MSG_TITLE
@@ -135,7 +135,7 @@ Normal
 ; Normal
 ;
 MSG_FPS_HALF
-moitié
+moitiÃ©
 ; Halve
 ;
 MSG_FPS_QUARTER
@@ -155,11 +155,11 @@ MSG_FPS_1
 ; 1 FPS
 ;
 MSG_SCALING_NONE
-Pas d'échelle
+Pas d'Ã©chelle
 ; No scaling
 ;
 MSG_SCALING_HALF
-Moitié de taille
+MoitiÃ© de taille
 ; Half size
 ;
 MSG_SCALING_QUARTER
@@ -167,23 +167,23 @@ Quart de taille
 ; Quarter size
 ;
 MSG_SCALING_1024X768
-1024×768
+1024Ã—768
 ; 1024x768
 ;
 MSG_SCALING_800X600
-800×600
+800Ã—600
 ; 800x600
 ;
 MSG_SCALING_640X480
-640×480
+640Ã—480
 ; 640x480
 ;
 MSG_SCALING_320X240
-320×240
+320Ã—240
 ; 320x240
 ;
 MSG_SCALING_160X120
-160×120
+160Ã—120
 ; 160x120
 ;
 MSG_VIDEO_FORMAT_MJPEG
@@ -219,7 +219,7 @@ Bonne
 ; Good
 ;
 MSG_VIDEO_QUALITY_POOR
-Médiocre
+MÃ©diocre
 ; Poor
 ;
 MSG_VIDEO_QUALITY_BAD
@@ -239,7 +239,7 @@ Q\0Quitter
 ; Q\0Quit
 ;
 MSG_MENU_SETTINGS_TITLE
-Paramètres
+ParamÃ¨tres
 ; Settings
 ;
 MSG_MENU_SETTINGS_APP
@@ -251,11 +251,11 @@ MUI...
 ; MUI...
 ;
 MSG_DIR_NOT_ACCESSIBLE
-Impossible de démarrer l'enregistrement car \n%s\n n'est pas accessible.
+Impossible de dÃ©marrer l'enregistrement car \n%s\n n'est pas accessible.
 ; Can not start recording because directory\n%s\nis not accessible.
 ;
 MSG_ABOUT
-\033c%s\n\nEcrit par %s\n%s\n\nIcône par %s
+\033c%s\n\nEcrit par %s\n%s\n\nIcÃ´ne par %s
 ; \033c%s\n\nWritten by %s\n%s\n\nIcon by %s
 ;
 MSG_MINIMUM_REQUIREMENTS
@@ -263,6 +263,6 @@ Ce programme requiert un Amiga et un 68020 avec un coprocesseur ou mieux.
 ; This program requires an AMIGA with 68020 and FPU or better.
 ;
 MSG_WINDOW_TITLE_SETTINGS
-Paramètres
+ParamÃ¨tres
 ; Settings
 ;

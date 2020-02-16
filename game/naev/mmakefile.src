@@ -9,25 +9,30 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM     contrib-sdl \
 #MM     contrib-sdl-sdl-mixer \
 #MM     contrib-openal \
-#MM     development-libxml2 \
 #MM     workbench-libs-freetype-complete \
+#MM     development-libxml2 \
+#MM     contrib-openssl \
 #MM     development-libvorbis \
 #MM     workbench-libs-png \
 #MM     ports-libs-libzip
+
 
 PACKAGE       := naev
 VERSION       := 0.7.0
 TARGETDIR     := $(AROS_CONTRIB)/Games/Misc/Naev
 REPOSITORIES  := https://sourceforge.net/projects/naev/files/$(PACKAGE)-$(VERSION)
 
-USER_INCLUDES := -I$(AROS_INCLUDES) -I$(AROS_CONTRIB_INCLUDES)
-USER_CFLAGS   := -D__unix__
+USER_INCLUDES := -I$(AROS_INCLUDES) -I$(AROS_INCLUDES)/libxml2 -I$(AROS_CONTRIB_INCLUDES)
+
+USER_CFLAGS   :=
+
 USER_LDFLAGS  :=
 EXTRAOPTIONS  := \
         --with-sdl2=no \
         --with-sdlmixer=yes \
-        FREETYPE_LIBS=-lfreetype2 \
-        LIBS="-lcrypto -lnet -lbz2 -lz"
+        FREETYPE_CFLAGS='-I$(AROS_INCLUDES)/freetype' \
+        FREETYPE_LIBS='-lfreetype2' \
+        LIBS='-lcrypto -lnet -lbz2 -lz'
 
 %fetch_and_build mmake=ports-game-naev prefix=$(TARGETDIR) \
         package=$(PACKAGE) version=$(VERSION) suffixes="tar.bz2" \

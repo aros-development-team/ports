@@ -6,7 +6,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-graphics-grafx2 : includes linklibs contrib-sdl \
 #MM    contrib-sdl-sdl-image contrib-sdl-sdl-ttf contrib-development-lua \
-#MM    ports-graphics-grafx2-fetch ports-graphics-grafx2-docs \
+#MM    ports-graphics-grafx2-fetch ports-graphics-grafx2-version \
+#MM    ports-graphics-grafx2-docs \
 #MM    ports-graphics-grafx2-data
 
 #MM  ports-graphics-grafx2-docs : ports-graphics-grafx2-fetch
@@ -15,14 +16,16 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-graphics-grafx2-quick : ports-graphics-grafx2-fetch
 
-REPOSITORIES := http://pulkomandy.tk/projects/GrafX2/downloads
-ARCHBASE     := grafx2-2.4.2035-src
+REPOSITORIES := https://gitlab.com/GrafX2/grafX2/-/archive/v2.4
+ARCHBASE     := grafX2-v2.4
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/GrafX2
 SDL_PREFIX   := $(AROS_DEVELOPER)
+ARCHSUFFIX   := "tgz"
+PATCHSPEC    := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
 
 NOWARN_FLAGS := $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_UNUSED_BUT_SET_VARIABLE) $(NOWARN_CPP) $(NOWARN_FORMAT)
-USER_CFLAGS  := $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags) \
-    -D__ENABLE_LUA__
+USER_CFLAGS  := $(CFLAGS_COMMON) $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags)
+USER_CPPFLAGS := -D__ENABLE_LUA__
 USER_INCLUDES:= -I$(AROS_INCLUDES)/lua -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
 
@@ -48,7 +51,6 @@ FILES := \
 	shade \
 	keyboard \
 	io \
-	version \
 	text \
 	SFont \
 	setup \
@@ -79,24 +81,35 @@ FILES := \
 	tiles \
 	colorred
 
-FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/grafx2/src/,$(FILES))
+FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/src/,$(FILES)) $(GENDIR)/$(CURDIR)/version
 
 %build_prog mmake=ports-graphics-grafx2 progname=GrafX2 \
     files=$(FILES) targetdir=$(TARGETDIR) \
     uselibs="lua SDL_ttf SDL_image SDL GL jpeg png z freetype2"
 
+# SVN revision number
+$(GENDIR)/$(CURDIR)/version.c :
+	@$(ECHO) "char SVN_revision[]=\"2039\";" > $@
+
+#MM
+ports-graphics-grafx2-version : $(GENDIR)/$(CURDIR)/version.c
+
 ############################################################################################################
 
-%fetch mmake=ports-graphics-grafx2-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/grafx2/$(ARCHBASE) \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz" \
-    patches_specs=grafx2-2.4.2035-src.diff::-p1
+%fetch mmake=ports-graphics-grafx2-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/grafx2 \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="$(ARCHSUFFIX)" \
+    patches_specs=$(PATCHSPEC)
+
+%create_patch mmake=ports-graphics-grafx2-patch \
+    archive=$(ARCHBASE) suffixes=$(ARCHSUFFIX) \
+    destination=$(PORTSDIR)/grafx2
 
 ############################################################################################################
 
-%copy_dir_recursive mmake=ports-graphics-grafx2-docs src=$(PORTSDIR)/grafx2/$(ARCHBASE)/grafx2/doc \
+%copy_dir_recursive mmake=ports-graphics-grafx2-docs src=$(PORTSDIR)/grafx2/$(ARCHBASE)/doc \
     dst=$(TARGETDIR)/doc
 
-%copy_dir_recursive mmake=ports-graphics-grafx2-data src=$(PORTSDIR)/grafx2/$(ARCHBASE)/grafx2/share \
+%copy_dir_recursive mmake=ports-graphics-grafx2-data src=$(PORTSDIR)/grafx2/$(ARCHBASE)/share \
     dst=$(TARGETDIR)/share
 
 %common

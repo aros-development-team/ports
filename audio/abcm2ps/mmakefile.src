@@ -62,7 +62,8 @@ DOCFILES := $(notdir \
     $(call WILDCARD, $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/*.abc) \
     $(call WILDCARD, $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/*.eps) \
     $(call WILDCARD, $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/*.txt) \
-    ) Changes README
+    $(call WILDCARD, $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/*.rst) \
+    ) README.md
 
 %copy_files_q mmake=ports-audio-abcm2ps-docs files=$(DOCFILES) src=$(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE) \
     dst=$(TARGETDIR)/Docs

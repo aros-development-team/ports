@@ -19,7 +19,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-game-biniax2-quick : ports-game-biniax2-fetch
 
-REPOSITORIES := http://mordred.dir.bg/biniax
+REPOSITORIES := http://www.tuzsuzov.com/biniax \
+http://mordred.dir.bg/biniax
 ARCHBASE     := biniax2-1.30-fullsrc
 TARGETDIR    := $(AROS_CONTRIB)/Games/Action/Biniax2
 SDL_PREFIX   := $(AROS_DEVELOPER)

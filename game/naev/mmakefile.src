@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-game : ports-game-naev 
+#DISABLED #MM- ports-game : ports-game-naev 
 
 #MM- ports-game-naev : \
 #MM     ports-game-naev-data \

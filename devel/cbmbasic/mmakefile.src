@@ -24,25 +24,21 @@ FILES := \
 NOWARN_FLAGS := $(NOWARN_UNUSED_BUT_SET_VARIABLE) $(NOWARN_STRICT_ALIASING) \
 	$(NOWARN_CPP) $(NOWARN_UNUSED_VARIABLE)
 
-USER_CFLAGS := $(NOWARN_FLAGS)
+USER_CFLAGS := $(CFLAGS_COMMON) $(NOWARN_FLAGS)
 
 %build_prog mmake=ports-devel-cbmbasic progname=CBMBasic \
     files=$(FILES) targetdir=$(TARGETDIR)
-
 
 %fetch mmake=ports-devel-cbmbasic-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/cbmbasic \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz" \
     patches_specs=cbmbasic-1.0-aros.diff:$(ARCHBASE):-p1
 
-
 %copy_dir_recursive mmake=ports-devel-cbmbasic-data src=$(PORTSDIR)/cbmbasic/$(ARCHBASE)/test \
 dst=$(TARGETDIR)/test
-
 
 CPYFILES := README.txt
 
 %copy_files_q mmake=ports-devel-cbmbasic-cpy files=$(CPYFILES) src=$(PORTSDIR)/cbmbasic/$(ARCHBASE) \
     dst=$(TARGETDIR)
-
 
 %common

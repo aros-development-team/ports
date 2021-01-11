@@ -1,5 +1,7 @@
 # $Id$
 
+include $(SRCDIR)/config/aros-contrib.cfg
+
 #MM- ports : ports-game
 #MM- ports-game : ports-game-$(AROS_TARGET_CPU)
 

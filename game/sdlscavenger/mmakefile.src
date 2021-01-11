@@ -2,8 +2,6 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-game : ports-game-$(AROS_TARGET_CPU)
-
 #MM- ports-game-i386 : ports-game-sdlscavenger
 #DISABLED #MM- ports-game-m68k : ports-game-sdlscavenger
 #MM- ports-game-arm : ports-game-sdlscavenger
@@ -22,8 +20,8 @@ TARGETDIR    := $(AROS_CONTRIB)/Games/Platform/SdlScavenger
 SDL_PREFIX   := $(AROS_DEVELOPER)
 
 NOWARN_FLAGS := $(NOWARN_UNUSED_BUT_SET_VARIABLE) $(NOWARN_SEQUENCE_POINT)
-USER_CFLAGS  := $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags) \
-                -DLIBPATH=\"/PROGDIR/data\"
+USER_CFLAGS  := $(CFLAGS_COMMON) $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags)
+USER_CPPFLAGS := -DLIBPATH=\"/PROGDIR/data\"
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
 

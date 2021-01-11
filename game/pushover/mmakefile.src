@@ -14,8 +14,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 PACKAGE      := pushover
 VERSION      := 0.0.5
 TARGETDIR    := $(AROS_CONTRIB)/Games/Puzzle/Pushover
-REPOSITORIES := sf://pushover
-
+REPOSITORIES = http://prdownloads.sourceforge.net/portableapps/Source/Pushover \
+ https://sourceforge.net/projects/portableapps/files/Source/Pushover
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
 

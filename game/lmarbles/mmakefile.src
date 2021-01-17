@@ -21,12 +21,12 @@ USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
     extraoptions="-datarootdir='$$(PROGDIR)share' LIBS='-lmikmod -lvorbisfile -lvorbis -logg'" 
 
 #MM- ports-game-lmarbles-install : \
+#MM     ports-game-lmarbles-install-var \
 #MM     ports-game-lmarbles-install-bin \
 #MM     ports-game-lmarbles-install-gfx \
 #MM     ports-game-lmarbles-install-snd \
 #MM     ports-game-lmarbles-install-lvl \
-#MM     ports-game-lmarbles-install-files \
-#MM     ports-game-lmarbles-install-var
+#MM     ports-game-lmarbles-install-files
 
 %copy_files_q mmake=ports-game-lmarbles-install-bin \
    files=lmarbles src=$(GENDIR)/$(CURDIR)/lmarbles/src dst=$(TARGETDIR)

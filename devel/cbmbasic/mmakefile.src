@@ -31,7 +31,10 @@ USER_CFLAGS := $(COMPILER_COMMON_CFLAGS) $(NOWARN_FLAGS)
 
 %fetch mmake=ports-devel-cbmbasic-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/cbmbasic \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz" \
-    patches_specs=cbmbasic-1.0-aros.diff:$(ARCHBASE):-p1
+    patches_specs=$(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
+
+%create_patch mmake=ports-devel-cbmbasic-create-patch \
+    archive=$(ARCHBASE) srcdir=$(ARCHBASE) destination=$(PORTSDIR)/cbmbasic suffixes="tgz"
 
 %copy_dir_recursive mmake=ports-devel-cbmbasic-data src=$(PORTSDIR)/cbmbasic/$(ARCHBASE)/test \
 dst=$(TARGETDIR)/test

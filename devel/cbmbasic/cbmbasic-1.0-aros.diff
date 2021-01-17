@@ -1,6 +1,38 @@
-diff -Naur cbmbasic-1.0-orig/runtime.c cbmbasic-1.0/runtime.c
---- cbmbasic-1.0-orig/runtime.c	2009-04-08 05:00:03.000000000 +0200
-+++ cbmbasic-1.0/runtime.c	2010-07-17 18:11:33.780545852 +0200
+diff -ruN cbmbasic-1.0/cbmbasic.c cbmbasic-1.0.aros/cbmbasic.c
+--- cbmbasic-1.0/cbmbasic.c	2009-04-08 04:13:13.000000000 +0000
++++ cbmbasic-1.0.aros/cbmbasic.c	2021-01-17 23:45:06.540000000 +0000
+@@ -137,19 +137,6 @@
+ 
+ 
+ /* Global Variable Declarations */
+-extern unsigned char A;
+-extern unsigned char RAM[65536];
+-extern unsigned short PC;
+-extern unsigned char S;
+-extern unsigned char X;
+-extern unsigned char Z;
+-extern unsigned char N;
+-extern unsigned char C;
+-extern unsigned char V;
+-extern unsigned char Y;
+-extern unsigned char B;
+-extern unsigned char D;
+-extern unsigned char I;
+ static unsigned short _ZZ4mainE11case_labels[17591];
+ 
+ 
+diff -ruN cbmbasic-1.0/runtime.c cbmbasic-1.0.aros/runtime.c
+--- cbmbasic-1.0/runtime.c	2009-04-08 03:00:03.000000000 +0000
++++ cbmbasic-1.0.aros/runtime.c	2021-01-17 23:44:14.120000000 +0000
+@@ -42,7 +42,7 @@
+ #include "plugin.h"
+ #include "glue.h"
+ 
+-unsigned char RAM[65536];
++extern unsigned char RAM[65536];
+ 
+ int
+ stack4(unsigned short a, unsigned short b, unsigned short c, unsigned short d) {
 @@ -390,7 +390,7 @@
  			putchar(13);
  			putchar(10);

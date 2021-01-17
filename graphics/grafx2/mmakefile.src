@@ -88,7 +88,7 @@ FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/src/,$(FILES)) $(GENDIR)/$(C
     uselibs="lua SDL_ttf SDL_image SDL GL jpeg png z freetype2"
 
 # SVN revision number
-$(GENDIR)/$(CURDIR)/version.c :
+$(GENDIR)/$(CURDIR)/version.c : | $(GENDIR)/$(CURDIR)
 	@$(ECHO) "char SVN_revision[]=\"2039\";" > $@
 
 #MM

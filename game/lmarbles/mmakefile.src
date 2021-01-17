@@ -14,11 +14,13 @@ REPOSITORIES := sf://lgames
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
 
+LMARBLES_EXTRAOPTS= -datarootdir='$$(PROGDIR)share' LIBS='-lmikmod -lvorbisfile -lvorbis -logg'
+
 %fetch_and_build mmake=ports-game-lmarbles prefix=$(TARGETDIR) \
     package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \
     patch=yes package_repo=$(REPOSITORIES) nix=yes nix_dir_layout=no \
     install_target= postinstall=ports-game-lmarbles-install \
-    extraoptions="-datarootdir='$$(PROGDIR)share' LIBS='-lmikmod -lvorbisfile -lvorbis -logg'" 
+    extraoptions="$(LMARBLES_EXTRAOPTS)"
 
 #MM- ports-game-lmarbles-install : \
 #MM     ports-game-lmarbles-install-var \
@@ -35,25 +37,38 @@ FILES := AUTHORS ChangeLog COPYING NEWS TODO
 %copy_files_q mmake=ports-game-lmarbles-install-files \
     src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION) dst=$(TARGETDIR)
 
-%copy_dir_recursive mmake=ports-game-lmarbles-install-gfx \
+%copy_dir_recursive mmake=game-lmarbles-gfx-copy \
     src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/src/gfx \
     dst=$(TARGETDIR)/share/lmarbles/gfx
 
-%copy_dir_recursive mmake=ports-game-lmarbles-install-snd \
+#MM ports-game-lmarbles-install-gfx : game-lmarbles-gfx-copy
+#MM
+ports-game-lmarbles-install-gfx:
+	$(Q)find $(TARGETDIR)/share/lmarbles/gfx -type f -exec chmod -R 666 {} \;
+
+%copy_dir_recursive mmake=game-lmarbles-snd-copy \
     src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/src/sounds \
     dst=$(TARGETDIR)/share/lmarbles/sounds
 
-%copy_dir_recursive mmake=ports-game-lmarbles-install-lvl \
+#MM ports-game-lmarbles-install-snd : game-lmarbles-snd-copy
+#MM
+ports-game-lmarbles-install-snd:
+	$(Q)find $(TARGETDIR)/share/lmarbles/sounds -type f -exec chmod -R 666 {} \;
+
+%copy_dir_recursive mmake=game-lmarbles-lvl-copy \
     src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/src/levels \
     dst=$(TARGETDIR)/share/lmarbles/levels
 
+#MM ports-game-lmarbles-install-lvl : game-lmarbles-lvl-copy
+#MM
+ports-game-lmarbles-install-lvl:
+	$(Q)find $(TARGETDIR)/share/lmarbles/levels -type f -exec chmod -R 666 {} \;
 
 #MM
 ports-game-lmarbles-install-var : $(TARGETDIR)/var
 
 $(TARGETDIR)/var :
 	%mkdir_q dir=$@
-
 
 #MM
 ports-game-lmarbles-clean :

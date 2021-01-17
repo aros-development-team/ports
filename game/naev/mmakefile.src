@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#DISABLED #MM- ports-game : ports-game-naev 
+#MM- ports-game : ports-game-naev 
 
 #MM- ports-game-naev : \
 #MM     ports-game-naev-data \
@@ -24,9 +24,10 @@ REPOSITORIES  := https://sourceforge.net/projects/naev/files/$(PACKAGE)-$(VERSIO
 
 USER_INCLUDES := -I$(AROS_INCLUDES) -I$(AROS_INCLUDES)/libxml2 -I$(AROS_CONTRIB_INCLUDES)
 
-USER_CFLAGS   :=
+NOWARN_FLAGS := $(NOWARN_STRINGOP_OVERFLOW)
+USER_CFLAGS   := $(CFLAGS_COMMON) $(NOWARN_FLAGS)
+USER_CPPFLAGS := -D_XOPEN_SOURCE=600L
 
-USER_LDFLAGS  :=
 EXTRAOPTIONS  := \
         --with-sdl2=no \
         --with-sdlmixer=yes \
@@ -42,9 +43,8 @@ EXTRAOPTIONS  := \
 %fetch mmake=ports-game-naev-data archive="$(PACKAGE)-$(VERSION)-ndata" destination="$(TARGETDIR)" \
         location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="zip"
 
-%create_patch mmake=ports-game-naev-create-patch \
-        archive="$(PACKAGE)-$(VERSION)" srcdir="$(PACKAGE)-$(VERSION)" \
-        suffixes="tar.bz2" destination="$(PORTSDIR)/$(PACKAGE)"
+#MM- ports-game-naev-create-patch : ports-game-naev--create-patch
+#MM- ports-game-naev-create-patch-quick : ports-game-naev--create-patch-quick
 
 #MM
 ports-game-naev-clean :

@@ -1,24 +1,26 @@
 diff -ruN naev-0.7.0/lib/lua/luaconf.h naev-0.7.0.aros/lib/lua/luaconf.h
---- naev-0.7.0/lib/lua/luaconf.h	2017-07-16 00:51:22.000000000 +0200
-+++ naev-0.7.0.aros/lib/lua/luaconf.h	2018-07-29 02:46:05.377669697 +0200
-@@ -55,7 +55,7 @@
+--- naev-0.7.0/lib/lua/luaconf.h	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/lib/lua/luaconf.h	2021-01-17 04:16:05.590000000 +0000
+@@ -55,8 +55,10 @@
  #define LUA_USE_MKSTEMP
  #define LUA_USE_ISATTY
  #define LUA_USE_POPEN
--#define LUA_USE_ULONGJMP
-+//#define LUA_USE_ULONGJMP
++#if !defined(__AROS__)
+ #define LUA_USE_ULONGJMP
  #endif
++#endif
  
  
+ /*
 diff -ruN naev-0.7.0/src/naev.c naev-0.7.0.aros/src/naev.c
---- naev-0.7.0/src/naev.c	2017-07-16 00:51:22.000000000 +0200
-+++ naev-0.7.0.aros/src/naev.c	2018-07-28 11:55:34.255841964 +0200
+--- naev-0.7.0/src/naev.c	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/src/naev.c	2017-07-15 22:51:26.000000000 +0000
 @@ -884,7 +884,7 @@
   */
  static void fps_init (void)
  {
 -#if HAS_POSIX && defined(CLOCK_MONOTONIC)
-+#if HAS_POSIX && defined(CLOCK_MONOTONIC) && !defined(__AROS__)
++#if HAS_POSIX && defined(CLOCK_MONOTONIC) && !HAS_AROS
     use_posix_time = 1;
     /* We must use clock_gettime here instead of gettimeofday mainly because this
      * way we are not influenced by changes to the time source like say ntp which
@@ -27,13 +29,40 @@ diff -ruN naev-0.7.0/src/naev.c naev-0.7.0.aros/src/naev.c
     unsigned int t;
  
 -#if HAS_POSIX && defined(CLOCK_MONOTONIC)
-+#if HAS_POSIX && defined(CLOCK_MONOTONIC) && !defined(__AROS__)
++#if HAS_POSIX && defined(CLOCK_MONOTONIC) && !HAS_AROS
     struct timespec ts;
  
     if (use_posix_time) {
+diff -ruN naev-0.7.0/src/ncompat.h naev-0.7.0.aros/src/ncompat.h
+--- naev-0.7.0/src/ncompat.h	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/src/ncompat.h	2021-01-17 04:01:24.010000000 +0000
+@@ -45,6 +45,14 @@
+ #else
+ #define HAS_MACOSX 0
+ #endif
++/**
++ * @brief System is AROS.
++ */
++#if defined(__AROS__)
++#define HAS_AROS 1
++#else
++#define HAS_AROS 0
++#endif
+ 
+ 
+ /* Standard specific. */
+@@ -53,7 +61,7 @@
+  *
+  * @note Mac OS X does not define these macros, but does follow unix somewhat.
+  */
+-#if (defined(__unix__) || defined(__unix) || HAS_MACOSX)
++#if (defined(__unix__) || defined(__unix) || HAS_MACOSX || HAS_AROS)
+ #define HAS_UNIX 1
+ #else
+ #define HAS_UNIX 0
 diff -ruN naev-0.7.0/src/ndata.c naev-0.7.0.aros/src/ndata.c
---- naev-0.7.0/src/ndata.c	2017-07-16 00:51:22.000000000 +0200
-+++ naev-0.7.0.aros/src/ndata.c	2018-07-28 11:55:34.255841964 +0200
+--- naev-0.7.0/src/ndata.c	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/src/ndata.c	2017-07-15 22:51:26.000000000 +0000
 @@ -209,7 +209,11 @@
  #endif /* SDL_VERSION_ATLEAST(2,0,0) */
  

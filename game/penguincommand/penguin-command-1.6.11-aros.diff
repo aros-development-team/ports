@@ -1,6 +1,6 @@
-diff -Naur penguin-command-1.6.11-orig/config.sub penguin-command-1.6.11/config.sub
---- penguin-command-1.6.11-orig/config.sub	2007-03-18 16:21:10.000000000 +0100
-+++ penguin-command-1.6.11/config.sub	2007-03-18 16:44:44.000000000 +0100
+diff -ruN penguin-command-1.6.11/config.sub penguin-command-1.6.11.aros/config.sub
+--- penguin-command-1.6.11/config.sub	2007-03-18 15:21:10.000000000 +0000
++++ penguin-command-1.6.11.aros/config.sub	2007-03-18 15:44:44.000000000 +0000
 @@ -1,9 +1,10 @@
  #! /bin/sh
  # Configuration validation subroutine script.
@@ -826,9 +826,47 @@ diff -Naur penguin-command-1.6.11-orig/config.sub penguin-command-1.6.11/config.
  
  # Local variables:
  # eval: (add-hook 'write-file-hooks 'time-stamp)
-diff -Naur penguin-command-1.6.11-orig/src/main.c penguin-command-1.6.11/src/main.c
---- penguin-command-1.6.11-orig/src/main.c	2007-03-18 16:21:13.000000000 +0100
-+++ penguin-command-1.6.11/src/main.c	2007-03-18 16:44:44.000000000 +0100
+diff -ruN penguin-command-1.6.11/src/Makefile.in penguin-command-1.6.11.aros/src/Makefile.in
+--- penguin-command-1.6.11/src/Makefile.in	2007-03-18 15:44:43.000000000 +0000
++++ penguin-command-1.6.11.aros/src/Makefile.in	2007-03-18 15:44:44.000000000 +0000
+@@ -238,7 +238,7 @@
+ 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
+ penguin-command$(EXEEXT): $(penguin_command_OBJECTS) $(penguin_command_DEPENDENCIES) 
+ 	@rm -f penguin-command$(EXEEXT)
+-	$(LINK) $(penguin_command_LDFLAGS) $(penguin_command_OBJECTS) $(penguin_command_LDADD) $(LIBS)
++	$(LINK) $(penguin_command_LDFLAGS) $(penguin_command_OBJECTS) $(penguin_command_LDADD) -lSDL_image -lpng -ljpeg -lz -lSDL_mixer -lmikmod -lvorbisfile -lvorbis -logg -lSDL -lGL
+ 
+ mostlyclean-compile:
+ 	-rm -f *.$(OBJEXT)
+diff -ruN penguin-command-1.6.11/src/SFont.c penguin-command-1.6.11.aros/src/SFont.c
+--- penguin-command-1.6.11/src/SFont.c	2007-03-18 15:21:14.000000000 +0000
++++ penguin-command-1.6.11.aros/src/SFont.c	2007-03-18 15:44:44.000000000 +0000
+@@ -179,7 +179,11 @@
+ 		if ((ch=='\b')&&(strlen(text)>0))
+ 		    text[strlen(text)-1]='\0';
+ 		else if (ch!='\b')
+-		    sprintf(text,"%s%c",text,ch);
++                {
++                    int chrno = strlen(text);
++                    text[chrno]=ch;
++                    text[chrno + 1]='\0';
++                }
+ 	        if (SFont_TextWidth2(Font,text)>PixelWidth) text[strlen(text)-1]='\0';
+ 		SDL_BlitSurface( Back, NULL, Dest, &rect);
+ 		PutString2(Dest, Font, x, y, text);
+diff -ruN penguin-command-1.6.11/src/joystick.c penguin-command-1.6.11.aros/src/joystick.c
+--- penguin-command-1.6.11/src/joystick.c	2007-03-18 15:21:13.000000000 +0000
++++ penguin-command-1.6.11.aros/src/joystick.c	2007-03-18 15:44:44.000000000 +0000
+@@ -1,5 +1,6 @@
+ #include <SDL.h>
+ #include "joystick.h"
++#include "gfx.h"
+ 
+ static SDL_Joystick *joy=NULL;
+ 
+diff -ruN penguin-command-1.6.11/src/main.c penguin-command-1.6.11.aros/src/main.c
+--- penguin-command-1.6.11/src/main.c	2007-03-18 15:21:13.000000000 +0000
++++ penguin-command-1.6.11.aros/src/main.c	2007-03-18 15:44:44.000000000 +0000
 @@ -32,8 +32,16 @@
  #endif
  
@@ -857,33 +895,44 @@ diff -Naur penguin-command-1.6.11-orig/src/main.c penguin-command-1.6.11/src/mai
      printf("** Starting SDL init **\n");
      init_SDL();
      SDL_EventState(SDL_ACTIVEEVENT, SDL_IGNORE);
-diff -Naur penguin-command-1.6.11-orig/src/Makefile.in penguin-command-1.6.11/src/Makefile.in
---- penguin-command-1.6.11-orig/src/Makefile.in	2007-03-18 16:44:43.000000000 +0100
-+++ penguin-command-1.6.11/src/Makefile.in	2017-01-19 22:55:10.485421916 +0100
-@@ -238,7 +238,7 @@
- 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
- penguin-command$(EXEEXT): $(penguin_command_OBJECTS) $(penguin_command_DEPENDENCIES) 
- 	@rm -f penguin-command$(EXEEXT)
--	$(LINK) $(penguin_command_LDFLAGS) $(penguin_command_OBJECTS) $(penguin_command_LDADD) $(LIBS)
-+	$(LINK) $(penguin_command_LDFLAGS) $(penguin_command_OBJECTS) $(penguin_command_LDADD) -lSDL_image -lpng -ljpeg -lz -lSDL_mixer -lmikmod -lvorbisfile -lvorbis -logg -lSDL -lGL
- 
- mostlyclean-compile:
- 	-rm -f *.$(OBJEXT)
-diff -Naur penguin-command-1.6.11-orig/src/options.c penguin-command-1.6.11/src/options.c
---- penguin-command-1.6.11-orig/src/options.c	2007-03-18 16:21:13.000000000 +0100
-+++ penguin-command-1.6.11/src/options.c	2007-03-18 16:44:44.000000000 +0100
-@@ -10,10 +10,14 @@
+diff -ruN penguin-command-1.6.11/src/options.c penguin-command-1.6.11.aros/src/options.c
+--- penguin-command-1.6.11/src/options.c	2007-03-18 15:21:13.000000000 +0000
++++ penguin-command-1.6.11.aros/src/options.c	2021-01-17 03:44:40.940000000 +0000
+@@ -1,3 +1,7 @@
++#ifdef __AROS__
++#include <proto/dos.h>
++#endif
++
+ #include "main.h"
+ #include <errno.h>
+ #include <string.h>
+@@ -10,10 +14,29 @@
      char filename[200];
      FILE *file;
      
-+    #ifdef __AROS__
-+    strcpy( filename, "PROGDIR:penguin-command.dat");
-+    #else
++#ifdef __AROS__
++    BPTR lock;
++    filename[0] = '\0';
++    if ((lock = Lock("PROGDIR:penguin-command.dat", ACCESS_READ)) != BNULL)
++    {
++        struct InfoData paramBlock;
++        if (Info(lock, &paramBlock))
++        {
++            if (paramBlock.id_DiskState != ID_WRITE_PROTECTED)
++                strcpy( filename, "PROGDIR:penguin-command.dat");
++        }
++        UnLock(lock);
++    }
++    if (filename[0] == '\0')
++    {
++        strcpy( filename, "T:penguin-command.dat");
++    }
++#else
      if ((char *)getenv("HOME") != NULL)
  		snprintf( filename, sizeof(filename), "%s/.penguin-command", getenv("HOME"));
      else
  		sprintf( filename, "penguin-command.dat");
-+    #endif
++#endif
  
      file = fopen(filename, mode);
      

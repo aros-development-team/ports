@@ -1,6 +1,6 @@
 diff -ruN naev-0.7.0/lib/lua/luaconf.h naev-0.7.0.aros/lib/lua/luaconf.h
 --- naev-0.7.0/lib/lua/luaconf.h	2017-07-15 22:51:22.000000000 +0000
-+++ naev-0.7.0.aros/lib/lua/luaconf.h	2021-01-17 04:16:05.590000000 +0000
++++ naev-0.7.0.aros/lib/lua/luaconf.h	2017-07-15 22:51:26.000000000 +0000
 @@ -55,8 +55,10 @@
  #define LUA_USE_MKSTEMP
  #define LUA_USE_ISATTY
@@ -12,6 +12,17 @@ diff -ruN naev-0.7.0/lib/lua/luaconf.h naev-0.7.0.aros/lib/lua/luaconf.h
  
  
  /*
+diff -ruN naev-0.7.0/src/music_openal.c naev-0.7.0.aros/src/music_openal.c
+--- naev-0.7.0/src/music_openal.c	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/src/music_openal.c	2021-01-18 05:31:13.860000000 +0000
+@@ -4,6 +4,7 @@
+ 
+ #if USE_OPENAL
+ 
++#define NAEV_MUSICOPENAL
+ 
+ #include "music_openal.h"
+ 
 diff -ruN naev-0.7.0/src/naev.c naev-0.7.0.aros/src/naev.c
 --- naev-0.7.0/src/naev.c	2017-07-15 22:51:22.000000000 +0000
 +++ naev-0.7.0.aros/src/naev.c	2017-07-15 22:51:26.000000000 +0000
@@ -35,7 +46,7 @@ diff -ruN naev-0.7.0/src/naev.c naev-0.7.0.aros/src/naev.c
     if (use_posix_time) {
 diff -ruN naev-0.7.0/src/ncompat.h naev-0.7.0.aros/src/ncompat.h
 --- naev-0.7.0/src/ncompat.h	2017-07-15 22:51:22.000000000 +0000
-+++ naev-0.7.0.aros/src/ncompat.h	2021-01-17 04:01:24.010000000 +0000
++++ naev-0.7.0.aros/src/ncompat.h	2017-07-15 22:51:26.000000000 +0000
 @@ -45,6 +45,14 @@
  #else
  #define HAS_MACOSX 0
@@ -75,3 +86,142 @@ diff -ruN naev-0.7.0/src/ndata.c naev-0.7.0.aros/src/ndata.c
     npng  = npng_open( rw );
     sur   = npng_readSurface( npng, 0, 0 );
     npng_close( npng );
+diff -ruN naev-0.7.0/src/nopenal.h naev-0.7.0.aros/src/nopenal.h
+--- naev-0.7.0/src/nopenal.h	2017-07-14 02:20:30.000000000 +0000
++++ naev-0.7.0.aros/src/nopenal.h	2021-01-18 05:32:24.500000000 +0000
+@@ -5,6 +5,11 @@
+ 
+ #if USE_OPENAL
+ 
++#ifndef NAEV_MUSICOPENAL
++#define NOPENALEXTERN extern
++#else
++#define NOPENALEXTERN
++#endif
+ 
+ #ifndef NOPENAL_H
+ #  define NOPENAL_H
+@@ -82,31 +87,31 @@
+ #define ALC_MAX_AUXILIARY_SENDS                            0x20003
+ #endif
+ /* Auxiliary Effect Slot. */
+-ALvoid (AL_APIENTRY *nalGenAuxiliaryEffectSlots)(ALsizei,ALuint*);
+-ALvoid (AL_APIENTRY *nalDeleteAuxiliaryEffectSlots)(ALsizei,ALuint*);
+-ALboolean (AL_APIENTRY *nalIsAuxiliaryEffectSlot)(ALuint);
+-ALvoid (AL_APIENTRY *nalAuxiliaryEffectSloti)(ALuint,ALenum,ALint);
+-ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotiv)(ALuint,ALenum,ALint*);
+-ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotf)(ALuint,ALenum,ALfloat);
+-ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotfv)(ALuint,ALenum,ALfloat*);
+-ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSloti)(ALuint,ALenum,ALint*);
+-ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotiv)(ALuint,ALenum,ALint*);
+-ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotf)(ALuint,ALenum,ALfloat*);
+-ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotfv)(ALuint,ALenum,ALfloat*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGenAuxiliaryEffectSlots)(ALsizei,ALuint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalDeleteAuxiliaryEffectSlots)(ALsizei,ALuint*);
++NOPENALEXTERN ALboolean (AL_APIENTRY *nalIsAuxiliaryEffectSlot)(ALuint);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalAuxiliaryEffectSloti)(ALuint,ALenum,ALint);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotiv)(ALuint,ALenum,ALint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotf)(ALuint,ALenum,ALfloat);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalAuxiliaryEffectSlotfv)(ALuint,ALenum,ALfloat*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSloti)(ALuint,ALenum,ALint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotiv)(ALuint,ALenum,ALint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotf)(ALuint,ALenum,ALfloat*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGetAuxiliaryEffectSlotfv)(ALuint,ALenum,ALfloat*);
+ /* Filter. */
+-ALvoid (AL_APIENTRY *nalGenFilters)(ALsizei,ALuint*);
+-ALvoid (AL_APIENTRY *nalDeleteFilters)(ALsizei,ALuint*);
+-ALvoid (AL_APIENTRY *nalFilteri)(ALuint,ALenum,ALint);
+-ALvoid (AL_APIENTRY *nalFilteriv)(ALuint,ALenum,ALint*);
+-ALvoid (AL_APIENTRY *nalFilterf)(ALuint,ALenum,ALfloat);
+-ALvoid (AL_APIENTRY *nalFilterfv)(ALuint,ALenum,ALfloat*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGenFilters)(ALsizei,ALuint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalDeleteFilters)(ALsizei,ALuint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalFilteri)(ALuint,ALenum,ALint);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalFilteriv)(ALuint,ALenum,ALint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalFilterf)(ALuint,ALenum,ALfloat);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalFilterfv)(ALuint,ALenum,ALfloat*);
+ /* Effect. */
+-ALvoid (AL_APIENTRY *nalGenEffects)(ALsizei,ALuint*);
+-ALvoid (AL_APIENTRY *nalDeleteEffects)(ALsizei,ALuint*);
+-ALvoid (AL_APIENTRY *nalEffecti)(ALuint,ALenum,ALint);
+-ALvoid (AL_APIENTRY *nalEffectiv)(ALuint,ALenum,ALint*);
+-ALvoid (AL_APIENTRY *nalEffectf)(ALuint,ALenum,ALfloat);
+-ALvoid (AL_APIENTRY *nalEffectfv)(ALuint,ALenum,ALfloat*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalGenEffects)(ALsizei,ALuint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalDeleteEffects)(ALsizei,ALuint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalEffecti)(ALuint,ALenum,ALint);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalEffectiv)(ALuint,ALenum,ALint*);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalEffectf)(ALuint,ALenum,ALfloat);
++NOPENALEXTERN ALvoid (AL_APIENTRY *nalEffectfv)(ALuint,ALenum,ALfloat*);
+ 
+ 
+ #endif /* NOPENAL_H */
+diff -ruN naev-0.7.0/src/opengl.c naev-0.7.0.aros/src/opengl.c
+--- naev-0.7.0/src/opengl.c	2017-07-15 22:51:22.000000000 +0000
++++ naev-0.7.0.aros/src/opengl.c	2021-01-18 05:33:32.710000000 +0000
+@@ -29,6 +29,7 @@
+  *  (+SCREEN_W/2.,+SCREEN_H/2.) is top right.
+  */
+ 
++#define NAEV_OPENGL
+ 
+ #include "opengl.h"
+ 
+diff -ruN naev-0.7.0/src/opengl_ext.h naev-0.7.0.aros/src/opengl_ext.h
+--- naev-0.7.0/src/opengl_ext.h	2017-07-14 02:20:30.000000000 +0000
++++ naev-0.7.0.aros/src/opengl_ext.h	2021-01-18 05:34:10.880000000 +0000
+@@ -6,35 +6,40 @@
+ #ifndef OPENGL_EXT_H
+ #  define OPENGL_EXT_H
+ 
++#ifndef NAEV_OPENGL
++#define NOPENGLEXTERN extern
++#else
++#define NOPENGLEXTERN
++#endif
+ 
+ #include "SDL_opengl.h"
+ 
+ /* GL_SGIS_generate_mipmap */
+-void (APIENTRY *nglGenerateMipmap)(GLenum target);
++NOPENGLEXTERN void (APIENTRY *nglGenerateMipmap)(GLenum target);
+ 
+ /* GL_ARB_multitexture */
+-void (APIENTRY *nglActiveTexture)(GLenum texture);
+-void (APIENTRY *nglClientActiveTexture)(GLenum texture);
+-void (APIENTRY *nglMultiTexCoord2d)(GLenum target,GLdouble s,GLdouble t);
++NOPENGLEXTERN void (APIENTRY *nglActiveTexture)(GLenum texture);
++NOPENGLEXTERN void (APIENTRY *nglClientActiveTexture)(GLenum texture);
++NOPENGLEXTERN void (APIENTRY *nglMultiTexCoord2d)(GLenum target,GLdouble s,GLdouble t);
+ 
+ /* GL_ARB_vertex_buffer_object */
+-void (APIENTRY *nglGenBuffers)(GLsizei n, GLuint* ids);
+-void (APIENTRY *nglBindBuffer)(GLenum target, GLuint id);
+-void (APIENTRY *nglBufferData)(GLenum target, GLsizei size, const void* data, GLenum usage);
+-void (APIENTRY *nglBufferSubData)(GLenum target, GLint offset, GLsizei size, void* data);
+-void* (APIENTRY *nglMapBuffer)(GLenum target, GLenum access);
+-void (APIENTRY *nglUnmapBuffer)(GLenum target);
+-void (APIENTRY *nglDeleteBuffers)(GLsizei n, const GLuint* ids);
++NOPENGLEXTERN void (APIENTRY *nglGenBuffers)(GLsizei n, GLuint* ids);
++NOPENGLEXTERN void (APIENTRY *nglBindBuffer)(GLenum target, GLuint id);
++NOPENGLEXTERN void (APIENTRY *nglBufferData)(GLenum target, GLsizei size, const void* data, GLenum usage);
++NOPENGLEXTERN void (APIENTRY *nglBufferSubData)(GLenum target, GLint offset, GLsizei size, void* data);
++NOPENGLEXTERN void* (APIENTRY *nglMapBuffer)(GLenum target, GLenum access);
++NOPENGLEXTERN void (APIENTRY *nglUnmapBuffer)(GLenum target);
++NOPENGLEXTERN void (APIENTRY *nglDeleteBuffers)(GLsizei n, const GLuint* ids);
+ 
+ /* GL_ARB_texture_compression */
+-void (APIENTRY *nglCompressedTexImage2D)(GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const GLvoid *);
++NOPENGLEXTERN void (APIENTRY *nglCompressedTexImage2D)(GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const GLvoid *);
+ 
+ 
+ /*
+  * Initializes the extensions.
+  */
+-int gl_initExtensions (void);
+-void gl_exitExtensions (void);
++NOPENGLEXTERN int gl_initExtensions (void);
++NOPENGLEXTERN void gl_exitExtensions (void);
+ 
+ 
+ #endif /* OPENGL_EXT_H */

@@ -1,0 +1,24 @@
+diff -ruN sdlscav-145/scav.c sdlscav-145.aros/scav.c
+--- sdlscav-145/scav.c	2015-01-05 22:31:53.000000000 +0000
++++ sdlscav-145.aros/scav.c	2021-01-17 23:56:44.000000000 +0000
+@@ -124,7 +124,7 @@
+ int seed=1;
+ int figseg;
+ uchar colormap[768];
+-int mousex,mousey;
++extern int mousex,mousey;
+ int numenemies;
+ int numgold;
+ int cframe;
+@@ -1545,7 +1545,11 @@
+    strcpy(libpath,LIBPATH);
+    strcpy(localdirname,LOCALDIRNAME);
+ 
++#ifdef __AROS__
++   p="/PROGDIR";
++#else
+    p=getenv(ENVHOME);
++#endif
+    if(!p)
+    {
+       eprintf("Cannot find %s environment variable!\n",ENVHOME);

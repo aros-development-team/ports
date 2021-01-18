@@ -38,7 +38,10 @@ FILES := \
 
 %fetch mmake=ports-game-sdlscavenger-fetch archive=$(ARCHBASE).4_2015_01_05 destination=$(PORTSDIR)/sdlscavenger \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz" \
-    patches_specs=sdlscav-145.4-aros.diff:$(ARCHBASE):-p1
+    patches_specs=$(ARCHBASE).4_2015_01_05-aros.diff:$(ARCHBASE):-p1
+
+%create_patch mmake=ports-game-sdlscavenger-create-patch \
+    archive=$(ARCHBASE).4_2015_01_05 srcdir=$(ARCHBASE) destination=$(PORTSDIR)/sdlscavenger suffixes="tgz"
 
 CPYFILES := DOC STRATEGY COPYING README
 

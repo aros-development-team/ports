@@ -1,7 +1,199 @@
-diff -Naur gnurobbo-0.68-orig/gnurobbo/controls.c gnurobbo-0.68/gnurobbo/controls.c
---- gnurobbo-0.68-orig/gnurobbo/controls.c	2017-08-02 17:52:10.133830065 +0200
-+++ gnurobbo-0.68/gnurobbo/controls.c	2017-08-02 18:09:19.918861768 +0200
-@@ -563,7 +563,7 @@
+diff -ruN gnurobbo-0.68/gnurobbo/ROB_engine.c gnurobbo-0.68.aros/gnurobbo/ROB_engine.c
+--- gnurobbo-0.68/gnurobbo/ROB_engine.c	2010-08-23 20:41:09.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/ROB_engine.c	2021-01-18 05:01:33.870000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_ROB
++
+ #include "game.h"
+ 
+ /* The GNU Robbo Rectangular Object Engine
+diff -ruN gnurobbo-0.68/gnurobbo/ROB_engine.h gnurobbo-0.68.aros/gnurobbo/ROB_engine.h
+--- gnurobbo-0.68/gnurobbo/ROB_engine.h	2010-01-16 20:41:55.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/ROB_engine.h	2021-01-18 05:01:23.060000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_ROB
++#define ROBEXTERN        extern
++#else
++#define ROBEXTERN
++#endif
++
+ /* Defines */
+ /*
+ #define DEBUG_ROB_HOTSPOTS
+@@ -118,7 +124,7 @@
+ 	void *pob;			/* Parent object pointer */
+ } ROB_Object;
+ 
+-ROB_Object *rob_lyr_pointer;
++ROBEXTERN ROB_Object *rob_lyr_pointer;
+ 
+ typedef struct robevent {
+ 	ROB_Object *rob_object;
+@@ -136,21 +142,21 @@
+ } ROB_OpEnv;
+ 
+ /* Function prototypes */
+-void ROB_Init(ROB_OpEnv *op_env);
+-ROB_Object *ROB_GetObject(int id);
+-int ROB_CreateObject(ROB_Object *rob_object);
+-int ROB_SetObjectDefaults(ROB_Object *rob_object);
+-char *ROB_GetError(void);
+-int ROB_Quit(void);
+-int ROB_FreeAllChildObjects(ROB_Object *pob, int free_pob);
+-int ROB_FreeAllDescendantObjects(ROB_Object *ancestor, int free_ancestor);
+-int ROB_FreeObject(ROB_Object *rob_object, int free_images_only);
+-int ROB_RenderObjects(void);
+-void ROB_GenerateEvents(int *actionid);
+-int ROB_ShowEvent(ROB_Event *rob_event, const char *func);
+-int ROB_SetOpEnvSystemPointer(int systempointer);
+-int ROB_SetOpEnvPointer(int pointer, int pointer_mode);
+-int ROB_SetOpEnvEventProcessor(void (*event_processor)(ROB_Event *rob_event));
++ROBEXTERN void ROB_Init(ROB_OpEnv *op_env);
++ROBEXTERN ROB_Object *ROB_GetObject(int id);
++ROBEXTERN int ROB_CreateObject(ROB_Object *rob_object);
++ROBEXTERN int ROB_SetObjectDefaults(ROB_Object *rob_object);
++ROBEXTERN char *ROB_GetError(void);
++ROBEXTERN int ROB_Quit(void);
++ROBEXTERN int ROB_FreeAllChildObjects(ROB_Object *pob, int free_pob);
++ROBEXTERN int ROB_FreeAllDescendantObjects(ROB_Object *ancestor, int free_ancestor);
++ROBEXTERN int ROB_FreeObject(ROB_Object *rob_object, int free_images_only);
++ROBEXTERN int ROB_RenderObjects(void);
++ROBEXTERN void ROB_GenerateEvents(int *actionid);
++ROBEXTERN int ROB_ShowEvent(ROB_Event *rob_event, const char *func);
++ROBEXTERN int ROB_SetOpEnvSystemPointer(int systempointer);
++ROBEXTERN int ROB_SetOpEnvPointer(int pointer, int pointer_mode);
++ROBEXTERN int ROB_SetOpEnvEventProcessor(void (*event_processor)(ROB_Event *rob_event));
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/board.c gnurobbo-0.68.aros/gnurobbo/board.c
+--- gnurobbo-0.68/gnurobbo/board.c	2014-02-15 20:48:19.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/board.c	2021-01-18 04:50:53.910000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_BOARD
++
+ #include "game.h"
+ 
+ /* Defines */
+diff -ruN gnurobbo-0.68/gnurobbo/board.h gnurobbo-0.68.aros/gnurobbo/board.h
+--- gnurobbo-0.68/gnurobbo/board.h	2014-02-12 20:22:57.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/board.h	2021-01-18 04:52:18.850000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_BOARD
++#define BOARDEXTERN        extern
++#else
++#define BOARDEXTERN
++#endif
++
+ /* Defines */
+ #define MAX_W 32		/* max width of the board */
+ #define MAX_H 31		/* max height of the board */
+@@ -125,7 +131,7 @@
+ #define EFFECT_NONE   -1
+ 
+ /* Variables */
+-int restart_timeout;		/* Time to wait before restarting a level after Robbo dies */
++BOARDEXTERN int restart_timeout;		/* Time to wait before restarting a level after Robbo dies */
+ 
+ struct Coords
+ {
+@@ -162,9 +168,9 @@
+ #endif
+   struct Coords icon[MAX_ICONS];	/* Coords of left-up point of icons drawed on bitmap */
+ };
+-struct object board[MAX_W][MAX_H];	/* This is the game area. Each board location holds one and only one of the above objects */
++BOARDEXTERN struct object board[MAX_W][MAX_H];	/* This is the game area. Each board location holds one and only one of the above objects */
+ 
+-struct
++BOARDEXTERN struct
+ {
+   int x;			/* Board x position */
+   int y;			/* Board y position */
+@@ -183,7 +189,7 @@
+ } robbo;
+ 
+ /* What is shown of the board is seen through this viewport */
+-struct
++BOARDEXTERN struct
+ {
+   int x;			/* Board x position */
+   int y;			/* Board y position */
+@@ -202,7 +208,7 @@
+ } viewport;
+ 
+ /* Some game mechanics that I have made available for modification via the rcfile */
+-struct
++BOARDEXTERN struct
+ {
+   int sensible_bears;
+   int sensible_questionmarks;
+@@ -210,23 +216,23 @@
+ } game_mechanics;
+ 
+ /* Function prototypes */
+-void update_game (void);
+-void init_questionmarks (void);
+-void open_exit (void);
+-void init_robbo (void);
+-void move_robbo (int x, int y);
+-void shoot_robbo (int x, int y);
+-void viewport_needs_redrawing (void);
+-void create_object (int x, int y, int type);
+-void clear_entire_board (void);
+-void set_coords (struct Coords *coords, int x, int y);
+-int coords_out_of_range (struct Coords coords);
+-void negate_state (int x, int y);
+-void redraw_field (int x, int y);
+-void clear_field (int x, int y);
+-int in_viewport(int x, int y);
+-int check_wall(int x, int y);
+-int rearange_walls();
+-int gcoord(int a);
++BOARDEXTERN void update_game (void);
++BOARDEXTERN void init_questionmarks (void);
++BOARDEXTERN void open_exit (void);
++BOARDEXTERN void init_robbo (void);
++BOARDEXTERN void move_robbo (int x, int y);
++BOARDEXTERN void shoot_robbo (int x, int y);
++BOARDEXTERN void viewport_needs_redrawing (void);
++BOARDEXTERN void create_object (int x, int y, int type);
++BOARDEXTERN void clear_entire_board (void);
++BOARDEXTERN void set_coords (struct Coords *coords, int x, int y);
++BOARDEXTERN int coords_out_of_range (struct Coords coords);
++BOARDEXTERN void negate_state (int x, int y);
++BOARDEXTERN void redraw_field (int x, int y);
++BOARDEXTERN void clear_field (int x, int y);
++BOARDEXTERN int in_viewport(int x, int y);
++BOARDEXTERN int check_wall(int x, int y);
++BOARDEXTERN int rearange_walls();
++BOARDEXTERN int gcoord(int a);
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/controls.c gnurobbo-0.68.aros/gnurobbo/controls.c
+--- gnurobbo-0.68/gnurobbo/controls.c	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/controls.c	2021-01-18 04:52:54.730000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_CONTROLS
++
+ #include "game.h"
+ 
+ /* Defines */
+@@ -563,7 +565,7 @@
  	/* Set some defaults */
  	for (count = 0; count < USER_CONTROLS; count++)
  	{
@@ -10,7 +202,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/controls.c gnurobbo-0.68/gnurobbo/control
  			user_controls[count].device = DEVICE_KEYBOARD;
  		#elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
  			user_controls[count].device = DEVICE_JOYSTICK;
-@@ -587,7 +587,7 @@
+@@ -587,7 +589,7 @@
  	 * you don't want to use a control then just set its device to UNDEFINED
  	 * (id and mod are already set to UNDEFINED from the above code) otherwise
  	 * within Options you'll see the device shown on its own which looks weird */
@@ -19,7 +211,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/controls.c gnurobbo-0.68/gnurobbo/control
  		user_controls[ACTION_UP].id = SDLK_UP;
  		user_controls[ACTION_UP_RIGHT].device = UNDEFINED;
  		user_controls[ACTION_RIGHT].id = SDLK_RIGHT;
-@@ -872,7 +872,7 @@
+@@ -872,7 +874,7 @@
  	{
  		/* WARNING: attempting to close joystick 0 on the GP2X
  		 * using the GPH SDK causes a seg fault */
@@ -28,10 +220,147 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/controls.c gnurobbo-0.68/gnurobbo/control
  			if (joystick)
  			{
  		#elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
-diff -Naur gnurobbo-0.68-orig/gnurobbo/game.c gnurobbo-0.68/gnurobbo/game.c
---- gnurobbo-0.68-orig/gnurobbo/game.c	2017-08-02 17:52:10.129830092 +0200
-+++ gnurobbo-0.68/gnurobbo/game.c	2017-08-02 18:13:27.453211540 +0200
-@@ -180,7 +180,7 @@
+diff -ruN gnurobbo-0.68/gnurobbo/controls.h gnurobbo-0.68.aros/gnurobbo/controls.h
+--- gnurobbo-0.68/gnurobbo/controls.h	2010-01-05 00:18:39.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/controls.h	2021-01-18 04:53:25.220000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_CONTROLS
++#define CONTROLSEXTERN        extern
++#else
++#define CONTROLSEXTERN
++#endif
++
+ /* Defines */
+ #define MAX_JOYSTICKS 10
+ #define MAX_JOYSTICK_NAME_LENGTH 256
+@@ -85,21 +91,21 @@
+ 
+ 
+ /* Variables */
+-SDL_Joystick *joystick;
++CONTROLSEXTERN SDL_Joystick *joystick;
+ 
+-char default_joystick_name[MAX_JOYSTICK_NAME_LENGTH];
+-int joystick_count;
+-char joystick_list[MAX_JOYSTICKS][MAX_JOYSTICK_NAME_LENGTH];
++CONTROLSEXTERN char default_joystick_name[MAX_JOYSTICK_NAME_LENGTH];
++CONTROLSEXTERN int joystick_count;
++CONTROLSEXTERN char joystick_list[MAX_JOYSTICKS][MAX_JOYSTICK_NAME_LENGTH];
+ 
+ /* Configurable options */
+-int key_repeat_delay;			/* 20 to 1000 ms */
+-int temp_key_repeat_delay;		/* 20 to 1000 ms */
+-int key_repeat_interval;		/* 20 to 1000 ms */
+-int temp_key_repeat_interval;	/* 20 to 1000 ms */
+-int default_joystick;
+-int temp_default_joystick;
+-int joystick_dead_zone;
+-int temp_joystick_dead_zone;
++CONTROLSEXTERN int key_repeat_delay;			/* 20 to 1000 ms */
++CONTROLSEXTERN int temp_key_repeat_delay;		/* 20 to 1000 ms */
++CONTROLSEXTERN int key_repeat_interval;		/* 20 to 1000 ms */
++CONTROLSEXTERN int temp_key_repeat_interval;	/* 20 to 1000 ms */
++CONTROLSEXTERN int default_joystick;
++CONTROLSEXTERN int temp_default_joystick;
++CONTROLSEXTERN int joystick_dead_zone;
++CONTROLSEXTERN int temp_joystick_dead_zone;
+ 
+ struct control {
+ 	int device;			/* Keyboard, joystick or mouse */
+@@ -110,21 +116,21 @@
+ 	int delay;			/* The initial delay in cycles before repeating - 0 disables the delay */
+ 	int interval;		/* The repeat interval in cycles - 0 disables the interval */
+ };
+-struct control user_controls[USER_CONTROLS];
+-struct control temp_user_controls[USER_CONTROLS];
++CONTROLSEXTERN struct control user_controls[USER_CONTROLS];
++CONTROLSEXTERN struct control temp_user_controls[USER_CONTROLS];
+ 
+-ROB_OpEnv gnurobbo_op_env;
+-ROB_OpEnv temp_gnurobbo_op_env;
++CONTROLSEXTERN ROB_OpEnv gnurobbo_op_env;
++CONTROLSEXTERN ROB_OpEnv temp_gnurobbo_op_env;
+ 
+ /* Function prototypes */
+-int get_user_action(int *actionid, int pollall, int *device, int *id, int *state);
+-void show_user_action(int *action_found);
+-void set_default_user_controls(struct control user_controls[USER_CONTROLS]);
+-int initialise_joystick(int joyid, char *joyname, int show);
+-int get_joystick_name(int joyid, char *joyname);
+-int get_joystick_list(char joystick_list[MAX_JOYSTICKS][MAX_JOYSTICK_NAME_LENGTH], int show);
+-void get_input_device_text(int device, int id, char *joyname, char *text);
+-int set_key_repeat(int delay, int interval);
++CONTROLSEXTERN int get_user_action(int *actionid, int pollall, int *device, int *id, int *state);
++CONTROLSEXTERN void show_user_action(int *action_found);
++CONTROLSEXTERN void set_default_user_controls(struct control user_controls[USER_CONTROLS]);
++CONTROLSEXTERN int initialise_joystick(int joyid, char *joyname, int show);
++CONTROLSEXTERN int get_joystick_name(int joyid, char *joyname);
++CONTROLSEXTERN int get_joystick_list(char joystick_list[MAX_JOYSTICKS][MAX_JOYSTICK_NAME_LENGTH], int show);
++CONTROLSEXTERN void get_input_device_text(int device, int id, char *joyname, char *text);
++CONTROLSEXTERN int set_key_repeat(int delay, int interval);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/font.c gnurobbo-0.68.aros/gnurobbo/font.c
+--- gnurobbo-0.68/gnurobbo/font.c	2010-04-02 16:28:24.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/font.c	2021-01-18 04:54:11.730000000 +0000
+@@ -19,6 +19,8 @@
+  *  Boston, MA 02111-1307, USA.
+  *
+  */
++
++#define GNUROBBO_FONT
+ 
+ #include "game.h"
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/font.h gnurobbo-0.68.aros/gnurobbo/font.h
+--- gnurobbo-0.68/gnurobbo/font.h	2010-01-05 00:18:39.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/font.h	2021-01-18 04:54:21.550000000 +0000
+@@ -20,17 +20,23 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_FONT
++#define FONTEXTERN        extern
++#else
++#define FONTEXTERN
++#endif
++
+ /* Defines */
+ 
+ /* Variables */
+ typedef SDL_Surface TTF_Font;
+ 
+ /* Function prototypes */
+-int TTF_Init(void);
+-void TTF_Quit(void);
+-SDL_Surface *TTF_OpenFont(const char *file, int ptsize);
+-void TTF_CloseFont(SDL_Surface *font);
+-SDL_Surface *TTF_RenderUTF8_Shaded(SDL_Surface *font, const char *text, SDL_Color fg, SDL_Color bg);
++FONTEXTERN int TTF_Init(void);
++FONTEXTERN void TTF_Quit(void);
++FONTEXTERN SDL_Surface *TTF_OpenFont(const char *file, int ptsize);
++FONTEXTERN void TTF_CloseFont(SDL_Surface *font);
++FONTEXTERN SDL_Surface *TTF_RenderUTF8_Shaded(SDL_Surface *font, const char *text, SDL_Color fg, SDL_Color bg);
+ 
+ #endif
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/game.c gnurobbo-0.68.aros/gnurobbo/game.c
+--- gnurobbo-0.68/gnurobbo/game.c	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/game.c	2021-01-18 04:55:28.810000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_GAME
++
+ #include <SDL/SDL_main.h>
+ #include "game.h"
+ 
+@@ -180,7 +182,7 @@
    pointer_controls.state = POINTER_CONTROLS_MODE_OFF;
    pointer_controls.shoot_state = POINTER_CONTROLS_SHOOT_OFF;
    pointer_controls.pad_type = POINTER_CONTROLS_PAD_TYPE_VIEWPORT;	/* POINTER_CONTROLS_PAD_TYPE_SCREEN; */
@@ -40,7 +369,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/game.c gnurobbo-0.68/gnurobbo/game.c
    gnurobbo_op_env.systempointer = TRUE;
  #elif defined(PLATFORM_GP2X)
    gnurobbo_op_env.systempointer = FALSE;
-@@ -357,6 +357,8 @@
+@@ -357,6 +359,8 @@
  	#elif defined(PLATFORM_PC)
  		strcpy (path_resource_file, getenv ("HOME"));
  		strcat (path_resource_file, "/");
@@ -49,7 +378,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/game.c gnurobbo-0.68/gnurobbo/game.c
  	#elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
  		strcpy (path_resource_file, "./");
  	#elif defined(PLATFORM_ZAURUS)
-@@ -468,7 +470,7 @@
+@@ -468,7 +472,7 @@
  	  initialise_joystick (UNDEFINED, default_joystick_name, TRUE);
      }
  
@@ -58,7 +387,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/game.c gnurobbo-0.68/gnurobbo/game.c
    /* Load the window manager icon and set caption */
    set_wm_icon();
    SDL_WM_SetCaption ("GNU Robbo", "gnurobbo");
-@@ -1608,7 +1610,7 @@
+@@ -1608,7 +1612,7 @@
  
    /* WARNING: attempting to close joystick 0 on the GP2X using the GPH
     * SDK causes a seg fault and it may do the same on similar devices */
@@ -67,10 +396,22 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/game.c gnurobbo-0.68/gnurobbo/game.c
    if (joystick)
      SDL_JoystickClose (joystick);
  #elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
-diff -Naur gnurobbo-0.68-orig/gnurobbo/game.h gnurobbo-0.68/gnurobbo/game.h
---- gnurobbo-0.68-orig/gnurobbo/game.h	2017-08-02 17:52:10.133830065 +0200
-+++ gnurobbo-0.68/gnurobbo/game.h	2017-08-02 18:15:49.036269136 +0200
-@@ -84,8 +84,13 @@
+diff -ruN gnurobbo-0.68/gnurobbo/game.h gnurobbo-0.68.aros/gnurobbo/game.h
+--- gnurobbo-0.68/gnurobbo/game.h	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/game.h	2021-01-18 05:07:30.960000000 +0000
+@@ -18,6 +18,11 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_GAME
++#define GAMEEXTERN        extern
++#else
++#define GAMEEXTERN
++#endif
+ 
+ //defines for Windows
+ //#define PLATFORM_WIN32
+@@ -84,8 +89,13 @@
  */
  
  
@@ -84,10 +425,166 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/game.h gnurobbo-0.68/gnurobbo/game.h
  
  #define UNDEFINED -1
  
-diff -Naur gnurobbo-0.68-orig/gnurobbo/levels.c gnurobbo-0.68/gnurobbo/levels.c
---- gnurobbo-0.68-orig/gnurobbo/levels.c	2017-08-02 17:52:10.129830092 +0200
-+++ gnurobbo-0.68/gnurobbo/levels.c	2017-08-02 18:37:51.976108821 +0200
-@@ -192,7 +192,7 @@
+@@ -184,32 +194,32 @@
+ 
+ /* Variables */
+ #ifdef DEBUG_COLOUR_SELECT
+-int debug_colour_select_r;
+-int debug_colour_select_g;
+-int debug_colour_select_b;
+-int debug_colour_select_component;
+-#endif
+-int sound;
+-int game_mode;
+-int game_cycle_delay;		/* Defaults to 10ms */
+-int game_cycle_limit;		/* 20, 25, 33 Hz */
+-int temp_game_cycle_limit;	/* 20, 25, 33 Hz */
+-int cycle_count;		/* A running cycle count used for time stamping objects */
+-int temp_game_sound;
+-int temp_sfx_vol;
+-int introscreenselecteditem;
+-int helppage;
+-int helppageselecteditem;
+-int options[104];
+-int optionspage;
+-int optionspageselecteditem[OPTIONS_SCREEN_PAGES];
++GAMEEXTERN int debug_colour_select_r;
++GAMEEXTERN int debug_colour_select_g;
++GAMEEXTERN int debug_colour_select_b;
++GAMEEXTERN int debug_colour_select_component;
++#endif
++extern int sound;
++GAMEEXTERN int game_mode;
++GAMEEXTERN int game_cycle_delay;		/* Defaults to 10ms */
++GAMEEXTERN int game_cycle_limit;		/* 20, 25, 33 Hz */
++GAMEEXTERN int temp_game_cycle_limit;	/* 20, 25, 33 Hz */
++GAMEEXTERN int cycle_count;		/* A running cycle count used for time stamping objects */
++extern int temp_game_sound;
++extern int temp_sfx_vol;
++GAMEEXTERN int introscreenselecteditem;
++GAMEEXTERN int helppage;
++GAMEEXTERN int helppageselecteditem;
++GAMEEXTERN int options[104];
++GAMEEXTERN int optionspage;
++GAMEEXTERN int optionspageselecteditem[OPTIONS_SCREEN_PAGES];
+ 
+ /* Function prototypes */
+-int my_rand ();
+-void my_srand (unsigned int seed);
+-int demo_mode (int demo_mode_state, int actionid);
+-void manage_game_on_input (int actionid);
++GAMEEXTERN int my_rand ();
++GAMEEXTERN void my_srand (unsigned int seed);
++GAMEEXTERN int demo_mode (int demo_mode_state, int actionid);
++GAMEEXTERN void manage_game_on_input (int actionid);
+ /* Event processors */
+-void intro_screen_event_processor (ROB_Event * rob_event);
+-void help_screen_event_processor (ROB_Event * rob_event);
+-void options_screen_event_processor (ROB_Event * rob_event);
++GAMEEXTERN void intro_screen_event_processor (ROB_Event * rob_event);
++GAMEEXTERN void help_screen_event_processor (ROB_Event * rob_event);
++GAMEEXTERN void options_screen_event_processor (ROB_Event * rob_event);
+diff -ruN gnurobbo-0.68/gnurobbo/konstruktor.c gnurobbo-0.68.aros/gnurobbo/konstruktor.c
+--- gnurobbo-0.68/gnurobbo/konstruktor.c	2012-01-18 20:03:07.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/konstruktor.c	2021-01-18 05:05:21.440000000 +0000
+@@ -12,6 +12,8 @@
+  * - Suite 330, Boston, MA 02111-1307, USA. 
+  */
+ 
++#define GNUROBBO_KONST
++
+ #include "game.h"
+ 
+ int             viewh;
+diff -ruN gnurobbo-0.68/gnurobbo/konstruktor.h gnurobbo-0.68.aros/gnurobbo/konstruktor.h
+--- gnurobbo-0.68/gnurobbo/konstruktor.h	2012-01-18 20:03:07.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/konstruktor.h	2021-01-18 04:56:20.120000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_KONST
++#define KONSTEXTERN        extern
++#else
++#define KONSTEXTERN
++#endif
++
+ #ifdef _SMOOTH_SCRL_
+ #define DELAY_KONSTRUKTOR (6*SCRL_MULT1)
+ #define DELAY_K_BLINK (3*SCRL_MULT1)
+@@ -93,7 +99,7 @@
+ 
+ /* Thunor: This is now being defined and declared at the same
+  * time since we only require one of them */
+-struct {
++KONSTEXTERN struct {
+ 	int x;
+ 	int y;
+ 	int w;
+@@ -108,32 +114,32 @@
+ 
+ 
+ 
+-SDL_Surface    *k_icons;
++KONSTEXTERN SDL_Surface    *k_icons;
+ 
+ /*
+  * variables 
+  */
+-int K_exit;
+-int             lastclick;
+-int             K_direction;
+-char            infostring[255];
+-int             inforedraw;
+-int             kmx,
++KONSTEXTERN int K_exit;
++KONSTEXTERN int             lastclick;
++KONSTEXTERN int             K_direction;
++KONSTEXTERN char            infostring[255];
++KONSTEXTERN int             inforedraw;
++KONSTEXTERN int             kmx,
+                 kmy;
+ /*
+  * prototypes 
+  */
+ 
+-int             konstruktor_init();
++KONSTEXTERN int             konstruktor_init();
+ 
+-int             konstruktor_end();
+-void            konstruktor_animate(void);
+-void            konstruktor_scroll(int direction);
+-void            konstruktor_show_game_area(void);
+-void            konstruktor_click();
+-void            konstruktor_draw_icons();
+-void            k_geticoncoords(int x, int y, SDL_Rect * rect);
+-void            k_save_map();
+-int             k_count_obj(int obj);
+-void            k_redraw_all();
++KONSTEXTERN int             konstruktor_end();
++KONSTEXTERN void            konstruktor_animate(void);
++KONSTEXTERN void            konstruktor_scroll(int direction);
++KONSTEXTERN void            konstruktor_show_game_area(void);
++KONSTEXTERN void            konstruktor_click();
++KONSTEXTERN void            konstruktor_draw_icons();
++KONSTEXTERN void            k_geticoncoords(int x, int y, SDL_Rect * rect);
++KONSTEXTERN void            k_save_map();
++KONSTEXTERN int             k_count_obj(int obj);
++KONSTEXTERN void            k_redraw_all();
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/levels.c gnurobbo-0.68.aros/gnurobbo/levels.c
+--- gnurobbo-0.68/gnurobbo/levels.c	2014-02-20 18:15:52.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/levels.c	2021-01-18 04:57:27.160000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_LEVELS
++
+ #include "game.h"
+ 
+ /* Defines */
+@@ -192,7 +194,7 @@
  	FILE *fp;
  	char fullpath[256];
  	#if defined(PLATFORM_WIN32)
@@ -96,7 +593,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/levels.c gnurobbo-0.68/gnurobbo/levels.c
  		char foldername[256];
  	#elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
  	#elif defined(PLATFORM_PSP)
-@@ -204,6 +204,9 @@
+@@ -204,6 +206,9 @@
  	#elif defined(PLATFORM_PC) || defined(PLATFORM_ZAURUS) || defined(PLATFORM_FREMANTLE)
  		strcpy (fullpath, getenv ("HOME"));
  		strcat (fullpath, "/" LOCAL_DATA_DIR "/" LEVELS_DIR "/" DEFAULT_USER_LEVEL_PACK);
@@ -106,7 +603,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/levels.c gnurobbo-0.68/gnurobbo/levels.c
  	#elif defined(PLATFORM_GP2X) || defined(PLATFORM_PSP)  || defined(PLATFORM_CAANOO)
  		strcpy (fullpath, PACKAGE_DATA_DIR "/" LEVELS_DIR "/" DEFAULT_USER_LEVEL_PACK);
  	#endif
-@@ -224,6 +227,12 @@
+@@ -224,6 +229,12 @@
  				mkdir (foldername, 0755);
  				strcat (foldername, "/" LEVELS_DIR);
  				mkdir (foldername, 0755);
@@ -119,7 +616,7 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/levels.c gnurobbo-0.68/gnurobbo/levels.c
  			#elif defined(PLATFORM_GP2X)  || defined(PLATFORM_CAANOO)
  			#elif defined(PLATFORM_PSP)
  			#endif
-@@ -309,6 +318,8 @@
+@@ -309,6 +320,8 @@
  
  	#if defined(PLATFORM_WIN32)
  		for (count = 0; count < 1; count++)
@@ -128,10 +625,74 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/levels.c gnurobbo-0.68/gnurobbo/levels.c
  	#elif defined(PLATFORM_PC) || defined(PLATFORM_ZAURUS) || defined(PLATFORM_FREMANTLE)
  		for (count = 0; count < 2; count++)
  	#elif defined(PLATFORM_GP2X) || defined(PLATFORM_PSP)  || defined(PLATFORM_CAANOO)
-diff -Naur gnurobbo-0.68-orig/gnurobbo/locales.c gnurobbo-0.68/gnurobbo/locales.c
---- gnurobbo-0.68-orig/gnurobbo/locales.c	2017-08-02 17:52:10.133830065 +0200
-+++ gnurobbo-0.68/gnurobbo/locales.c	2017-08-02 18:35:23.097057260 +0200
-@@ -326,6 +326,10 @@
+diff -ruN gnurobbo-0.68/gnurobbo/levels.h gnurobbo-0.68.aros/gnurobbo/levels.h
+--- gnurobbo-0.68/gnurobbo/levels.h	2010-08-24 21:57:10.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/levels.h	2021-01-18 04:57:14.360000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_LEVELS
++#define LEVELSEXTERN        extern
++#else
++#define LEVELSEXTERN
++#endif
++
+ /* Defines */
+ #define MAX_LEVEL_PACKS 84
+ #define LOCAL_DATA_DIR ".gnurobbo"
+@@ -31,7 +37,7 @@
+ #define DEFAULT_LEVEL_COLOUR 0x608050
+ 
+ /* Variables */
+-struct {
++LEVELSEXTERN struct {
+ 	int w;
+ 	int h;
+ 	char author[60];		/* The text displayed on the authorline above the viewport */
+@@ -49,19 +55,19 @@
+ 	int level_selected;		/* e.g. 3 is currently selected by the user */
+ 	int selected;			/* e.g. This pack is currently selected by the user */
+ };
+-struct pack level_packs[MAX_LEVEL_PACKS];
++LEVELSEXTERN struct pack level_packs[MAX_LEVEL_PACKS];
+ 
+-int found_pack_count;		/* How many packs were physically found */
+-int level_pack_count;		/* How many packs are in the list (historical entries from the rc are added to the end) */
+-int selected_pack;			/* Which pack in the list is currently selected */
++LEVELSEXTERN int found_pack_count;		/* How many packs were physically found */
++LEVELSEXTERN int level_pack_count;		/* How many packs are in the list (historical entries from the rc are added to the end) */
++LEVELSEXTERN int selected_pack;			/* Which pack in the list is currently selected */
+ 
+ /* Function prototypes */
+-int level_init(void);
+-void create_userpack(void);
+-int find_all_dat_files(void);
+-void read_level_packs(void);
+-void sort_level_packs(void);
+-int load_level_data(int level_number);
++LEVELSEXTERN int level_init(void);
++LEVELSEXTERN void create_userpack(void);
++LEVELSEXTERN int find_all_dat_files(void);
++LEVELSEXTERN void read_level_packs(void);
++LEVELSEXTERN void sort_level_packs(void);
++LEVELSEXTERN int load_level_data(int level_number);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/locales.c gnurobbo-0.68.aros/gnurobbo/locales.c
+--- gnurobbo-0.68/gnurobbo/locales.c	2012-01-18 20:03:07.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/locales.c	2021-01-18 04:58:51.510000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_LOCALES
++
+ #include "game.h"
+ 
+ /* Defines */
+@@ -326,6 +328,10 @@
  		strcpy (config_items[++row].name, "[txt_intro_keys_PLATFORM_PC]");
  		config_items[row].destination = txt_intro_keys;
  		config_items[row].max_rows = TXT_INTRO_KEYS_ROWS;
@@ -142,10 +703,522 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/locales.c gnurobbo-0.68/gnurobbo/locales.
  	#elif defined(PLATFORM_GP2X) || defined(PLATFORM_CAANOO)
  		strcpy (config_items[++row].name, "[txt_intro_keys_PLATFORM_GP2X]");
  		config_items[row].destination = txt_intro_keys;
-diff -Naur gnurobbo-0.68-orig/gnurobbo/rcfile.h gnurobbo-0.68/gnurobbo/rcfile.h
---- gnurobbo-0.68-orig/gnurobbo/rcfile.h	2017-08-02 17:52:10.133830065 +0200
-+++ gnurobbo-0.68/gnurobbo/rcfile.h	2017-08-02 18:20:10.858675704 +0200
-@@ -23,6 +23,8 @@
+diff -ruN gnurobbo-0.68/gnurobbo/locales.h gnurobbo-0.68.aros/gnurobbo/locales.h
+--- gnurobbo-0.68/gnurobbo/locales.h	2012-01-18 20:03:07.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/locales.h	2021-01-18 04:58:37.100000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_LOCALES
++#define LOCALESEXTERN        extern
++#else
++#define LOCALESEXTERN
++#endif
++
+ /* Defines */
+ #define MAX_LOCALES 12
+ #define DEFAULT_LOCALE "en_GB"
+@@ -36,213 +42,213 @@
+ #define TXT_MAX_COLS 100
+ 
+ /* Variables */
+-char txt_intro_story[TXT_INTRO_STORY_ROWS * TXT_MAX_COLS];
+-char txt_intro_keys[TXT_INTRO_KEYS_ROWS * TXT_MAX_COLS];
+-char txt_intro_keys_description[TXT_INTRO_KEYS_DESCRIPTION_ROWS * TXT_MAX_COLS];
+-char txt_intro_menu[TXT_INTRO_MENU_ROWS * TXT_MAX_COLS];
+-char txt_of[TXT_MAX_COLS];
+-char txt_intro_credits[TXT_INTRO_CREDITS_ROWS * TXT_MAX_COLS];
+-
+-char txt_help_page0[TXT_HELP_PAGE0_ROWS * TXT_MAX_COLS];
+-char txt_help_page1[TXT_HELP_PAGE1_ROWS * TXT_MAX_COLS];
+-char txt_help_page2[TXT_HELP_PAGE2_ROWS * TXT_MAX_COLS];
+-char txt_help_page3[TXT_HELP_PAGE3_ROWS * TXT_MAX_COLS];
+-char txt_Back[TXT_MAX_COLS];
+-char txt_Next[TXT_MAX_COLS];
+-char txt_Exit[TXT_MAX_COLS];
+-
+-char txt_options_page1[TXT_OPTIONS_PAGE1_ROWS * TXT_MAX_COLS];
+-char txt_Save[TXT_MAX_COLS];
+-char txt_Game_Speed[TXT_MAX_COLS];
+-char txt_Fast[TXT_MAX_COLS];
+-char txt_Normal[TXT_MAX_COLS];
+-char txt_Slow[TXT_MAX_COLS];
+-char txt_Key_Repeat[TXT_MAX_COLS];
+-char txt_Delay[TXT_MAX_COLS];
+-char txt_Interval[TXT_MAX_COLS];
+-char txt_Default_Joystick[TXT_MAX_COLS];
+-char txt_No_joystick_found[TXT_MAX_COLS];
+-char txt_Joystick_Axes_Dead_Zone[TXT_MAX_COLS];
+-char txt_Language[TXT_MAX_COLS];
+-char txt_Translation_by[TXT_MAX_COLS];
+-char txt_Save_Frequency[TXT_MAX_COLS];
+-char txt_On_Exit[TXT_MAX_COLS];
+-char txt_On_Change[TXT_MAX_COLS];
+-char txt_Move_Up[TXT_MAX_COLS];
+-char txt_Move_Up_Right[TXT_MAX_COLS];
+-char txt_Move_Right[TXT_MAX_COLS];
+-char txt_Move_Down_Right[TXT_MAX_COLS];
+-char txt_Move_Down[TXT_MAX_COLS];
+-char txt_Move_Down_Left[TXT_MAX_COLS];
+-char txt_Move_Left[TXT_MAX_COLS];
+-char txt_Move_Up_Left[TXT_MAX_COLS];
+-char txt_Shoot_Up[TXT_MAX_COLS];
+-char txt_Shoot_Down[TXT_MAX_COLS];
+-char txt_Shoot_Left[TXT_MAX_COLS];
+-char txt_Shoot_Right[TXT_MAX_COLS];
+-char txt_Restart[TXT_MAX_COLS];
+-char txt_Confirm[TXT_MAX_COLS];
+-char txt_Help[TXT_MAX_COLS];
+-char txt_Options[TXT_MAX_COLS];
+-char txt_Previous_Level[TXT_MAX_COLS];
+-char txt_Next_Level[TXT_MAX_COLS];
+-char txt_Previous_Pack[TXT_MAX_COLS];
+-char txt_Next_Pack[TXT_MAX_COLS];
+-char txt_Toggle_Fullscreen[TXT_MAX_COLS];
+-char txt_Home[TXT_MAX_COLS];
+-char txt_End[TXT_MAX_COLS];
+-char txt_Page_Up[TXT_MAX_COLS];
+-char txt_Page_Down[TXT_MAX_COLS];
+-char txt_Volume_Up[TXT_MAX_COLS];
+-char txt_Volume_Down[TXT_MAX_COLS];
+-char txt_Modifier[TXT_MAX_COLS];
+-char txt_Restore_Default_Controls[TXT_MAX_COLS];
+-char txt_Toggle_Designer[TXT_MAX_COLS];
+-char txt_Scroll_Up[TXT_MAX_COLS];
+-char txt_Scroll_Down[TXT_MAX_COLS];
+-char txt_Primary_Click[TXT_MAX_COLS];
+-char txt_System_Pointer[TXT_MAX_COLS];
+-char txt_Disabled[TXT_MAX_COLS];
+-char txt_Enabled[TXT_MAX_COLS];
+-char txt_Pointer_Controls_Pad_Type[TXT_MAX_COLS];
+-char txt_Viewport[TXT_MAX_COLS];
+-char txt_Screen[TXT_MAX_COLS];
+-char txt_Sound[TXT_MAX_COLS];
+-char txt_Sfx_Volume[TXT_MAX_COLS];
+-char txt_Simulated_Pointer[TXT_MAX_COLS];
+-
+-char txt_Key[TXT_MAX_COLS];
+-char txt_Joy[TXT_MAX_COLS];
+-char txt_Ptr[TXT_MAX_COLS];
+-char txt_Mod[TXT_MAX_COLS];
+-char txt_Skin[TXT_MAX_COLS];
+-char txt_By[TXT_MAX_COLS];
+-
+-char txt_Level_Author[TXT_MAX_COLS];
+-char txt_endscreen_congrats[TXT_ENDSCREEN_CONGRATS_ROWS * TXT_MAX_COLS];
+-
+-char txt_Volume[TXT_MAX_COLS];
+-char txt_Changes_saved[TXT_MAX_COLS];
+-char txt_Default_controls_restored[TXT_MAX_COLS];
+-char txt_Press_something_and_release[TXT_MAX_COLS];
+-char txt_No_input_was_detected[TXT_MAX_COLS];
+-
+-char txt_ptr_BtnLeft[TXT_MAX_COLS];
+-char txt_ptr_BtnMiddle[TXT_MAX_COLS];
+-char txt_ptr_BtnRight[TXT_MAX_COLS];
+-char txt_ptr_WheelUp[TXT_MAX_COLS];
+-char txt_ptr_WheelDown[TXT_MAX_COLS];
+-
+-char txt_key_Backspace[TXT_MAX_COLS];
+-char txt_key_Tab[TXT_MAX_COLS];
+-char txt_key_Clear[TXT_MAX_COLS];
+-char txt_key_Return[TXT_MAX_COLS];
+-char txt_key_Pause[TXT_MAX_COLS];
+-char txt_key_Escape[TXT_MAX_COLS];
+-char txt_key_Space[TXT_MAX_COLS];
+-char txt_key_Delete[TXT_MAX_COLS];
+-char txt_key_KP[TXT_MAX_COLS];
+-char txt_key_Up[TXT_MAX_COLS];
+-char txt_key_Down[TXT_MAX_COLS];
+-char txt_key_Right[TXT_MAX_COLS];
+-char txt_key_Left[TXT_MAX_COLS];
+-char txt_key_Insert[TXT_MAX_COLS];
+-char txt_key_Home[TXT_MAX_COLS];
+-char txt_key_End[TXT_MAX_COLS];
+-char txt_key_PgUp[TXT_MAX_COLS];
+-char txt_key_PgDn[TXT_MAX_COLS];
+-char txt_key_NumLk[TXT_MAX_COLS];
+-char txt_key_CapsLk[TXT_MAX_COLS];
+-char txt_key_ScrlLk[TXT_MAX_COLS];
+-char txt_key_RShift[TXT_MAX_COLS];
+-char txt_key_LShift[TXT_MAX_COLS];
+-char txt_key_RCtrl[TXT_MAX_COLS];
+-char txt_key_LCtrl[TXT_MAX_COLS];
+-char txt_key_RAlt[TXT_MAX_COLS];
+-char txt_key_LAlt[TXT_MAX_COLS];
+-char txt_key_RMeta[TXT_MAX_COLS];
+-char txt_key_LMeta[TXT_MAX_COLS];
+-char txt_key_LSuper[TXT_MAX_COLS];
+-char txt_key_RSuper[TXT_MAX_COLS];
+-char txt_key_AltGr[TXT_MAX_COLS];
+-char txt_key_Compose[TXT_MAX_COLS];
+-char txt_key_Help[TXT_MAX_COLS];
+-char txt_key_PrScr[TXT_MAX_COLS];
+-char txt_key_SysRq[TXT_MAX_COLS];
+-char txt_key_Break[TXT_MAX_COLS];
+-char txt_key_Menu[TXT_MAX_COLS];
+-char txt_key_Power[TXT_MAX_COLS];
+-char txt_key_Euro[TXT_MAX_COLS];
+-char txt_key_Undo[TXT_MAX_COLS];
+-
+-char txt_konstruktor_Ground[TXT_MAX_COLS];
+-char txt_konstruktor_Stop[TXT_MAX_COLS];
+-char txt_konstruktor_Radioactive_Field[TXT_MAX_COLS];
+-char txt_konstruktor_Push_Box[TXT_MAX_COLS];
+-char txt_konstruktor_Capsule[TXT_MAX_COLS];
+-char txt_konstruktor_Bomb[TXT_MAX_COLS];
+-char txt_konstruktor_Bomb2[TXT_MAX_COLS];
+-char txt_konstruktor_Door[TXT_MAX_COLS];
+-char txt_konstruktor_Box[TXT_MAX_COLS];
+-char txt_konstruktor_Empty_Field[TXT_MAX_COLS];
+-char txt_konstruktor_Butterfly[TXT_MAX_COLS];
+-char txt_konstruktor_Gun_Fire[TXT_MAX_COLS];
+-char txt_konstruktor_Force_Field[TXT_MAX_COLS];
+-char txt_konstruktor_Screw[TXT_MAX_COLS];
+-char txt_konstruktor_Wall[TXT_MAX_COLS];
+-char txt_konstruktor_Black_Wall[TXT_MAX_COLS];
+-char txt_konstruktor_Teleport[TXT_MAX_COLS];
+-char txt_konstruktor_Gun[TXT_MAX_COLS];
+-char txt_konstruktor_Magnet[TXT_MAX_COLS];
+-char txt_konstruktor_Bear[TXT_MAX_COLS];
+-char txt_konstruktor_Black_Bear[TXT_MAX_COLS];
+-char txt_konstruktor_Bird[TXT_MAX_COLS];
+-char txt_konstruktor_Key[TXT_MAX_COLS];
+-char txt_konstruktor_Bullets[TXT_MAX_COLS];
+-char txt_konstruktor_on_map[TXT_MAX_COLS];
+-char txt_konstruktor_Laser_Gun[TXT_MAX_COLS];
+-char txt_konstruktor_Blaster_Gun[TXT_MAX_COLS];
+-char txt_konstruktor_Regular_Gun[TXT_MAX_COLS];
+-char txt_konstruktor_Fixed[TXT_MAX_COLS];
+-char txt_konstruktor_Moveable[TXT_MAX_COLS];
+-char txt_konstruktor_Rotating[TXT_MAX_COLS];
+-char txt_konstruktor_Moveable_Rotating[TXT_MAX_COLS];
+-char txt_konstruktor_Direction_right[TXT_MAX_COLS];
+-char txt_konstruktor_Direction_down[TXT_MAX_COLS];
+-char txt_konstruktor_Direction_left[TXT_MAX_COLS];
+-char txt_konstruktor_Direction_up[TXT_MAX_COLS];
+-char txt_konstruktor_Welcome_to_GNU_Robbo_Designer[TXT_MAX_COLS];
+-char txt_konstruktor_Exit_designer_select_again_to_exit[TXT_MAX_COLS];
+-char txt_konstruktor_Reload_level_select_again_to_reload[TXT_MAX_COLS];
+-char txt_konstruktor_Level_reloaded[TXT_MAX_COLS];
+-char txt_konstruktor_New_level_select_again_to_create[TXT_MAX_COLS];
+-char txt_konstruktor_Level_created[TXT_MAX_COLS];
+-char txt_konstruktor_Save_select_again_to_save_new_level[TXT_MAX_COLS];
+-char txt_konstruktor_New_level_appended_to_pack[TXT_MAX_COLS];
+-char txt_konstruktor_Clear_level_select_again_to_clear[TXT_MAX_COLS];
+-char txt_konstruktor_Level_cleared[TXT_MAX_COLS];
+-char txt_konstruktor_Save_select_again_to_save_changes[TXT_MAX_COLS];
+-char txt_konstruktor_Changes_saved[TXT_MAX_COLS];
+-char txt_konstruktor_Level_resized_to[TXT_MAX_COLS];
+-char txt_konstruktor_Screws[TXT_MAX_COLS];
++LOCALESEXTERN char txt_intro_story[TXT_INTRO_STORY_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_intro_keys[TXT_INTRO_KEYS_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_intro_keys_description[TXT_INTRO_KEYS_DESCRIPTION_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_intro_menu[TXT_INTRO_MENU_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_of[TXT_MAX_COLS];
++LOCALESEXTERN char txt_intro_credits[TXT_INTRO_CREDITS_ROWS * TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_help_page0[TXT_HELP_PAGE0_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_help_page1[TXT_HELP_PAGE1_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_help_page2[TXT_HELP_PAGE2_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_help_page3[TXT_HELP_PAGE3_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_Back[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Next[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Exit[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_options_page1[TXT_OPTIONS_PAGE1_ROWS * TXT_MAX_COLS];
++LOCALESEXTERN char txt_Save[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Game_Speed[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Fast[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Normal[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Slow[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Key_Repeat[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Delay[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Interval[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Default_Joystick[TXT_MAX_COLS];
++LOCALESEXTERN char txt_No_joystick_found[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Joystick_Axes_Dead_Zone[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Language[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Translation_by[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Save_Frequency[TXT_MAX_COLS];
++LOCALESEXTERN char txt_On_Exit[TXT_MAX_COLS];
++LOCALESEXTERN char txt_On_Change[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Up_Right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Down_Right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Down_Left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Move_Up_Left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Shoot_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Shoot_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Shoot_Left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Shoot_Right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Restart[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Confirm[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Help[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Options[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Previous_Level[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Next_Level[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Previous_Pack[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Next_Pack[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Toggle_Fullscreen[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Home[TXT_MAX_COLS];
++LOCALESEXTERN char txt_End[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Page_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Page_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Volume_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Volume_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Modifier[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Restore_Default_Controls[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Toggle_Designer[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Scroll_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Scroll_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Primary_Click[TXT_MAX_COLS];
++LOCALESEXTERN char txt_System_Pointer[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Disabled[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Enabled[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Pointer_Controls_Pad_Type[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Viewport[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Screen[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Sound[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Sfx_Volume[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Simulated_Pointer[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_Key[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Joy[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Ptr[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Mod[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Skin[TXT_MAX_COLS];
++LOCALESEXTERN char txt_By[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_Level_Author[TXT_MAX_COLS];
++LOCALESEXTERN char txt_endscreen_congrats[TXT_ENDSCREEN_CONGRATS_ROWS * TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_Volume[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Changes_saved[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Default_controls_restored[TXT_MAX_COLS];
++LOCALESEXTERN char txt_Press_something_and_release[TXT_MAX_COLS];
++LOCALESEXTERN char txt_No_input_was_detected[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_ptr_BtnLeft[TXT_MAX_COLS];
++LOCALESEXTERN char txt_ptr_BtnMiddle[TXT_MAX_COLS];
++LOCALESEXTERN char txt_ptr_BtnRight[TXT_MAX_COLS];
++LOCALESEXTERN char txt_ptr_WheelUp[TXT_MAX_COLS];
++LOCALESEXTERN char txt_ptr_WheelDown[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_key_Backspace[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Tab[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Clear[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Return[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Pause[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Escape[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Space[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Delete[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_KP[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Insert[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Home[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_End[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_PgUp[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_PgDn[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_NumLk[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_CapsLk[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_ScrlLk[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_RShift[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_LShift[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_RCtrl[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_LCtrl[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_RAlt[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_LAlt[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_RMeta[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_LMeta[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_LSuper[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_RSuper[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_AltGr[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Compose[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Help[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_PrScr[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_SysRq[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Break[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Menu[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Power[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Euro[TXT_MAX_COLS];
++LOCALESEXTERN char txt_key_Undo[TXT_MAX_COLS];
++
++LOCALESEXTERN char txt_konstruktor_Ground[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Stop[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Radioactive_Field[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Push_Box[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Capsule[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Bomb[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Bomb2[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Door[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Box[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Empty_Field[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Butterfly[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Gun_Fire[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Force_Field[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Screw[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Wall[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Black_Wall[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Teleport[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Gun[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Magnet[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Bear[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Black_Bear[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Bird[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Key[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Bullets[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_on_map[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Laser_Gun[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Blaster_Gun[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Regular_Gun[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Fixed[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Moveable[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Rotating[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Moveable_Rotating[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Direction_right[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Direction_down[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Direction_left[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Direction_up[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Welcome_to_GNU_Robbo_Designer[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Exit_designer_select_again_to_exit[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Reload_level_select_again_to_reload[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Level_reloaded[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_New_level_select_again_to_create[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Level_created[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Save_select_again_to_save_new_level[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_New_level_appended_to_pack[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Clear_level_select_again_to_clear[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Level_cleared[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Save_select_again_to_save_changes[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Changes_saved[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Level_resized_to[TXT_MAX_COLS];
++LOCALESEXTERN char txt_konstruktor_Screws[TXT_MAX_COLS];
+ 
+ struct locale {
+ 	char foldername[100];		/* e.g. de_DE, en_GB, es_ES, pl_PL ... */
+ 	char name[60];				/* e.g. Deutsch, English, Español, Polski ... */
+ 	char author[60];			/* Enables translators to get recognition for their work */
+ };
+-struct locale locales[MAX_LOCALES];
++LOCALESEXTERN struct locale locales[MAX_LOCALES];
+ 
+-int locale_count;
+-int selected_locale;
+-int temp_selected_locale;
++LOCALESEXTERN int locale_count;
++LOCALESEXTERN int selected_locale;
++LOCALESEXTERN int temp_selected_locale;
+ 
+ /* Function prototypes */
+-int find_all_locales(void);
+-void read_localerc_files(void);
+-void sort_locales(void);
+-void load_selected_locale(void);
+-void set_locale_to_LANG(void);
++LOCALESEXTERN int find_all_locales(void);
++LOCALESEXTERN void read_localerc_files(void);
++LOCALESEXTERN void sort_locales(void);
++LOCALESEXTERN void load_selected_locale(void);
++LOCALESEXTERN void set_locale_to_LANG(void);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/pointer_controls.c gnurobbo-0.68.aros/gnurobbo/pointer_controls.c
+--- gnurobbo-0.68/gnurobbo/pointer_controls.c	2010-01-16 20:41:55.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/pointer_controls.c	2021-01-18 05:05:08.950000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_POINTER
++
+ #include "game.h"
+ 
+ /* Defines */
+diff -ruN gnurobbo-0.68/gnurobbo/pointer_controls.h gnurobbo-0.68.aros/gnurobbo/pointer_controls.h
+--- gnurobbo-0.68/gnurobbo/pointer_controls.h	2010-01-16 15:10:33.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/pointer_controls.h	2021-01-18 04:59:41.070000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_POINTER
++#define POINTEREXTERN        extern
++#else
++#define POINTEREXTERN
++#endif
++
+ /* Defines */
+ /* Pointer controls ids */
+ #define POINTER_CONTROLS_ID 500
+@@ -53,20 +59,20 @@
+ 	int shoot_state;
+ 	int pad_type;
+ };
+-struct pointercontrols pointer_controls;
+-struct pointercontrols temp_pointer_controls;
++POINTEREXTERN struct pointercontrols pointer_controls;
++POINTEREXTERN struct pointercontrols temp_pointer_controls;
+ 
+ /* Function prototypes */
+-void pointer_controls_event_processor(ROB_Event *rob_event);
+-void create_pointer_controls(void);
+-void show_pointer_controls(void);
+-void show_pointer_controls_pad(void);
+-void show_pointer_controls_toolbar(void);
+-void hide_pointer_controls(void);
+-void hide_pointer_controls_pad(void);
+-void hide_pointer_controls_toolbar(void);
+-void update_pointer_controls_pad(int robbo_xoffset, int robbo_yoffset);
+-void update_pointer_controls_toolbar(void);
++POINTEREXTERN void pointer_controls_event_processor(ROB_Event *rob_event);
++POINTEREXTERN void create_pointer_controls(void);
++POINTEREXTERN void show_pointer_controls(void);
++POINTEREXTERN void show_pointer_controls_pad(void);
++POINTEREXTERN void show_pointer_controls_toolbar(void);
++POINTEREXTERN void hide_pointer_controls(void);
++POINTEREXTERN void hide_pointer_controls_pad(void);
++POINTEREXTERN void hide_pointer_controls_toolbar(void);
++POINTEREXTERN void update_pointer_controls_pad(int robbo_xoffset, int robbo_yoffset);
++POINTEREXTERN void update_pointer_controls_toolbar(void);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/rcfile.c gnurobbo-0.68.aros/gnurobbo/rcfile.c
+--- gnurobbo-0.68/gnurobbo/rcfile.c	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/rcfile.c	2021-01-18 05:05:15.270000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_RCF
++
+ #include "game.h"
+ 
+ /* Defines */
+diff -ruN gnurobbo-0.68/gnurobbo/rcfile.h gnurobbo-0.68.aros/gnurobbo/rcfile.h
+--- gnurobbo-0.68/gnurobbo/rcfile.h	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/rcfile.h	2021-01-18 05:00:17.490000000 +0000
+@@ -18,11 +18,19 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_RCF
++#define RCFEXTERN        extern
++#else
++#define RCFEXTERN
++#endif
++
+ /* Defines */
+ #if defined(PLATFORM_WIN32)
  	#define RESOURCE_FILE "gnurobborc"
  #elif defined(PLATFORM_PC)
  	#define RESOURCE_FILE ".gnurobborc"
@@ -154,3 +1227,345 @@ diff -Naur gnurobbo-0.68-orig/gnurobbo/rcfile.h gnurobbo-0.68/gnurobbo/rcfile.h
  #elif defined(PLATFORM_GP2X) || defined(PLATFORM_CAANOO)
  	#define RESOURCE_FILE "gnurobborc"
  #elif defined(PLATFORM_ZAURUS)
+@@ -37,17 +45,17 @@
+ #define RCFILE_SAVE_ON_CHANGE 1
+ 
+ /* Variables */
+-char path_resource_file[100];
++RCFEXTERN char path_resource_file[100];
+ 
+-struct {
++RCFEXTERN struct {
+ 	int save_frequency;
+ } rcfile;
+ 
+-int temp_rcfile_save_frequency;
++RCFEXTERN int temp_rcfile_save_frequency;
+ 
+ /* Function prototypes */
+-int read_resource_file(char *filename);
+-int save_resource_file(char *filename, int inform);
++RCFEXTERN int read_resource_file(char *filename);
++RCFEXTERN int save_resource_file(char *filename, int inform);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/screen.c gnurobbo-0.68.aros/gnurobbo/screen.c
+--- gnurobbo-0.68/gnurobbo/screen.c	2014-02-05 15:00:57.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/screen.c	2021-01-18 05:02:25.730000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_SCREEN
++
+ #include "game.h"
+ 
+ /* Defines */
+diff -ruN gnurobbo-0.68/gnurobbo/screen.h gnurobbo-0.68.aros/gnurobbo/screen.h
+--- gnurobbo-0.68/gnurobbo/screen.h	2014-02-04 18:41:12.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/screen.h	2021-01-18 05:02:12.710000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_SCREEN
++#define SCREENEXTERN        extern
++#else
++#define SCREENEXTERN
++#endif
++
+ /* Defines */
+ /* Redraw bits */
+ #define REDRAW_INITIALISE 15
+@@ -49,36 +55,36 @@
+ #define EFX_SHOOT 8
+ 
+ /* Variables */
+-SDL_Surface *screen;
++SCREENEXTERN SDL_Surface *screen;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int redraw;			/* An ORed combination of REDRAW_* bits */
+ } intro_screen;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int redraw;			/* An ORed combination of REDRAW_* bits */
+ } help_screen;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int redraw;			/* An ORed combination of REDRAW_* bits */
+ } options_screen;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int redraw;			/* An ORed combination of REDRAW_* bits */
+ } game_area;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int xoffset;
+ 	int yoffset;
+ 	int redraw;			/* An ORed combination of SCORELINE_* bits */
+ } scoreline;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int xoffset;
+ 	int yoffset;
+ } authorline;
+ 
+-struct {
++SCREENEXTERN struct {
+ 	int xres;
+ 	int yres;
+ 	int field_size;
+@@ -100,21 +106,21 @@
+ } MSG_Box;
+ 
+ /* Function prototypes */
+-int show_game_area(void);
+-int show_game_area_fade(int subfunction, int type);
+-SDL_Rect set_rect(int x, int y, int w, int h);
+-void clear_screen(void);
+-int set_video_mode(void);
+-void toggle_fullscreen(int *fullscreen);
+-void show_level_colour(int debug_colour_select_r, int debug_colour_select_g, int debug_colour_select_b, int debug_colour_select_component);
+-void inc_colour_component(int *colour_component);
+-void dec_colour_component(int *colour_component);
+-void show_introscreen(void);
+-void show_helpscreen(void);
+-void show_optionsscreen(void);
+-void show_message_box(int subfunction, MSG_Box *msg_box);
+-void show_endscreen(void);
+-void show_scoreline (void);
++SCREENEXTERN int show_game_area(void);
++SCREENEXTERN int show_game_area_fade(int subfunction, int type);
++SCREENEXTERN SDL_Rect set_rect(int x, int y, int w, int h);
++SCREENEXTERN void clear_screen(void);
++SCREENEXTERN int set_video_mode(void);
++SCREENEXTERN void toggle_fullscreen(int *fullscreen);
++SCREENEXTERN void show_level_colour(int debug_colour_select_r, int debug_colour_select_g, int debug_colour_select_b, int debug_colour_select_component);
++SCREENEXTERN void inc_colour_component(int *colour_component);
++SCREENEXTERN void dec_colour_component(int *colour_component);
++SCREENEXTERN void show_introscreen(void);
++SCREENEXTERN void show_helpscreen(void);
++SCREENEXTERN void show_optionsscreen(void);
++SCREENEXTERN void show_message_box(int subfunction, MSG_Box *msg_box);
++SCREENEXTERN void show_endscreen(void);
++SCREENEXTERN void show_scoreline (void);
+ 
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/skins.c gnurobbo-0.68.aros/gnurobbo/skins.c
+--- gnurobbo-0.68/gnurobbo/skins.c	2014-02-04 18:41:12.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/skins.c	2021-01-18 05:03:17.070000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_SKINS
++
+ #include "game.h"
+ 
+ /* Defines */
+diff -ruN gnurobbo-0.68/gnurobbo/skins.h gnurobbo-0.68.aros/gnurobbo/skins.h
+--- gnurobbo-0.68/gnurobbo/skins.h	2014-02-04 18:41:12.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/skins.h	2021-01-18 05:03:04.610000000 +0000
+@@ -18,6 +18,12 @@
+  *
+  */
+ 
++#ifndef GNUROBBO_SKINS
++#define SKINSEXTERN        extern
++#else
++#define SKINSEXTERN
++#endif
++
+ /* Defines */
+ #define MAX_SKINS 10
+ #define DEFAULT_SKIN "tronic"
+@@ -44,22 +50,22 @@
+ #define DESIGNER_OBJV_TILE_COLOUR 0x202020
+ 
+ /* Variables */
+-SDL_Surface *wm_icon;
+-SDL_Surface *icons;
++SKINSEXTERN SDL_Surface *wm_icon;
++SKINSEXTERN SDL_Surface *icons;
+ #ifdef LIGHTNINGENABLED
+-SDL_Surface *efx;
++SKINSEXTERN SDL_Surface *efx;
+ #endif
+-SDL_Surface *ciphers;
+-SDL_Surface *alpha;
+-SDL_Surface *bgrnd;
+-TTF_Font *font;
+-
+-SDL_Rect robbo_images_srcrect[8];
+-SDL_Rect score_images_srcrect[10];
+-SDL_Rect score_screw_srcrect;
+-SDL_Rect score_key_srcrect;
+-SDL_Rect score_bullet_srcrect;
+-SDL_Rect score_level_srcrect;
++SKINSEXTERN SDL_Surface *ciphers;
++SKINSEXTERN SDL_Surface *alpha;
++SKINSEXTERN SDL_Surface *bgrnd;
++SKINSEXTERN TTF_Font *font;
++
++SKINSEXTERN SDL_Rect robbo_images_srcrect[8];
++SKINSEXTERN SDL_Rect score_images_srcrect[10];
++SKINSEXTERN SDL_Rect score_screw_srcrect;
++SKINSEXTERN SDL_Rect score_key_srcrect;
++SKINSEXTERN SDL_Rect score_bullet_srcrect;
++SKINSEXTERN SDL_Rect score_level_srcrect;
+ 
+ struct skin
+ {
+@@ -85,18 +91,18 @@
+   Uint32 designer_OBJS_tile_colour;
+   Uint32 designer_OBJV_tile_colour;
+ };
+-struct skin skins[MAX_SKINS];
++SKINSEXTERN struct skin skins[MAX_SKINS];
+ 
+-int skin_count;			/* How many skins are in the list */
+-int selected_skin;		/* Which skin in the list is currently selected */
+-int temp_selected_skin;
++SKINSEXTERN int skin_count;			/* How many skins are in the list */
++SKINSEXTERN int selected_skin;		/* Which skin in the list is currently selected */
++SKINSEXTERN int temp_selected_skin;
+ 
+ /* Function prototypes */
+-int find_all_skins (void);
+-void read_skinrc_files (void);
+-void sort_skins (void);
+-int read_skin_level_colour_override (void);
+-void load_selected_skin (void);
+-void set_wm_icon (void);
+-SDL_Surface *create_skin_preview (void);
+-void load_TTF_font (void);
++SKINSEXTERN int find_all_skins (void);
++SKINSEXTERN void read_skinrc_files (void);
++SKINSEXTERN void sort_skins (void);
++SKINSEXTERN int read_skin_level_colour_override (void);
++SKINSEXTERN void load_selected_skin (void);
++SKINSEXTERN void set_wm_icon (void);
++SKINSEXTERN SDL_Surface *create_skin_preview (void);
++SKINSEXTERN void load_TTF_font (void);
+diff -ruN gnurobbo-0.68/gnurobbo/sound.c gnurobbo-0.68.aros/gnurobbo/sound.c
+--- gnurobbo-0.68/gnurobbo/sound.c	2011-04-17 16:55:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/sound.c	2021-01-18 05:04:12.320000000 +0000
+@@ -18,6 +18,8 @@
+  *
+  */
+ 
++#define GNUROBBO_SOUND
++
+ #include "game.h"
+ 
+ 
+diff -ruN gnurobbo-0.68/gnurobbo/sound.h gnurobbo-0.68.aros/gnurobbo/sound.h
+--- gnurobbo-0.68/gnurobbo/sound.h	2010-02-20 16:38:41.000000000 +0000
++++ gnurobbo-0.68.aros/gnurobbo/sound.h	2021-01-18 05:03:58.810000000 +0000
+@@ -18,7 +18,11 @@
+  *
+  */
+ 
+-
++#ifndef GNUROBBO_SOUND
++#define SOUNDEXTERN        extern
++#else
++#define SOUNDEXTERN
++#endif
+ 
+ /*
+  * Defines 
+@@ -78,15 +82,15 @@
+ /*
+  * Variables 
+  */
+-int sound;
+-int temp_game_sound;
+-int             sfx_vol;
+-int temp_sfx_vol;
++SOUNDEXTERN int sound;
++SOUNDEXTERN int temp_game_sound;
++SOUNDEXTERN int             sfx_vol;
++SOUNDEXTERN int temp_sfx_vol;
+ /*
+  * if we do not support music, we assume, that volume is sfx_volume 
+  */
+ #ifdef HAVE_MUSIC
+-int             volume;
++SOUNDEXTERN int             volume;
+ #else
+ #define volume sfx_vol
+ #endif
+@@ -97,26 +101,26 @@
+  */
+ 
+ 
+-void            volume_up(void);
+-void            volume_down(void);
++SOUNDEXTERN void            volume_up(void);
++SOUNDEXTERN void            volume_down(void);
+ 
+-void            load_soundskin(char *fname);
++SOUNDEXTERN void            load_soundskin(char *fname);
+ 
+-void            audio_init(void);	/* this one initializes sound
++SOUNDEXTERN void            audio_init(void);	/* this one initializes sound
+ 					 * system - shuld be run only once 
+ 					 */
+ 
+-void            audio_destroy(void);	/* this one destroys all audio
++SOUNDEXTERN void            audio_destroy(void);	/* this one destroys all audio
+ 					 * content from the memory, and
+ 					 * sets sound variable to 0 */
+ 					/*
+ 					 * if you want to use audio again, set sound
+ 					 * variable to 1 and call audio_init 
+ 					 */
+-void            load_samples(void);	/* loads samples into memory */
++SOUNDEXTERN void            load_samples(void);	/* loads samples into memory */
+ 
+ 
+-void            play_sound(int event, int vol);	/* this one plays sounds */
++SOUNDEXTERN void            play_sound(int event, int vol);	/* this one plays sounds */
+ 				    /*
+ 				     * vol can take 3 values: SND_NORM -
+ 				     * sound is played with volume set in
+@@ -127,10 +131,10 @@
+ 				     * and SND_MUTE - which means mute
+ 				     * sound or no sound at all 
+ 				     */
+-int             audio_opened();	/* returns 0 if mixer is not initialized */
+-void            audio_open();	/* initializes mixer should be the first
++SOUNDEXTERN int             audio_opened();	/* returns 0 if mixer is not initialized */
++SOUNDEXTERN void            audio_open();	/* initializes mixer should be the first
+ 				 * thing before playing any sound */
+-void            audio_close();	/* closes mixer - done befere exit */
++SOUNDEXTERN void            audio_close();	/* closes mixer - done befere exit */
+ 
+ 
+ #ifndef HAVE_MUSIC
+@@ -142,10 +146,10 @@
+ #define play_music()
+ 
+ #else
+-void            make_playlist(void);
+-void            play_music(void);
+-void            music_finished(void);
+-void            destroy_playlist(void);
+-void            music_stop(void);
++SOUNDEXTERN void            make_playlist(void);
++SOUNDEXTERN void            play_music(void);
++SOUNDEXTERN void            music_finished(void);
++SOUNDEXTERN void            destroy_playlist(void);
++SOUNDEXTERN void            music_stop(void);
+ 
+ #endif

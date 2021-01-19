@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#DISABLED #MM- ports-game : ports-game-abuse
+#MM- ports-game : ports-game-abuse
 # Collision check isn't working. i.e. hero falls through floor.
 
 #MM- ports-game-abuse : \
@@ -13,13 +13,13 @@ PACKAGE      := abuse
 VERSION      := 0.8
 TARGETDIR    := $(AROS_CONTRIB)/Games/Platform/Abuse
 REPOSITORIES := http://abuse.zoy.org/raw-attachment/wiki/download
+USER_INCLUDES := -I$(AROS_CONTRIB_INCLUDES)
 USER_CXXFLAGS:= -static-libstdc++ -fpermissive
 
 %fetch_and_build mmake=ports-game-abuse prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \
 	patch=yes package_repo=$(REPOSITORIES) nix=no nix_dir_layout=no \
 	extraoptions="--with-assetdir='$$(PROGDIR)share/games/abuse'"
-
 
 #MM
 ports-game-abuse-clean :

@@ -1,12 +1,12 @@
 diff -ruN abuse-0.8/configure abuse-0.8.aros/configure
---- abuse-0.8/configure	2011-05-09 12:06:36.000000000 +0100
-+++ abuse-0.8.aros/configure	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/configure	2011-05-09 11:06:36.000000000 +0000
++++ abuse-0.8.aros/configure	2021-01-19 01:07:22.020000000 +0000
 @@ -16121,7 +16121,7 @@
  if test "${ac_cv_my_have_sdl_mixer}" = "no"; then
    as_fn_error $? "*** SDL_mixer not found!" "$LINENO" 5
  fi
 -LIBS="$LIBS -lSDL_mixer"
-+LIBS="$LIBS -lSDL_mixer -lvorbisfile -lvorbis -logg -lSDL -lm"
++LIBS="$LIBS -lSDL_mixer -lmikmod -lvorbisfile -lvorbis -logg"
  
  if test "${enable_debug}" = "yes"; then
  
@@ -48,9 +48,21 @@ diff -ruN abuse-0.8/configure abuse-0.8.aros/configure
  
  ac_config_files="$ac_config_files Makefile src/Makefile src/lisp/Makefile src/net/Makefile src/imlib/Makefile src/sdlport/Makefile data/Makefile doc/Makefile doc/abuse.6 doc/abuse-tool.6"
  
+diff -ruN abuse-0.8/configure.ac abuse-0.8.aros/configure.ac
+--- abuse-0.8/configure.ac	2011-05-09 07:58:04.000000000 +0000
++++ abuse-0.8.aros/configure.ac	2021-01-19 01:06:52.530000000 +0000
+@@ -63,7 +63,7 @@
+ if test "${ac_cv_my_have_sdl_mixer}" = "no"; then
+   AC_MSG_ERROR([*** SDL_mixer not found!])
+ fi
+-LIBS="$LIBS -lSDL_mixer"
++LIBS="$LIBS -lSDL_mixer -lmikmod -lvorbisfile -lvorbis -logg"
+ 
+ if test "${enable_debug}" = "yes"; then
+   AC_DEFINE(HAVE_DEBUG, 1, Define to 1 to activate debug)
 diff -ruN abuse-0.8/src/demo.h abuse-0.8.aros/src/demo.h
---- abuse-0.8/src/demo.h	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/demo.h	2014-08-01 12:21:36.596308992 +0100
+--- abuse-0.8/src/demo.h	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/demo.h	2014-08-01 05:52:22.063683052 +0000
 @@ -44,7 +44,7 @@
  
  
@@ -61,8 +73,8 @@ diff -ruN abuse-0.8/src/demo.h abuse-0.8.aros/src/demo.h
  #endif
  
 diff -ruN abuse-0.8/src/game.cpp abuse-0.8.aros/src/game.cpp
---- abuse-0.8/src/game.cpp	2011-05-09 12:22:03.000000000 +0100
-+++ abuse-0.8.aros/src/game.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/game.cpp	2011-05-09 11:22:03.000000000 +0000
++++ abuse-0.8.aros/src/game.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -62,6 +62,31 @@
  #define SHIFT_RIGHT_DEFAULT 0
  #define SHIFT_DOWN_DEFAULT 30
@@ -96,8 +108,8 @@ diff -ruN abuse-0.8/src/game.cpp abuse-0.8.aros/src/game.cpp
  
  Game *the_game = NULL;
 diff -ruN abuse-0.8/src/innet.cpp abuse-0.8.aros/src/innet.cpp
---- abuse-0.8/src/innet.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/innet.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/innet.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/innet.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -290,13 +290,13 @@
  {
    if (prot)
@@ -115,8 +127,8 @@ diff -ruN abuse-0.8/src/innet.cpp abuse-0.8.aros/src/innet.cpp
                  {
                    uint8_t client_type;
 diff -ruN abuse-0.8/src/intsect.cpp abuse-0.8.aros/src/intsect.cpp
---- abuse-0.8/src/intsect.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/intsect.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/intsect.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/intsect.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -12,6 +12,7 @@
  #   include "config.h"
  #endif
@@ -126,8 +138,8 @@ diff -ruN abuse-0.8/src/intsect.cpp abuse-0.8.aros/src/intsect.cpp
  
  void pushback(int32_t x1,int32_t y1,int32_t &x2,int32_t &y2,
 diff -ruN abuse-0.8/src/level.cpp abuse-0.8.aros/src/level.cpp
---- abuse-0.8/src/level.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/level.cpp	2014-08-01 12:34:17.144383557 +0100
+--- abuse-0.8/src/level.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/level.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -2637,8 +2637,8 @@
  
    if (blockx2>=foreground_width()) { x2=tl*foreground_width()-1; }
@@ -140,8 +152,8 @@ diff -ruN abuse-0.8/src/level.cpp abuse-0.8.aros/src/level.cpp
    if ((blockx1>blockx2) || (blocky1>blocky2)) return ;
  
 diff -ruN abuse-0.8/src/net/fileman.cpp abuse-0.8.aros/src/net/fileman.cpp
---- abuse-0.8/src/net/fileman.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/net/fileman.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/net/fileman.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/net/fileman.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -143,7 +143,7 @@
      read_total=size_to_read>(READ_PACKET_SIZE-2) ? (READ_PACKET_SIZE-2) : size_to_read;
  
@@ -170,8 +182,8 @@ diff -ruN abuse-0.8/src/net/fileman.cpp abuse-0.8.aros/src/net/fileman.cpp
        if (size_read!=packet_size)
        {
 diff -ruN abuse-0.8/src/net/gserver.cpp abuse-0.8.aros/src/net/gserver.cpp
---- abuse-0.8/src/net/gserver.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/net/gserver.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/net/gserver.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/net/gserver.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -334,7 +334,7 @@
  int game_server::end_reload(int disconnect)  // notify evryone you've reloaded the level (at server request)
  {
@@ -191,8 +203,8 @@ diff -ruN abuse-0.8/src/net/gserver.cpp abuse-0.8.aros/src/net/gserver.cpp
    for (; c; c=c->next)
    {
 diff -ruN abuse-0.8/src/net/sock.h abuse-0.8.aros/src/net/sock.h
---- abuse-0.8/src/net/sock.h	2011-04-22 11:15:13.000000000 +0100
-+++ abuse-0.8.aros/src/net/sock.h	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/net/sock.h	2011-04-22 10:15:13.000000000 +0000
++++ abuse-0.8.aros/src/net/sock.h	2014-08-01 05:52:22.063683052 +0000
 @@ -36,8 +36,8 @@
    virtual void read_unselectable()   { ; }
    virtual void write_selectable()    { ; }
@@ -214,8 +226,8 @@ diff -ruN abuse-0.8/src/net/sock.h abuse-0.8.aros/src/net/sock.h
    net_socket *connect_to_server(char const *&server_name, int port, int force_port=0,
                  net_socket::socket_type sock_type=net_socket::SOCKET_SECURE);
 diff -ruN abuse-0.8/src/net/tcpip.cpp abuse-0.8.aros/src/net/tcpip.cpp
---- abuse-0.8/src/net/tcpip.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/net/tcpip.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/net/tcpip.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/net/tcpip.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -317,7 +317,7 @@
    if (sock_type==net_socket::SOCKET_SECURE)
      s=new tcp_socket(socket_fd);
@@ -289,8 +301,8 @@ diff -ruN abuse-0.8/src/net/tcpip.cpp abuse-0.8.aros/src/net/tcpip.cpp
  /*//////////////////////////////////////////////////////////////////////
  $Log$
 diff -ruN abuse-0.8/src/net/tcpip.h abuse-0.8.aros/src/net/tcpip.h
---- abuse-0.8/src/net/tcpip.h	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/net/tcpip.h	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/net/tcpip.h	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/net/tcpip.h	2014-08-01 05:52:22.063683052 +0000
 @@ -26,8 +26,10 @@
  #   include <stdio.h>
  #   include <string.h>
@@ -381,8 +393,8 @@ diff -ruN abuse-0.8/src/net/tcpip.h abuse-0.8.aros/src/net/tcpip.h
      sockaddr_in host;
      memset( (char*) &host,0, sizeof(host));
 diff -ruN abuse-0.8/src/sdlport/setup.cpp abuse-0.8.aros/src/sdlport/setup.cpp
---- abuse-0.8/src/sdlport/setup.cpp	2011-05-09 08:58:30.000000000 +0100
-+++ abuse-0.8.aros/src/sdlport/setup.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/sdlport/setup.cpp	2011-05-09 07:58:30.000000000 +0000
++++ abuse-0.8.aros/src/sdlport/setup.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -27,6 +27,9 @@
  #include <sys/stat.h>
  #include <signal.h>
@@ -424,8 +436,8 @@ diff -ruN abuse-0.8/src/sdlport/setup.cpp abuse-0.8.aros/src/sdlport/setup.cpp
      // Set the datadir to a default value
      // (The current directory)
 diff -ruN abuse-0.8/src/sdlport/video.cpp abuse-0.8.aros/src/sdlport/video.cpp
---- abuse-0.8/src/sdlport/video.cpp	2011-05-02 12:55:06.000000000 +0100
-+++ abuse-0.8.aros/src/sdlport/video.cpp	2014-08-01 06:52:22.063683052 +0100
+--- abuse-0.8/src/sdlport/video.cpp	2011-05-02 11:55:06.000000000 +0000
++++ abuse-0.8.aros/src/sdlport/video.cpp	2014-08-01 05:52:22.063683052 +0000
 @@ -24,6 +24,8 @@
  
  #include <SDL.h>

@@ -1,0 +1,12 @@
+diff -ruN ZuneView/src/exif.c ZuneView.aros/src/exif.c
+--- ZuneView/src/exif.c	2019-09-24 08:40:06.000000000 +0000
++++ ZuneView.aros/src/exif.c	2021-01-19 03:03:46.670000000 +0000
+@@ -1016,7 +1016,7 @@
+         }
+ 
+         switch(Tag){
+-            BYTE FmtString[21];
++            BYTE FmtString[22];
+             BYTE TempString[50];
+             double Values[3];
+ 

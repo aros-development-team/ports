@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#DISABLED #MM- ports-office : ports-office-$(AROS_TARGET_CPU)
+#MM- ports-office : ports-office-$(AROS_TARGET_CPU)
 
 #MM- ports-office-i386 : ports-office-muibase
 #MM- ports-office-arm : ports-office-muibase
@@ -18,8 +18,13 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-office-muibase-quick : ports-office-muibase-fetch
 
+MB_VERSION   := 3
+MB_REVISION  := 3
+MB_VERSTR    := 3.3
+
 REPOSITORIES := sf://muibase
-ARCHBASE     := MUIbase-3.3
+ARCHBASE     := MUIbase-$(MB_VERSTR)
+ARCHPKGBASE     := MUIbaseSource-$(MB_VERSTR)
 TARGETDIR    := $(AROS_CONTRIB)/Office/MUIbase
 BASE_SRCD    := src/base
 LANG_SRCD    := src/lang
@@ -42,9 +47,7 @@ ifneq ("","$(strip $(WARN_ERROR))")
 CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
 endif
 
-MB_VERSION   := 3
-MB_REVISION  := 3
-MB_VERSTR    := 3.3
+
 DATE         := date
 
 
@@ -160,7 +163,6 @@ MUIEXT_SRCS := \
 	$(MUIEXT_SRCD)/DataTypes_mcc \
 	$(MUIEXT_SRCD)/WindowButton_mcc \
 
-
 POT_SRC = $(POD)/MUIbase.pot
 
 AUTO_SRCS := y.tab appstrings_cat
@@ -174,14 +176,18 @@ FILES := \
 	$(AUTO_SRCS)
 FILES := $(addprefix $(PORTSDIR)/muibase/$(ARCHBASE)/,$(FILES))
 
-
 %build_prog mmake=ports-office-muibase progname=MUIbase \
     files=$(FILES) targetdir=$(TARGETDIR)
 
+%fetch mmake=ports-office-muibase-fetch archive=$(ARCHPKGBASE) destination=$(PORTSDIR)/muibase \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz" \
+    patches_specs=$(ARCHPKGBASE)-aros.diff:$(ARCHBASE):-p1
 
-%fetch mmake=ports-office-muibase-fetch archive=MUIbaseSource-3.3 destination=$(PORTSDIR)/muibase \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tgz"
-
+%create_patch mmake=ports-office-muibase-create-patch \
+    archive=$(ARCHPKGBASE) \
+    srcdir=$(ARCHBASE) \
+    suffixes="tgz" \
+    destination=$(PORTSDIR)/muibase
 
 ##### Generate some source files #####
 
@@ -203,7 +209,7 @@ version.h: $(PORTSDIR)/muibase/$(ARCHBASE)
 	$(ECHO) "#define MB_VERSTR \"$(MB_VERSTR)\"" >> $@
 
 $(PORTSDIR)/muibase/$(ARCHBASE)/y.tab.c: $(PORTSDIR)/muibase/$(ARCHBASE)/$(LANG_SRCD)/parser.y $(PORTSDIR)/muibase/$(ARCHBASE)/lex.yy.c
-	byacc -o $@ $<
+	yacc -o $@ $<
 
 $(PORTSDIR)/muibase/$(ARCHBASE)/lex.yy.c: $(PORTSDIR)/muibase/$(ARCHBASE)/$(LANG_SRCD)/scanner.l
 	flex -8 -o$@ $<

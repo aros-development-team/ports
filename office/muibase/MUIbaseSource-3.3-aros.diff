@@ -1,0 +1,3313 @@
+diff -ruN MUIbase-3.3/src/amiga/adosutil.c MUIbase-3.3.aros/src/amiga/adosutil.c
+--- MUIbase-3.3/src/amiga/adosutil.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/adosutil.c	2021-01-19 01:48:23.470000000 +0000
+@@ -524,7 +524,7 @@
+ 
+     if (WorkbenchBase != NULL && WorkbenchBase->lib_Version >= 44) {
+         if (!WorkbenchControl(NULL, 
+-                    WBCTRLA_DuplicateSearchPath, (ULONG)&path, 
++                    WBCTRLA_DuplicateSearchPath, (IPTR)&path, 
+                     TAG_DONE)) {
+             /*  eliminate any possibly modified path pointer if call failed */
+             path = (BPTR)0;
+@@ -581,7 +581,7 @@
+ static long dosProcessesRunning = 0;
+ static struct DosProcess *newProcess = NULL;
+ 
+-static void HOOK_PROTO(processExited, GuiObject app, ulong *params)
++static void HOOK_PROTO(processExited, GuiObject app, IPTR *params)
+ {
+     struct DosProcess *process = (struct DosProcess *)params[0];
+     int rc = params[1];
+@@ -616,13 +616,13 @@
+ #if defined(__MORPHOS__)
+     rc = SystemTags((STRPTR)process->cmd, 
+             SYS_UserShell, TRUE,
+-            NP_Name, (ULONG)"MUIbase-sync-launcher",
++            NP_Name, (IPTR)"MUIbase-sync-launcher",
+             NP_PPCStackSize, process->stackSize,
+             TAG_END);
+ #else
+     rc = SystemTags((STRPTR)process->cmd, 
+             SYS_UserShell, TRUE,
+-            NP_Name, (ULONG)"MUIbase-sync-launcher",
++            NP_Name, (IPTR)"MUIbase-sync-launcher",
+             NP_StackSize, process->stackSize,
+             TAG_END);
+ #endif
+@@ -697,8 +697,8 @@
+     if (needRC) {
+ #if defined(__MORPHOS__)
+         newProcess->process = CreateNewProcTags(
+-                NP_Entry, (ULONG)processEntry,
+-                NP_Name, (ULONG)"MUIbase-launcher",
++                NP_Entry, (IPTR)processEntry,
++                NP_Name, (IPTR)"MUIbase-launcher",
+                 NP_Output, quiet? Open((STRPTR)"NIL:", MODE_OLDFILE) : Output(),
+                 NP_CloseOutput, quiet,
+                 NP_Input, quiet? Open((STRPTR)"NIL:", MODE_OLDFILE) : Input(),
+@@ -706,13 +706,13 @@
+                 NP_StackSize, minStackSize, /* for MUI */
+                 NP_Cli, TRUE,       /* needed or some commands are not found */
+                 path? NP_Path : TAG_IGNORE, path,
+-                NP_CommandName, (ULONG)"MUIbase-launcher",
++                NP_CommandName, (IPTR)"MUIbase-launcher",
+                 NP_CodeType, CODETYPE_PPC,
+                 TAG_END);
+ #else
+         newProcess->process = CreateNewProcTags(
+-                NP_Entry, (ULONG)processEntry,
+-                NP_Name, (ULONG)"MUIbase-launcher",
++                NP_Entry, (IPTR)processEntry,
++                NP_Name, (IPTR)"MUIbase-launcher",
+                 NP_Output, quiet? Open((STRPTR)"NIL:", MODE_OLDFILE) : Output(),
+                 NP_CloseOutput, quiet,
+                 NP_Input, quiet? Open((STRPTR)"NIL:", MODE_OLDFILE) : Input(),
+@@ -720,7 +720,7 @@
+                 NP_StackSize, minStackSize, /* for MUI */
+                 NP_Cli, TRUE,       /* needed or some commands are not found */
+                 path? NP_Path : TAG_IGNORE, path,
+-                NP_CommandName, (ULONG)"MUIbase-launcher",
++                NP_CommandName, (IPTR)"MUIbase-launcher",
+                 TAG_END);
+ #endif
+         if (newProcess->process) {
+@@ -738,7 +738,7 @@
+             SYS_Input, quiet? Open((STRPTR)"NIL:", MODE_READWRITE) : (BPTR)0,
+             SYS_Output, quiet? Open((STRPTR)"NIL:", MODE_READWRITE) : (BPTR)0,
+             SYS_Asynch, TRUE,
+-            NP_Name, (ULONG)"MUIbase-async-launcher",
++            NP_Name, (IPTR)"MUIbase-async-launcher",
+             path? NP_Path : TAG_IGNORE, path,
+             NP_PPCStackSize, newProcess->stackSize,
+             TAG_END);
+@@ -748,7 +748,7 @@
+             SYS_Input, quiet? Open((STRPTR)"NIL:", MODE_READWRITE) : (BPTR)0,
+             SYS_Output, quiet? Open((STRPTR)"NIL:", MODE_READWRITE) : (BPTR)0,
+             SYS_Asynch, TRUE,
+-            NP_Name, (ULONG)"MUIbase-async-launcher",
++            NP_Name, (IPTR)"MUIbase-async-launcher",
+             path? NP_Path : TAG_IGNORE, path,
+             NP_StackSize, newProcess->stackSize,
+             TAG_END);
+diff -ruN MUIbase-3.3/src/amiga/codeset.c MUIbase-3.3.aros/src/amiga/codeset.c
+--- MUIbase-3.3/src/amiga/codeset.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/codeset.c	2021-01-19 01:42:07.240000000 +0000
+@@ -316,13 +316,13 @@
+ 	if (out == NULL) {
+ 	    error = ERR_MEM;
+ 	} else {
+-	    CodesetsUTF8ToStr(CSA_Source, (ULONG)in, 
+-                    CSA_SourceLen, (ULONG)(end - in),
+-		    CSA_Dest, (ULONG)out,
++	    CodesetsUTF8ToStr(CSA_Source, (IPTR)in, 
++                    CSA_SourceLen, (IPTR)(end - in),
++		    CSA_Dest, (IPTR)out,
+ 		    CSA_DestLen, size,
+-		    CSA_DestCodeset, (ULONG)DefaultCS,
++		    CSA_DestCodeset, (IPTR)DefaultCS,
+ 		    CSA_AllocIfNeeded, FALSE,
+-		    CSA_ErrPtr, (ULONG)&warnings,
++		    CSA_ErrPtr, (IPTR)&warnings,
+ 		    TAG_DONE);
+             out[size-1] = 0;                /* make sure we are terminated */
+ 	    if (strlen(out) + 1 != size) {  /* check memory size */
+@@ -436,15 +436,15 @@
+ #endif
+     } else {
+ 	size = CodesetsStrLen((STRPTR)in, 
+-		CSA_SourceCodeset, (ULONG)DefaultCS, 
++		CSA_SourceCodeset, (IPTR)DefaultCS, 
+ 		TAG_DONE) + 1;
+ 	out = PoolAllocMem(memPool, size);
+ 	if (out == NULL) {
+ 	    error = ERR_MEM;
+ 	} else {
+-	    CodesetsUTF8Create(CSA_Source, (ULONG)in, 
+-	    	    CSA_SourceCodeset, (ULONG)DefaultCS,
+-		    CSA_Dest, (ULONG)out,
++	    CodesetsUTF8Create(CSA_Source, (IPTR)in, 
++	    	    CSA_SourceCodeset, (IPTR)DefaultCS,
++		    CSA_Dest, (IPTR)out,
+ 		    CSA_DestLen, size,
+ 		    CSA_AllocIfNeeded, FALSE,
+ 		    TAG_DONE);
+@@ -487,7 +487,7 @@
+ #endif
+     } else {
+ 	len = CodesetsStrLen((STRPTR)s, 
+-		CSA_SourceCodeset, (ULONG)DefaultCS, 
++		CSA_SourceCodeset, (IPTR)DefaultCS, 
+ 		TAG_DONE);
+     }
+ 		
+@@ -520,9 +520,9 @@
+         }
+ #endif
+ 	utf8File = file;
+-	CodesetsUTF8Create(CSA_Source, (ULONG)s,
+-		CSA_SourceCodeset, (ULONG)DefaultCS,
+-		CSA_DestHook, (ULONG)&writeUTF8Hook,
++	CodesetsUTF8Create(CSA_Source, (IPTR)s,
++		CSA_SourceCodeset, (IPTR)DefaultCS,
++		CSA_DestHook, (IPTR)&writeUTF8Hook,
+ 		TAG_DONE);
+     }
+ }
+diff -ruN MUIbase-3.3/src/amiga/mui/ansiprint_mui.c MUIbase-3.3.aros/src/amiga/mui/ansiprint_mui.c
+--- MUIbase-3.3/src/amiga/mui/ansiprint_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/ansiprint_mui.c	2021-01-19 01:56:51.980000000 +0000
+@@ -202,7 +202,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closePrintSFW, Object *obj, ulong *ok)
++static void HOOK_PROTO(closePrintSFW, Object *obj, IPTR *ok)
+ {
+     struct PrintSFWData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -376,10 +376,10 @@
+ 	MUIA_Numeric_Max, 20,
+ 	MUIA_Numeric_Value, 0,
+ 	End;
+-    d->d_Headline = MUI_MakeObject(MUIO_Checkmark,(ULONG)GCS(MSG_QueryPrint_Headline));
++    d->d_Headline = MUI_MakeObject(MUIO_Checkmark,(IPTR)GCS(MSG_QueryPrint_Headline));
+     d->d_EscapeCodes = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_QueryPrint_EscapeCodes));
+-    d->d_Quotes = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_QueryPrint_Quotes));
++	    (IPTR)GCS(MSG_QueryPrint_EscapeCodes));
++    d->d_Quotes = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_QueryPrint_Quotes));
+ 
+     misc = VGroup,
+ 	MUIA_Frame, MUIV_Frame_Group,
+@@ -524,17 +524,17 @@
+ 
+     SetAttrs(d->d_Headline,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_QueryPrint_HeadlineBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_QueryPrint_HeadlineBH),
+ 	MUIA_Selected, TRUE,
+         TAG_DONE);
+     SetAttrs(d->d_EscapeCodes,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_QueryPrint_EscapeCodesBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_QueryPrint_EscapeCodesBH),
+ 	MUIA_Selected, TRUE,
+         TAG_DONE);
+     SetAttrs(d->d_Quotes,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_QueryPrint_QuotesBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_QueryPrint_QuotesBH),
+         TAG_DONE);
+     set(d->d_Ok, MUIA_CycleChain, TRUE);
+     set(d->d_Cancel, MUIA_CycleChain, TRUE);
+diff -ruN MUIbase-3.3/src/amiga/mui/attribute_mui.c MUIbase-3.3.aros/src/amiga/mui/attribute_mui.c
+--- MUIbase-3.3/src/amiga/mui/attribute_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/attribute_mui.c	2021-01-19 02:00:00.950000000 +0000
+@@ -182,7 +182,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(finish, Object *obj, ulong *ok)
++static void HOOK_PROTO(finish, Object *obj, IPTR *ok)
+ {
+     struct EditAttributeData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -253,7 +253,7 @@
+     disposeAttribute(app, obj);
+ }
+ 
+-static ulong HOOK_PROTO(referenceDisplay, const char **dst, struct Table *tab)
++static IPTR HOOK_PROTO(referenceDisplay, const char **dst, struct Table *tab)
+ {
+     *dst = TableName(tab);
+     return(0);
+@@ -273,14 +273,14 @@
+ 	struct EditAttributeData **x)
+ {
+     struct EditAttributeData *d = *x;
+-    ulong active = nget(d->d_Type, MUIA_Cycle_Active);
++    IPTR active = nget(d->d_Type, MUIA_Cycle_Active);
+ 
+     set(d->d_TypeGroup, MUIA_Group_ActivePage, pages[active]);
+ }
+ 
+ static void updatePage(struct EditAttributeData *d)
+ {
+-    ulong page = nget(d->d_TypeGroup, MUIA_Group_ActivePage);
++    IPTR page = nget(d->d_TypeGroup, MUIA_Group_ActivePage);
+     bool on = (page != GRP_VIRTUAL && page != GRP_BUTTON);
+     bool countOn, logOn;
+ 
+@@ -471,18 +471,18 @@
+ 	    End,
+ 	End;
+     d->d_ReferenceFilter = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Filter));
++	    (IPTR)GCS(MSG_Filter));
+     if(d->d_ReferenceFilter)
+ 	SetAttrs(d->d_ReferenceFilter,
+             MUIA_CycleChain, TRUE,
+-            MUIA_ShortHelp, (ULONG)GCS(MSG_Attr_Reference_FilterBH),
++            MUIA_ShortHelp, (IPTR)GCS(MSG_Attr_Reference_FilterBH),
+             TAG_DONE);
+     d->d_ReferenceAutoShow = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_AutoShow));
++	    (IPTR)GCS(MSG_AutoShow));
+     if(d->d_ReferenceAutoShow)
+ 	SetAttrs(d->d_ReferenceAutoShow,
+ 		 MUIA_CycleChain, TRUE,
+-		 MUIA_ShortHelp, (ULONG)GCS(MSG_Attr_Reference_AutoShowBH),
++		 MUIA_ShortHelp, (IPTR)GCS(MSG_Attr_Reference_AutoShowBH),
+ 		 TAG_DONE);
+     grp_reference = VGroup,
+ 	MUIA_Frame, MUIV_Frame_Group,
+@@ -611,21 +611,21 @@
+     d->d_Trigger = UserFunctionsPopup(d->d_TriggerStr, pr);
+ 
+     d->d_CountChanges = MUI_MakeObject(MUIO_Checkmark, 
+-    	    (ULONG)GCS(MSG_CountChanges));
++    	    (IPTR)GCS(MSG_CountChanges));
+     if (d->d_CountChanges) {
+ 	SetAttrs(d->d_CountChanges,
+ 		MUIA_CycleChain, TRUE,
+ 		MUIA_Selected, TRUE,
+-		MUIA_ShortHelp, (ULONG)GCS(MSG_Attr_CountChangesBH),
++		MUIA_ShortHelp, (IPTR)GCS(MSG_Attr_CountChangesBH),
+ 		TAG_DONE);
+     }
+     d->d_LogChanges = MUI_MakeObject(MUIO_Checkmark,
+-            (ULONG)GCS(MSG_LogChanges));
++            (IPTR)GCS(MSG_LogChanges));
+     if (d->d_LogChanges) {
+ 	SetAttrs(d->d_LogChanges,
+ 		MUIA_CycleChain, TRUE,
+ 		MUIA_Selected, TRUE,
+-		MUIA_ShortHelp, (ULONG)GCS(MSG_Attr_LogChangesBH),
++		MUIA_ShortHelp, (IPTR)GCS(MSG_Attr_LogChangesBH),
+ 		TAG_DONE);
+     }
+     
+diff -ruN MUIbase-3.3/src/amiga/mui/break_mui.c MUIbase-3.3.aros/src/amiga/mui/break_mui.c
+--- MUIbase-3.3/src/amiga/mui/break_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/break_mui.c	2021-01-19 02:01:09.650000000 +0000
+@@ -272,7 +272,7 @@
+ 
+             if (breakData.pause) {
+                 SetAttrs(breakData.pauseButton,
+-                        MUIA_Text_Contents, (ULONG)GCS(MSG_Continue),
++                        MUIA_Text_Contents, (IPTR)GCS(MSG_Continue),
+                         MUIA_Text_SetVMax, FALSE,
+                         TAG_DONE);
+ 
+@@ -286,7 +286,7 @@
+                             &breakData.sigs);
+                 } while (!breakData.pause && !breakData.abort);
+                 SetAttrs(breakData.pauseButton,
+-                        MUIA_Text_Contents, (ULONG)GCS(MSG_Pause),
++                        MUIA_Text_Contents, (IPTR)GCS(MSG_Pause),
+                         MUIA_Text_SetVMax, FALSE,
+                         TAG_DONE);
+                 breakData.pause = FALSE;
+diff -ruN MUIbase-3.3/src/amiga/mui/buildguiattribute_mui.c MUIbase-3.3.aros/src/amiga/mui/buildguiattribute_mui.c
+--- MUIbase-3.3/src/amiga/mui/buildguiattribute_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/buildguiattribute_mui.c	2021-01-19 01:56:29.410000000 +0000
+@@ -120,9 +120,9 @@
+ }
+ static HOOK_STRUCT(edit)
+ 
+-static void HOOK_PROTO(stringcontentschange, GuiObject go, ulong *x)
++static void HOOK_PROTO(stringcontentschange, GuiObject go, IPTR *x)
+ {
+-    ulong store = *x;
++    IPTR store = *x;
+ 
+     changedstringobject = go;
+     if(store)
+@@ -139,7 +139,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(checkboxchange, GuiObject go, ulong *x)
++static void HOOK_PROTO(checkboxchange, GuiObject go, IPTR *x)
+ {
+     struct DisplayObject *dio = NULL;
+ 
+@@ -149,7 +149,7 @@
+     GuiSetCursor();
+ }
+ 
+-static void HOOK_PROTO(cyclechange, GuiObject go, ulong *x)
++static void HOOK_PROTO(cyclechange, GuiObject go, IPTR *x)
+ {
+     struct DisplayObject *dio = NULL;
+ 
+@@ -159,7 +159,7 @@
+ /*   GuiSetCursor(); */
+ }
+ 
+-static void HOOK_PROTO(buttonchange, GuiObject go, ulong dummy)
++static void HOOK_PROTO(buttonchange, GuiObject go, IPTR dummy)
+ {
+     struct DisplayObject *dio = NULL;
+ 
+@@ -323,7 +323,7 @@
+     if(path == NULL)
+         return;
+ 
+-    GuiStoreData(dio, (ulong)path);
++    GuiStoreData(dio, (IPTR)path);
+     FreeString(memPool, path);
+ }
+ 
+@@ -927,7 +927,7 @@
+ 
+         SetAttrs(lvobject,
+             MUIA_CycleChain, chain && (!inchain || extrachain),
+-            MUIA_UserData, (ULONG)dio,
++            MUIA_UserData, (IPTR)dio,
+             TAG_DONE);
+         set(listview, MUIA_UserData, go);
+ 
+@@ -1106,7 +1106,7 @@
+ {
+     struct DisplayObject *dio = NULL;
+     char *str = NULL;
+-    ulong data[2];
++    IPTR data[2];
+     GuiObject obj;
+ 
+     if(changedstringobject)
+@@ -1115,7 +1115,7 @@
+         changedstringobject = NULL;
+ 	str = pget(obj, MUIA_String_Contents);
+         dio = pget(obj, MUIA_UserData);
+-        GuiStoreData(dio, (ulong)str);
++        GuiStoreData(dio, (IPTR)str);
+     }
+     if(changededitorobject)
+     {
+@@ -1129,8 +1129,8 @@
+ 	    if(str != NULL)
+ 	    {
+ 		data[0] = strlen(str);
+-		data[1] = (ulong)str;
+-		GuiStoreData(dio, (ulong)data);
++		data[1] = (IPTR)str;
++		GuiStoreData(dio, (IPTR)data);
+ 		set(obj, MUIA_ExtEditor_HasChanged, FALSE);
+             }
+         }
+diff -ruN MUIbase-3.3/src/amiga/mui/display_mui.c MUIbase-3.3.aros/src/amiga/mui/display_mui.c
+--- MUIbase-3.3/src/amiga/mui/display_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/display_mui.c	2021-01-19 01:59:34.490000000 +0000
+@@ -85,7 +85,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditText, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditText, Object *obj, IPTR *ok)
+ {
+     struct EditTextData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -186,7 +186,7 @@
+     MUIAddCallback(d->d_Background, MUIA_Pressed, FALSE, PopButtonSetCWD, pr);
+ 
+     d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     back = HGroup,
+         Child, d->d_Background,
+@@ -253,7 +253,7 @@
+         d->d_Background, 3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_DefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !bg || !bg[0],
+         TAG_DONE);
+     set(d->d_Ok, MUIA_CycleChain, TRUE);
+@@ -307,7 +307,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditSpace, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditSpace, Object *obj, IPTR *ok)
+ {
+     struct EditSpaceData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -363,7 +363,7 @@
+     d->d_Space = space;
+     d->d_StructureEditor = se;
+ 
+-    d->d_Bar = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_DisplaySpace_Delimiter));
++    d->d_Bar = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_DisplaySpace_Delimiter));
+ 
+     d->d_Weight = SliderObject,
+         MUIA_CycleChain, TRUE,
+@@ -389,7 +389,7 @@
+     MUIAddCallback(d->d_Background, MUIA_Pressed, FALSE, PopButtonSetCWD, pr);
+ 
+     d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     back = HGroup,
+         Child, d->d_Background,
+@@ -452,14 +452,14 @@
+ 
+     SetAttrs(d->d_Bar,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplaySpace_DelimiterBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplaySpace_DelimiterBH),
+         MUIA_Selected, DisplaySpaceBar(space),
+         TAG_DONE);
+     DoMethod(d->d_DefaultBackground, MUIM_Notify, MUIA_Selected, MUIV_EveryTime,
+         d->d_Background, 3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_DefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !bg || !bg[0],
+         TAG_DONE);
+     set(d->d_Ok, MUIA_CycleChain, TRUE);
+@@ -505,7 +505,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditImage, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditImage, Object *obj, IPTR *ok)
+ {
+     struct EditImageData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -685,7 +685,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditRegister, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditRegister, Object *obj, IPTR *ok)
+ {
+     struct EditRegisterData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -850,7 +850,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditGroup, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditGroup, Object *obj, IPTR *ok)
+ {
+     struct EditGroupData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -944,7 +944,7 @@
+     MUIAddCallback(d->d_Background, MUIA_Pressed, FALSE, PopButtonSetCWD, pr);
+ 
+     d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     back = HGroup,
+         Child, d->d_Background,
+@@ -969,10 +969,10 @@
+         Child, back,
+ 	End;
+ 
+-    d->d_Border = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_DisplayGroup_Border));
++    d->d_Border = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_DisplayGroup_Border));
+     d->d_Horizontal = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_DisplayGroup_Horizontal));
+-    d->d_Spacing = MUI_MakeObject(MUIO_Checkmark,(ULONG)GCS(MSG_DisplayGroup_Spacing));
++	    (IPTR)GCS(MSG_DisplayGroup_Horizontal));
++    d->d_Spacing = MUI_MakeObject(MUIO_Checkmark,(IPTR)GCS(MSG_DisplayGroup_Spacing));
+ 
+     attrs = VGroup,
+ 	MUIA_Frame, MUIV_Frame_Group,
+@@ -1033,24 +1033,24 @@
+ 
+     SetAttrs(d->d_Border,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayGroup_BorderBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayGroup_BorderBH),
+         MUIA_Selected, DisplayGroupBorder(group),
+         TAG_DONE);
+     SetAttrs(d->d_Horizontal,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayGroup_HorizontalBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayGroup_HorizontalBH),
+         MUIA_Selected, DisplayGroupHoriz(group),
+         TAG_DONE);
+     SetAttrs(d->d_Spacing,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayGroup_SpacingBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayGroup_SpacingBH),
+         MUIA_Selected, DisplayGroupSpacing(group),
+         TAG_DONE);
+     DoMethod(d->d_DefaultBackground, MUIM_Notify, MUIA_Selected, MUIV_EveryTime,
+         d->d_Background, 3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_DefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !bg || !bg[0],
+         TAG_DONE);
+     set(d->d_Ok, MUIA_CycleChain, TRUE);
+@@ -1108,7 +1108,7 @@
+     struct DisplayObject *dio = *x, *inuse;
+     Object *win = GuiObjectWindow(obj);
+     const char *text = pget(obj, MUIA_String_Contents), *name;
+-    ulong id = StrToId(text);
++    IPTR id = StrToId(text);
+ 
+     inuse = DisplayWindowIdInUse(id, dio);
+     if (inuse != NULL)
+@@ -1121,7 +1121,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeEditWindow, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditWindow, Object *obj, IPTR *ok)
+ {
+     struct EditWindowData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -1230,7 +1230,7 @@
+ 	End;
+ 
+     d->d_Button = MUI_MakeObject(MUIO_Checkmark, 
+-        (ULONG)GCS(MSG_DisplayWindow_WindowButton));
++        (IPTR)GCS(MSG_DisplayWindow_WindowButton));
+ 
+     sc[0] = DisplayObjectShortcut(window);
+     sc[1] = 0;
+@@ -1268,7 +1268,7 @@
+     d->d_EnabledCompute = UserFunctionsPopup(d->d_EnabledComputeStr, pr);
+ 
+     d->d_CloseWhenDisabled = MUI_MakeObject(MUIO_Checkmark, 
+-            (ULONG)GCS(MSG_DisplayWindow_CloseWindowWhenDisabled));
++            (IPTR)GCS(MSG_DisplayWindow_CloseWindowWhenDisabled));
+ 
+     d->d_Weight = SliderObject,
+         MUIA_CycleChain, TRUE,
+@@ -1304,7 +1304,7 @@
+     MUIAddCallback(d->d_Background, MUIA_Pressed, FALSE, PopButtonSetCWD, pr);
+ 
+     d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     back = HGroup,
+         Child, d->d_Background,
+@@ -1429,7 +1429,7 @@
+         settings, 3, MUIM_Set, MUIA_Disabled, MUIV_NotTriggerValue);
+     SetAttrs(d->d_Button,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayWindow_WindowButtonBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayWindow_WindowButtonBH),
+         MUIA_Selected, DisplayWindowButton(window),
+         TAG_DONE);
+     DoMethod(d->d_Title,
+@@ -1463,7 +1463,7 @@
+         d->d_Background, 3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_DefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !bg || !bg[0],
+         TAG_DONE);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/displayattribute_mui.c MUIbase-3.3.aros/src/amiga/mui/displayattribute_mui.c
+--- MUIbase-3.3/src/amiga/mui/displayattribute_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/displayattribute_mui.c	2021-01-19 01:58:42.120000000 +0000
+@@ -82,7 +82,7 @@
+     MUI_AddDisposeObject(app, obj);
+ }
+ 
+-static void HOOK_PROTO(closeEditDisplayAttribute, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditDisplayAttribute, Object *obj, IPTR *ok)
+ {
+     struct EditDisplayAttributeData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -495,20 +495,20 @@
+         shortcutLabel = Label(GCS(MSG_DisplayObject_Shortcut));
+ 
+         d->d_Home = MUI_MakeObject(MUIO_Checkmark, 
+-                (ULONG)GCS(MSG_DisplayAttr_Home));
++                (IPTR)GCS(MSG_DisplayAttr_Home));
+         if (d->d_Home) {
+             SetAttrs(d->d_Home,
+-                    MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayAttr_HomeBH),
++                    MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayAttr_HomeBH),
+                     MUIA_CycleChain, TRUE,
+                     MUIA_Selected, DisplayAttributeHome(dio),
+                     TAG_DONE);
+ 	}
+ 
+         d->d_TabChain = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_TabChain));
++		(IPTR)GCS(MSG_DisplayAttr_TabChain));
+ 	if (d->d_TabChain) {
+ 	    SetAttrs(d->d_TabChain,
+-		    MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayAttr_TabChainBH),
++		    MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayAttr_TabChainBH),
+ 		    MUIA_CycleChain, TRUE,
+ 		    MUIA_Selected, DisplayAttributeTabChain(dio),
+ 		    TAG_DONE);
+@@ -516,12 +516,12 @@
+ 
+         if (show_readonly) {
+ 	    d->d_ReadOnly = MUI_MakeObject(MUIO_Checkmark, 
+-	    	    (ULONG)GCS(MSG_DisplayAttr_ReadOnly));
++	    	    (IPTR)GCS(MSG_DisplayAttr_ReadOnly));
+             if (d->d_ReadOnly) {
+                 SetAttrs(d->d_ReadOnly,
+                         MUIA_ShortHelp, show_stringbuttons?
+-                            (ULONG)GCS(MSG_DisplayAttr_ReadOnlyStringBH) :
+-                            (ULONG)GCS(MSG_DisplayAttr_ReadOnlyBH),
++                            (IPTR)GCS(MSG_DisplayAttr_ReadOnlyStringBH) :
++                            (IPTR)GCS(MSG_DisplayAttr_ReadOnlyBH),
+                         MUIA_CycleChain, TRUE,
+                         TAG_DONE);
+             }
+@@ -609,7 +609,7 @@
+             End;
+ 
+         d->d_Frame = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_Choice_Frame));
++		(IPTR)GCS(MSG_DisplayAttr_Choice_Frame));
+ 	if (d->d_Frame != NULL) {
+ 	    SetAttrs(d->d_Frame,
+ 		    MUIA_ShortHelp, GCS(MSG_DisplayAttr_Choice_FrameBH),
+@@ -619,7 +619,7 @@
+ 	}
+ 
+ 	d->d_Horizontal = MUI_MakeObject(MUIO_Checkmark,
+-	       	(ULONG)GCS(MSG_DisplayAttr_Choice_Horizontal));
++	       	(IPTR)GCS(MSG_DisplayAttr_Choice_Horizontal));
+ 	if (d->d_Horizontal != NULL) {
+ 	    SetAttrs(d->d_Horizontal,
+ 		MUIA_ShortHelp, GCS(MSG_DisplayAttr_Choice_HorizontalBH),
+@@ -702,19 +702,19 @@
+ 	Object *page0, *page1, *page2;
+ 
+         d->d_ShowTitles = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_ShowTitles));
++		(IPTR)GCS(MSG_DisplayAttr_ShowTitles));
+         if (d->d_ShowTitles) {
+             SetAttrs(d->d_ShowTitles,
+-		    MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayAttr_ShowTitlesBH),
++		    MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayAttr_ShowTitlesBH),
+ 		    MUIA_CycleChain, TRUE,
+ 		    MUIA_Selected, DisplayAttributeShowTitles(dio),
+ 		    TAG_DONE);
+ 	}
+         d->d_TabChain = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_TabChain));
++		(IPTR)GCS(MSG_DisplayAttr_TabChain));
+ 	if (d->d_TabChain) {
+ 	    SetAttrs(d->d_TabChain,
+-		    MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayAttr_TabChainBH),
++		    MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayAttr_TabChainBH),
+ 		    MUIA_CycleChain, TRUE,
+ 		    MUIA_Selected, DisplayAttributeTabChain(dio),
+ 		    TAG_DONE);
+@@ -907,7 +907,7 @@
+         bgLabel = FreeLabel(GCS(MSG_Background));
+ 
+ 	d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_Background_Default));
++		(IPTR)GCS(MSG_Background_Default));
+         if (d->d_Background && d->d_DefaultBackground) {
+             SetAttrs(d->d_DefaultBackground,
+                 MUIA_CycleChain, TRUE,
+@@ -1038,7 +1038,7 @@
+         Object *top, *bottom, *popGroup, *flagsGroup;
+ 
+         d->d_File = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_File));
++		(IPTR)GCS(MSG_DisplayAttr_File));
+         if (d->d_File) {
+             SetAttrs(d->d_File,
+                 MUIA_CycleChain, TRUE,
+@@ -1050,7 +1050,7 @@
+         }
+ 
+         d->d_Font = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_Font));
++		(IPTR)GCS(MSG_DisplayAttr_Font));
+         if (d->d_Font) {
+             SetAttrs(d->d_Font,
+                 MUIA_CycleChain, TRUE,
+@@ -1062,7 +1062,7 @@
+         }
+ 
+         d->d_Listview = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_Listview));
++		(IPTR)GCS(MSG_DisplayAttr_Listview));
+         if (d->d_Listview) {
+             SetAttrs(d->d_Listview,
+                 MUIA_CycleChain, TRUE,
+@@ -1074,7 +1074,7 @@
+         }
+ 
+         d->d_View = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_View));
++		(IPTR)GCS(MSG_DisplayAttr_View));
+         if (d->d_View) {
+             SetAttrs(d->d_View,
+                 MUIA_CycleChain, TRUE,
+@@ -1173,7 +1173,7 @@
+ 	    End;
+ 
+         d->d_DisplayExternal = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_DisplayPicture));
++		(IPTR)GCS(MSG_DisplayAttr_DisplayPicture));
+         if (d->d_DisplayExternal) {
+             SetAttrs(d->d_DisplayExternal,
+                 MUIA_CycleChain, TRUE,
+@@ -1183,7 +1183,7 @@
+         }
+ 
+         d->d_HideStringField = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_HideStringField));
++		(IPTR)GCS(MSG_DisplayAttr_HideStringField));
+         if (d->d_HideStringField) {
+             SetAttrs(d->d_HideStringField,
+                 MUIA_CycleChain, TRUE,
+@@ -1194,11 +1194,11 @@
+         }
+ 
+         d->d_TitleAtStringField = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_TitleAtStringField));
++		(IPTR)GCS(MSG_DisplayAttr_TitleAtStringField));
+         if (d->d_TitleAtStringField) {
+             SetAttrs(d->d_TitleAtStringField,
+                 MUIA_CycleChain, TRUE,
+-                MUIA_ShortHelp,(ULONG)GCS(MSG_DisplayAttr_TitleAtStringFieldBH),
++                MUIA_ShortHelp,(IPTR)GCS(MSG_DisplayAttr_TitleAtStringFieldBH),
+                 TAG_DONE);
+         }
+ 
+@@ -1268,7 +1268,7 @@
+         static const char *rectext[4];
+ 
+         d->d_Show = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_Show));
++		(IPTR)GCS(MSG_DisplayAttr_Show));
+         if (d->d_Show) {
+             SetAttrs(d->d_Show,
+                 MUIA_CycleChain, TRUE,
+@@ -1279,7 +1279,7 @@
+ 		    onShowChanged, d);
+         }
+ 
+-        d->d_AutoShow = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_AutoShow));
++        d->d_AutoShow = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_AutoShow));
+         if (d->d_AutoShow) {
+             SetAttrs(d->d_AutoShow,
+                 MUIA_CycleChain, TRUE,
+@@ -1289,7 +1289,7 @@
+         }
+ 
+         d->d_Filter = MUI_MakeObject(MUIO_Checkmark,
+-		(ULONG)GCS(MSG_DisplayAttr_Filter));
++		(IPTR)GCS(MSG_DisplayAttr_Filter));
+         if (d->d_Filter) {
+             SetAttrs(d->d_Filter,
+                 MUIA_CycleChain, TRUE,
+@@ -1366,7 +1366,7 @@
+         }
+ 
+         d->d_InitialRecord = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_InitialRecord));
++		(IPTR)GCS(MSG_DisplayAttr_InitialRecord));
+         if (d->d_InitialRecord) {
+ 	    SetAttrs(d->d_InitialRecord,
+ 	    	    MUIA_CycleChain, TRUE,
+@@ -1376,7 +1376,7 @@
+         }
+ 
+ 	d->d_CurrentRecord = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_CurrentRecord));
++		(IPTR)GCS(MSG_DisplayAttr_CurrentRecord));
+         if (d->d_CurrentRecord) {
+ 	    SetAttrs(d->d_CurrentRecord,
+ 	    	    MUIA_CycleChain, TRUE,
+@@ -1432,7 +1432,7 @@
+             End;
+ 
+ 	d->d_AutoUpdate = MUI_MakeObject(MUIO_Checkmark, 
+-		(ULONG)GCS(MSG_DisplayAttr_AutoUpdate));
++		(IPTR)GCS(MSG_DisplayAttr_AutoUpdate));
+         if (d->d_AutoUpdate) {
+ 	    SetAttrs(d->d_AutoUpdate,
+                 MUIA_CycleChain, TRUE,
+diff -ruN MUIbase-3.3/src/amiga/mui/displaytable_mui.c MUIbase-3.3.aros/src/amiga/mui/displaytable_mui.c
+--- MUIbase-3.3/src/amiga/mui/displaytable_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/displaytable_mui.c	2021-01-19 01:59:02.410000000 +0000
+@@ -66,7 +66,7 @@
+     MUI_AddDisposeObject(app, obj);
+ }
+ 
+-static void HOOK_PROTO(closeEditDisplayTable, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeEditDisplayTable, Object *obj, IPTR *ok)
+ {
+     struct EditDisplayTableData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -185,7 +185,7 @@
+     MUIAddCallback(d->d_Background, MUIA_Pressed, FALSE, PopButtonSetCWD, pr);
+ 
+     d->d_DefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     back = HGroup,
+         Child, d->d_Background,
+@@ -201,7 +201,7 @@
+         End;
+ 
+     d->d_HasPanel = MUI_MakeObject(MUIO_Checkmark, 
+-            (ULONG)GCS(MSG_DisplayTable_HasPanel));
++            (IPTR)GCS(MSG_DisplayTable_HasPanel));
+ 
+     generalGroup = VGroup,
+         MUIA_Background, MUII_GroupBack,
+@@ -252,7 +252,7 @@
+             PopButtonSetCWD, pr);
+ 
+     d->d_PanelDefaultBackground = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_Background_Default));
++	    (IPTR)GCS(MSG_Background_Default));
+ 
+     panelBack = HGroup,
+         Child, d->d_PanelBackground,
+@@ -283,10 +283,10 @@
+ 	End;
+ 
+     d->d_PanelNumAll = MUI_MakeObject(MUIO_Checkmark, 
+-            (ULONG)GCS(MSG_DisplayTable_Panel_NumAll));
+-    d->d_PanelFilter = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_Filter));
++            (IPTR)GCS(MSG_DisplayTable_Panel_NumAll));
++    d->d_PanelFilter = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_Filter));
+     d->d_PanelArrows = MUI_MakeObject(MUIO_Checkmark, 
+-            (ULONG)GCS(MSG_DisplayTable_Panel_Arrows));
++            (IPTR)GCS(MSG_DisplayTable_Panel_Arrows));
+ 
+     panelAttrs = VGroup,
+ 	MUIA_Frame, MUIV_Frame_Group,
+@@ -363,14 +363,14 @@
+         3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_DefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !bg || !bg[0],
+         TAG_DONE);
+     DoMethod(d->d_HasPanel, MUIM_Notify, MUIA_Selected, MUIV_EveryTime,
+         panelGroup, 3, MUIM_Set, MUIA_Disabled, MUIV_NotTriggerValue);
+     SetAttrs(d->d_HasPanel,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayTable_HasPanelBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayTable_HasPanelBH),
+         MUIA_Selected, hasPanel,
+         TAG_DONE);
+     DoMethod(d->d_PanelDefaultBackground, MUIM_Notify, 
+@@ -378,24 +378,24 @@
+         3, MUIM_Set, MUIA_Disabled, MUIV_TriggerValue);
+     SetAttrs(d->d_PanelDefaultBackground,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_Background_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_Background_DefaultBH),
+         MUIA_Selected, !panelbg || !panelbg[0],
+         TAG_DONE);
+     SetAttrs(d->d_PanelNumAll,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayTable_Panel_NumAllBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayTable_Panel_NumAllBH),
+         MUIA_Selected, DisplayTablePanelNumAll(dio) && gadgets,
+         MUIA_Disabled, !gadgets,
+         TAG_DONE);
+     SetAttrs(d->d_PanelFilter,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayTable_Panel_FilterBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayTable_Panel_FilterBH),
+         MUIA_Selected, DisplayTablePanelFilter(dio) && gadgets,
+         MUIA_Disabled, !gadgets,
+         TAG_DONE);
+     SetAttrs(d->d_PanelArrows,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_DisplayTable_Panel_ArrowsBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_DisplayTable_Panel_ArrowsBH),
+         MUIA_Selected, DisplayTablePanelArrows(dio) && gadgets,
+         MUIA_Disabled, !gadgets,
+         TAG_DONE);
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/ActGroup_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/ActGroup_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/ActGroup_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/ActGroup_mcc.c	2021-01-19 01:50:12.290000000 +0000
+@@ -35,7 +35,7 @@
+     struct MUI_EventHandlerNode ehnode;
+ };
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -47,10 +47,10 @@
+     data = INST_DATA(cl, obj);
+     memset(data, 0, sizeof(struct Data));
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mShow(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mShow(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -67,7 +67,7 @@
+     return TRUE;
+ }
+ 
+-static ULONG mHide(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mHide(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -92,7 +92,7 @@
+ #define _isinobject(x,y) (_between(_mleft(obj),(x),_mright (obj)) \
+ 	&& _between(_mtop(obj) ,(y),_mbottom(obj)))
+ 
+-static ULONG mHandleEvent(struct IClass *cl, Object *obj, 
++static IPTR mHandleEvent(struct IClass *cl, Object *obj, 
+ 	struct  MUIP_HandleEvent *msg)
+ {
+     struct IntuiMessage *imsg = msg->imsg;
+@@ -103,7 +103,7 @@
+ 	** As of NList_mcc V0.101 the behavior in NList 
+ 	** has been changed and we can activate as usual.
+ 	*/
+-	set(_win(obj), MUIA_Window_ActiveObject, (ULONG)obj);
++	set(_win(obj), MUIA_Window_ActiveObject, (IPTR)obj);
+     }
+     return 0;
+ }
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/DDList_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/DDList_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/DDList_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/DDList_mcc.c	2021-01-19 01:52:08.840000000 +0000
+@@ -41,8 +41,8 @@
+ 
+ struct Data
+ {
+-    ULONG (*d_DragQuery)(Object *, struct MUIP_DragDrop *, void *);
+-    ULONG (*d_DragDrop)(Object *, struct MUIP_DragDrop *, void *);
++    IPTR (*d_DragQuery)(Object *, struct MUIP_DragDrop *, void *);
++    IPTR (*d_DragDrop)(Object *, struct MUIP_DragDrop *, void *);
+     void *d_DragData;
+     BOOL d_Dropped;
+     bool (*d_KeyFunc)(Object *, char *, short, ushort, void *);
+@@ -60,11 +60,11 @@
+ 	switch (tag->ti_Tag)
+ 	{
+             case MUIA_DDList_DragQuery:
+-                data->d_DragQuery = (ULONG (*)(Object *, struct MUIP_DragDrop *, void *))tag->ti_Data;
++                data->d_DragQuery = (IPTR (*)(Object *, struct MUIP_DragDrop *, void *))tag->ti_Data;
+                 break;
+ 
+             case MUIA_DDList_DragDrop:
+-                data->d_DragDrop = (ULONG (*)(Object *, struct MUIP_DragDrop *, void *))tag->ti_Data;
++                data->d_DragDrop = (IPTR (*)(Object *, struct MUIP_DragDrop *, void *))tag->ti_Data;
+                 break;
+ 
+             case MUIA_DDList_DragData:
+@@ -82,7 +82,7 @@
+     }
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -95,10 +95,10 @@
+ 
+     setattrs(data, msg->ops_AttrList);
+ 
+-    return((ULONG)obj);
++    return((IPTR)obj);
+ }
+ 
+-static ULONG mDispose(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mDispose(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -109,7 +109,7 @@
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -117,7 +117,7 @@
+     return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -130,13 +130,13 @@
+ 	    if (data->d_MemPool == NULL) {
+ 		data->d_MemPool = CreatePool(0, 4096, 1024);
+ 	    }
+-            *msg->opg_Storage = (ULONG)data->d_MemPool;
++            *msg->opg_Storage = (IPTR)data->d_MemPool;
+             return TRUE;
+     }
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mSetup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mSetup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -152,7 +152,7 @@
+     return(TRUE);
+ }
+ 
+-static ULONG mCleanup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mCleanup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -161,7 +161,7 @@
+     return(DoSuperMethodA(cl, obj, msg));
+ }
+ 
+-static ULONG mHandleEvent(struct IClass *cl, Object *obj, 
++static IPTR mHandleEvent(struct IClass *cl, Object *obj, 
+ 	struct MUIP_HandleEvent *msg)
+ {
+     struct Data *d = INST_DATA(cl, obj);
+@@ -181,7 +181,7 @@
+ 
+ /* taken from MUI's drag'n drop example */
+ 
+-static ULONG dragQuery(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
++static IPTR dragQuery(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -211,10 +211,10 @@
+     return(MUIV_DragQuery_Refuse);
+ }
+ 
+-ULONG dragDrop(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
++IPTR dragDrop(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG rc = 0;
++    IPTR rc = 0;
+ 
+     if(msg->obj==obj)
+     {
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/DataTypes_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/DataTypes_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/DataTypes_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/DataTypes_mcc.c	2021-01-19 01:49:26.280000000 +0000
+@@ -147,7 +147,7 @@
+     return redraw;
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -166,10 +166,10 @@
+     set(obj, MUIA_FillArea, FALSE);
+ #endif
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mDispose(struct IClass *cl,Object *obj,Msg msg)
++static IPTR mDispose(struct IClass *cl,Object *obj,Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -177,10 +177,10 @@
+     return DoSuperMethodA(cl, obj, msg);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG result;
++    IPTR result;
+     bool redraw;
+ 
+     redraw = setattrs(data, msg->ops_AttrList);
+@@ -192,20 +192,20 @@
+     return result;
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+     switch (msg->opg_AttrID) {
+         case MUIA_DataTypes_FixedSize:
+-            *msg->opg_Storage = (ulong)data->d_FixedSize;
++            *msg->opg_Storage = (IPTR)data->d_FixedSize;
+             return TRUE;
+     }
+ 
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mAskMinMax(struct IClass *cl, Object *obj, 
++static IPTR mAskMinMax(struct IClass *cl, Object *obj, 
+         struct MUIP_AskMinMax *msg)
+ {
+     struct Data *data = INST_DATA(cl,obj);
+@@ -236,7 +236,7 @@
+     return 0;
+ }
+ 
+-static ULONG mDraw(struct IClass *cl, Object *obj, struct MUIP_Draw *msg)
++static IPTR mDraw(struct IClass *cl, Object *obj, struct MUIP_Draw *msg)
+ {
+     struct Data *data = INST_DATA(cl,obj);
+     Object *dto = data->d_Object;
+@@ -261,7 +261,7 @@
+ 
+     /* Make the datatype object suitable for our screen */
+     SetAttrs(dto,
+-        PDTA_Screen, (ULONG)_screen(obj),
++        PDTA_Screen, (IPTR)_screen(obj),
+         PDTA_UseFriendBitMap , TRUE,
+         TAG_DONE);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/EditLabels_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/EditLabels_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/EditLabels_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/EditLabels_mcc.c	2021-01-19 01:50:53.230000000 +0000
+@@ -112,10 +112,10 @@
+ }
+ static HOOK_STRUCT(compare)
+ 
+-static ULONG setattrs(struct Data *data, struct TagItem *tags)
++static IPTR setattrs(struct Data *data, struct TagItem *tags)
+ {
+     struct TagItem *tag;
+-    ULONG rc = 0;
++    IPTR rc = 0;
+ 
+     while((tag = NextTagItem(&tags)) != NULL)
+     {
+@@ -130,7 +130,7 @@
+     return(rc);
+ }
+ 
+-static ULONG mNew(struct IClass *cl,Object *obj,struct opSet *msg)
++static IPTR mNew(struct IClass *cl,Object *obj,struct opSet *msg)
+ {
+     struct TagItem *tags = msg->ops_AttrList;
+     struct Data *data, d;
+@@ -207,8 +207,8 @@
+         End;
+ 
+     obj = (Object *)DoSuperNew(cl, obj,
+-	Child, (ULONG)d.d_Main, 		       
+-        TAG_MORE, (ULONG)tags,
++	Child, (IPTR)d.d_Main, 		       
++        TAG_MORE, (IPTR)tags,
+         TAG_DONE);
+     if(obj == NULL)
+         return(0);
+@@ -220,16 +220,16 @@
+ 
+     SetAttrs(d.d_New,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_EditLabels_NewBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_EditLabels_NewBH),
+         TAG_DONE);
+     SetAttrs(d.d_Remove,
+         MUIA_CycleChain, TRUE,
+         MUIA_Disabled, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_EditLabels_RemoveBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_EditLabels_RemoveBH),
+         TAG_DONE);
+     SetAttrs(d.d_Sort,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_EditLabels_SortBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_EditLabels_SortBH),
+         TAG_DONE);
+ 
+     MUIAddCallback(d.d_Listview, MUIA_List_Active, MUIV_EveryTime,
+@@ -244,14 +244,14 @@
+ 
+     setattrs(data, tags);
+ 
+-    return((ULONG)obj);
++    return((IPTR)obj);
+ }
+ 
+-static ULONG mDispose(struct IClass *cl,Object *obj,Msg msg)
++static IPTR mDispose(struct IClass *cl,Object *obj,Msg msg)
+ {
+     struct Data *d = INST_DATA(cl, obj);
+     struct MemPool *memPool = d->d_MemPool;
+-    ULONG rc;
++    IPTR rc;
+ 
+     rc = DoSuperMethodA(cl, obj, msg);
+     if(memPool)
+@@ -259,17 +259,17 @@
+     return(rc);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG rc;
++    IPTR rc;
+ 
+     rc = setattrs(data, msg->ops_AttrList);
+     rc |= DoSuperMethodA(cl, obj, (Msg)msg);
+     return(rc);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+   struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -278,7 +278,7 @@
+     case MUIA_EditLabels_Labels:
+       FreeLabels(data->d_MemPool, data->d_Labels);
+       data->d_Labels = MUIListLabels(data->d_MemPool, data->d_Listview);
+-      *msg->opg_Storage = (ulong)data->d_Labels;
++      *msg->opg_Storage = (IPTR)data->d_Labels;
+       return(TRUE);
+     }
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/ExtApplication_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtApplication_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/ExtApplication_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtApplication_mcc.c	2021-01-19 01:53:51.800000000 +0000
+@@ -58,7 +58,7 @@
+     }
+ }
+ 
+-static ULONG mNew(struct IClass *cl,Object *obj,struct opSet *msg)
++static IPTR mNew(struct IClass *cl,Object *obj,struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -78,10 +78,10 @@
+ 
+     setattrs(data, msg->ops_AttrList);
+ 
+-    return((ULONG)obj);
++    return((IPTR)obj);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -109,14 +109,14 @@
+     return(NULL);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+     switch(msg->opg_AttrID)
+     {
+         case MUIA_ExtApplication_ActiveExtWindow:
+-            *msg->opg_Storage = (ULONG)activeextwindow(obj, data);
++            *msg->opg_Storage = (IPTR)activeextwindow(obj, data);
+             return(TRUE);
+     }
+ 
+@@ -135,10 +135,10 @@
+     }
+ }
+ 
+-static ULONG mDispose(struct IClass *cl,Object *obj,Msg msg)
++static IPTR mDispose(struct IClass *cl,Object *obj,Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG rc;
++    IPTR rc;
+ 
+     clearDisposeList(data->d_DisposeList);
+     data->d_DisposeList = NULL;
+@@ -153,7 +153,7 @@
+     return(rc);
+ }
+ 
+-static ULONG mAddDisposeObject(struct IClass *cl, Object *obj,
++static IPTR mAddDisposeObject(struct IClass *cl, Object *obj,
+         struct MUIP_ExtApplication_DisposeObject *eado)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+@@ -166,10 +166,10 @@
+     return(0);
+ }
+ 
+-static ULONG mInput(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mInput(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG rc;
++    IPTR rc;
+ 
+     if(data->d_NestCounter == 0)
+     {
+@@ -184,7 +184,7 @@
+     return(rc);
+ }
+ 
+-static ULONG mProjectSleep(struct IClass *cl, Object *obj,
++static IPTR mProjectSleep(struct IClass *cl, Object *obj,
+         struct MUIP_ExtApplication_ProjectSleep *eaps)
+ {
+     struct List *list = pget(obj, MUIA_Application_WindowList);
+@@ -201,7 +201,7 @@
+     return(0);
+ }
+ 
+-static ULONG mRedirectMessage(struct IClass *cl, Object *obj,
++static IPTR mRedirectMessage(struct IClass *cl, Object *obj,
+         struct MUIP_ExtApplication_RedirectMessage *earm)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+@@ -214,12 +214,12 @@
+     return 0;
+ }
+ 
+-static ULONG mGetMessage(struct IClass *cl, Object *obj,
++static IPTR mGetMessage(struct IClass *cl, Object *obj,
+         struct MUIP_ExtApplication_GetMessage *eagm)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     struct Message *msg, *succ;
+-    ULONG rc = 0;
++    IPTR rc = 0;
+ 
+     Forbid();
+     SAFEFORNODE(msg, succ, &data->d_RedirectPort->mp_MsgList)
+@@ -227,7 +227,7 @@
+ 	if(msg == eagm->eagm_Message)
+ 	{
+ 	    REMOVE(msg);
+-	    rc = (ULONG)msg;
++	    rc = (IPTR)msg;
+ 	    break;
+ 	}
+     }
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/ExtApplication_mcc.h MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtApplication_mcc.h
+--- MUIbase-3.3/src/amiga/mui/extclasses/ExtApplication_mcc.h	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtApplication_mcc.h	2021-01-19 02:04:52.500000000 +0000
+@@ -48,17 +48,17 @@
+ 
+ struct MUIP_ExtApplication_DisposeObject
+ {
+-    ULONG MethodID;
+-    Object *eado_Object;
++    STACKED ULONG MethodID;
++    STACKED Object *eado_Object;
+ };
+ 
+ #define MUIM_ExtApplication_ProjectSleep (TAG_EXTAPPLICATION_BASE | 0xA)
+ 
+ struct MUIP_ExtApplication_ProjectSleep
+ {
+-    ULONG MethodID;
+-    struct Project *eaps_Project;
+-    ULONG eaps_Sleep;
++    STACKED ULONG MethodID;
++    STACKED struct Project *eaps_Project;
++    STACKED ULONG eaps_Sleep;
+ };
+ 
+ /*
+@@ -68,8 +68,8 @@
+ 
+ struct MUIP_ExtApplication_RedirectMessage
+ {
+-    ULONG MethodID;
+-    struct Message *earm_Message;
++    STACKED ULONG MethodID;
++    STACKED struct Message *earm_Message;
+ };
+ 
+ /*
+@@ -80,8 +80,8 @@
+ 
+ struct MUIP_ExtApplication_GetMessage
+ {
+-    ULONG MethodID;
+-    struct Message *eagm_Message;
++    STACKED ULONG MethodID;
++    STACKED struct Message *eagm_Message;
+ };
+ 
+ #define ExtApplicationObject NewObject(ExtApplicationClass, NULL
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/ExtEditor_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtEditor_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/ExtEditor_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtEditor_mcc.c	2021-01-19 01:54:08.150000000 +0000
+@@ -121,7 +121,7 @@
+     }
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+     struct TagItem *tags = msg->ops_AttrList;
+@@ -279,14 +279,14 @@
+         redo, 3, MUIM_Set, MUIA_Menuitem_Enabled, MUIV_TriggerValue);
+     set(redo, MUIA_Menuitem_Enabled, h);
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mDispose(struct IClass *cl,Object *obj,Msg msg)
++static IPTR mDispose(struct IClass *cl,Object *obj,Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     Object *menustrip = data->d_Menustrip;
+-    ULONG rc;
++    IPTR rc;
+ 
+     rc = DoSuperMethodA(cl, obj, msg);
+     if (menustrip) {
+@@ -296,7 +296,7 @@
+     return rc;
+ }
+ 
+-static ULONG mSet(struct IClass *cl,Object *obj,struct opSet *msg)
++static IPTR mSet(struct IClass *cl,Object *obj,struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -304,7 +304,7 @@
+     return DoSuperMethodA(cl,obj,(Msg)msg);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/ExtWindow_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtWindow_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/ExtWindow_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/ExtWindow_mcc.c	2021-01-19 01:53:30.020000000 +0000
+@@ -74,7 +74,7 @@
+     } else {
+         strcpy(copy, title);
+     }
+-    SetSuperAttrs(cl, obj, MUIA_Window_Title, (ULONG)copy, TAG_END);
++    SetSuperAttrs(cl, obj, MUIA_Window_Title, (IPTR)copy, TAG_END);
+     if (data->d_Title) {
+         FREEMEM(data->d_Title, strlen(data->d_Title) + 1);
+     }
+@@ -172,7 +172,7 @@
+         set(app, MUIA_ExtApplication_ActiveExtWindow, obj);
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -192,10 +192,10 @@
+     MUIAddCallback(obj, MUIA_Window_Sleep, MUIV_EveryTime, windowsleep, NULL); 
+     MUIAddCallback(obj, MUIA_Window_Open, TRUE, openwindow, NULL);
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mDispose(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mDispose(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     char *title = data->d_Title;
+@@ -210,7 +210,7 @@
+     return DoSuperMethodA(cl, obj, msg);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     struct Window *window = pget(obj, MUIA_Window_Window);
+@@ -226,39 +226,39 @@
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+     switch (msg->opg_AttrID) {
+         case MUIA_ExtWindow_Project:
+-            *msg->opg_Storage = (ULONG)data->d_Project;
++            *msg->opg_Storage = (IPTR)data->d_Project;
+             return TRUE;
+ 
+         case MUIA_Window_LeftEdge:
+             if (data->d_DimensionsValid) {
+-                *msg->opg_Storage = (ULONG)data->d_LeftEdge;
++                *msg->opg_Storage = (IPTR)data->d_LeftEdge;
+                 return TRUE;
+             }
+             break;
+ 
+         case MUIA_Window_TopEdge:
+             if (data->d_DimensionsValid) {
+-                *msg->opg_Storage = (ULONG)data->d_TopEdge;
++                *msg->opg_Storage = (IPTR)data->d_TopEdge;
+                 return TRUE;
+             }
+             break;
+ 
+         case MUIA_Window_Width:
+             if (data->d_DimensionsValid) {
+-                *msg->opg_Storage = (ULONG)data->d_Width;
++                *msg->opg_Storage = (IPTR)data->d_Width;
+                 return TRUE;
+             }
+             break;
+ 
+         case MUIA_Window_Height:
+             if (data->d_DimensionsValid) {
+-                *msg->opg_Storage = (ULONG)data->d_Height;
++                *msg->opg_Storage = (IPTR)data->d_Height;
+                 return TRUE;
+             }
+             break;
+@@ -271,7 +271,7 @@
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mSetup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mSetup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -293,7 +293,7 @@
+     return TRUE;
+ }
+ 
+-static ULONG mCleanup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mCleanup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+@@ -301,7 +301,7 @@
+     return DoSuperMethodA(cl, obj, msg);
+ }
+ 
+-static ULONG mHandleEvent(struct IClass *cl, Object *obj,
++static IPTR mHandleEvent(struct IClass *cl, Object *obj,
+         struct  MUIP_HandleEvent *msg)
+ {
+     struct Data *d = INST_DATA(cl, obj);
+@@ -334,7 +334,7 @@
+ }
+ 
+ #if 0
+-static ULONG mIconify(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mIconify(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/NewCycle_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/NewCycle_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/NewCycle_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/NewCycle_mcc.c	2021-01-19 01:52:26.760000000 +0000
+@@ -40,12 +40,12 @@
+     char **d_Labels;
+ };
+ 
+-static ULONG setattrs(struct IClass *cl, Object *obj, struct TagItem *tags)
++static IPTR setattrs(struct IClass *cl, Object *obj, struct TagItem *tags)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     bool create = (data->d_Cycle == NULL);
+     struct TagItem *tag;
+-    ulong rc = 0;
++    IPTR rc = 0;
+ 
+     tag = FindTagItem(MUIA_Cycle_Entries, tags);
+     if (tag) {
+@@ -106,7 +106,7 @@
+     return rc;
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data;
+ 
+@@ -119,23 +119,23 @@
+     memset(data, 0, sizeof(*data));
+     setattrs(cl, obj, msg->ops_AttrList);
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mDispose(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mDispose(struct IClass *cl, Object *obj, Msg msg)
+ {
+     return DoSuperMethodA(cl, obj, msg);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     return setattrs(cl, obj, msg->ops_AttrList);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+-    ULONG attrID = msg->opg_AttrID, rc = 0;
+-    ULONG *storage = msg->opg_Storage;
++    IPTR attrID = msg->opg_AttrID, rc = 0;
++    IPTR *storage = msg->opg_Storage;
+     struct Data *data = INST_DATA(cl, obj);
+ 
+     switch (attrID) {
+@@ -148,7 +148,7 @@
+             }
+             break;
+         case MUIA_Cycle_Entries:
+-            *storage = (ULONG)data->d_Labels;
++            *storage = (IPTR)data->d_Labels;
+             rc = TRUE;
+             break;
+         default:
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/PopEditLabels_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/PopEditLabels_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/PopEditLabels_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/PopEditLabels_mcc.c	2021-01-19 01:48:36.170000000 +0000
+@@ -46,10 +46,10 @@
+     char **d_Labels;
+ };
+ 
+-static ULONG setattrs(struct Data *data, struct TagItem *tags)
++static IPTR setattrs(struct Data *data, struct TagItem *tags)
+ {
+     struct TagItem *tag;
+-    ULONG rc = 0;
++    IPTR rc = 0;
+ 
+     while ((tag = NextTagItem(&tags)) != NULL)
+     {
+@@ -69,13 +69,13 @@
+     return(rc);
+ }
+ 
+-static ULONG mNew(struct IClass *cl,Object *obj,struct opSet *msg)
++static IPTR mNew(struct IClass *cl,Object *obj,struct opSet *msg)
+ {
+     struct TagItem *tags = msg->ops_AttrList;
+     struct Data *data;
+ 
+     obj = (Object *)DoSuperNew(cl, obj,
+-        TAG_MORE, (ULONG)tags,
++        TAG_MORE, (IPTR)tags,
+         TAG_DONE);
+     if(obj == NULL)
+         return(0);
+@@ -90,14 +90,14 @@
+     DoMethod(obj, MUIM_Notify, MUIA_Pressed, FALSE,
+         obj, 1, MUIM_PopEditLabels_Open);
+ 
+-    return((ULONG)obj);
++    return((IPTR)obj);
+ }
+ 
+-static ULONG mDispose(struct IClass *cl,Object *obj,Msg msg)
++static IPTR mDispose(struct IClass *cl,Object *obj,Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     struct MemPool *memPool = data->d_MemPool;
+-    ULONG rc;
++    IPTR rc;
+ 
+     CoerceMethod(cl, obj, MUIM_PopEditLabels_Close, FALSE);
+ 
+@@ -107,31 +107,31 @@
+     return(rc);
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+-    ULONG rc;
++    IPTR rc;
+ 
+     rc = setattrs(data, msg->ops_AttrList);
+     rc |= DoSuperMethodA(cl, obj, (Msg)msg);
+     return(rc);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+ 
+     switch(msg->opg_AttrID)
+     {
+         case MUIA_EditLabels_Labels:
+-            *msg->opg_Storage = (ulong)data->d_Labels;
++            *msg->opg_Storage = (IPTR)data->d_Labels;
+             return(TRUE);
+     }
+ 
+     return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG mOpen(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mOpen(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     Object *root, *buttons, *editlabels, *ok, *cancel;
+@@ -199,7 +199,7 @@
+     return(1);
+ }
+ 
+-static ULONG mClose(struct IClass *cl, Object *obj, struct MUIP_PopEditLabels_Close *pelc)
++static IPTR mClose(struct IClass *cl, Object *obj, struct MUIP_PopEditLabels_Close *pelc)
+ {
+     struct Data *data = INST_DATA(cl, obj);
+     Object *app = pget(obj, MUIA_ApplicationObject);
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/PopEditLabels_mcc.h MUIbase-3.3.aros/src/amiga/mui/extclasses/PopEditLabels_mcc.h
+--- MUIbase-3.3/src/amiga/mui/extclasses/PopEditLabels_mcc.h	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/PopEditLabels_mcc.h	2021-01-19 02:04:18.430000000 +0000
+@@ -53,8 +53,8 @@
+ 
+ struct MUIP_PopEditLabels_Close
+ {
+-    ULONG MethodID;
+-    ULONG pelc_Ok;
++    STACKED ULONG MethodID;
++    STACKED ULONG pelc_Ok;
+ };
+ 
+ #define PopEditLabelsObject NewObject(PopEditLabelsClass, NULL
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/RefAttrSelector_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/RefAttrSelector_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/RefAttrSelector_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/RefAttrSelector_mcc.c	2021-01-19 02:10:15.290000000 +0000
+@@ -41,6 +41,7 @@
+ #include "error.h"
+ #include "appstrings_cat.h"
+ #include "amiga/font.h"
++
+ #include <proto/utility.h>
+ 
+ #define SUPERCLASS MUIC_Popobject
+@@ -341,7 +342,7 @@
+     set(list, MUIA_List_Quiet, FALSE);
+ 
+     /* set record reference */
+-    GuiStoreData(dio, (ulong)refrec);
++    GuiStoreData(dio, (IPTR)refrec);
+ }
+ static HOOK_STRUCT(refObjStr)
+ 
+@@ -441,7 +442,7 @@
+     return listview;
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct TagItem *tags = msg->ops_AttrList;
+     struct DisplayObject *dio = (struct DisplayObject *)
+@@ -450,11 +451,11 @@
+     struct ClassData *data;
+ 
+     obj = (Object *)DoSuperNew(cl, obj,
+-        MUIA_Popobject_StrObjHook, (ULONG)&refStrObjHook,
+-        MUIA_Popobject_ObjStrHook, (ULONG)&refObjStrHook,
+-        MUIA_Popobject_WindowHook, (ULONG)&refWindowHook,
+-        MUIA_Popobject_Object, (ULONG)listview,
+-        TAG_MORE, (ULONG)tags,
++        MUIA_Popobject_StrObjHook, (IPTR)&refStrObjHook,
++        MUIA_Popobject_ObjStrHook, (IPTR)&refObjStrHook,
++        MUIA_Popobject_WindowHook, (IPTR)&refWindowHook,
++        MUIA_Popobject_Object, (IPTR)listview,
++        TAG_MORE, (IPTR)tags,
+         TAG_DONE);
+ 
+     if (obj == NULL) {
+@@ -469,10 +470,10 @@
+     MUIAddCallback(listview, MUIA_Listview_DoubleClick, TRUE, 
+             refdoubleclick, dio);
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mSetup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mSetup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+ 
+@@ -488,7 +489,7 @@
+     return TRUE;
+ }
+ 
+-static ULONG mCleanup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mCleanup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+ 
+@@ -496,7 +497,7 @@
+     return DoSuperMethodA(cl, obj, msg);
+ }
+ 
+-static ULONG mHandleEvent(struct IClass *cl, Object *obj, 
++static IPTR mHandleEvent(struct IClass *cl, Object *obj, 
+ 	struct MUIP_HandleEvent *msg)
+ {
+     struct IntuiMessage *imsg = msg->imsg;
+@@ -549,7 +550,7 @@
+     return NULL;
+ }
+ 
+-static ULONG dragQuery(struct IClass *cl, Object *obj,struct MUIP_DragDrop *msg)
++static IPTR dragQuery(struct IClass *cl, Object *obj,struct MUIP_DragDrop *msg)
+ {
+     if (dragDropRecord(obj, msg->obj)) {
+         return MUIV_DragQuery_Accept;
+@@ -558,15 +559,15 @@
+     return MUIV_DragQuery_Refuse;
+ }
+ 
+-static ULONG dragDrop(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
++static IPTR dragDrop(struct IClass *cl, Object *obj, struct MUIP_DragDrop *msg)
+ {
+     struct DisplayObject *dio = pget(obj, MUIA_UserData);
+     struct Record *refrec = dragDropRecord(obj, msg->obj);
+-    ULONG rc = 0;
++    IPTR rc = 0;
+ 
+     if (refrec) {
+         /* set record reference */
+-        GuiStoreData(dio, (ulong)refrec);
++        GuiStoreData(dio, (IPTR)refrec);
+     } else {
+ 	rc = DoSuperMethodA(cl, obj, (Msg)msg);
+     }
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/SFWList_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/SFWList_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/SFWList_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/SFWList_mcc.c	2021-01-19 01:51:47.130000000 +0000
+@@ -135,11 +135,11 @@
+ }
+ 
+ #ifdef USE_DISPLAY_HOOK
+-static ulong HOOK_PROTO(display, const char **dst, struct QueryLine *ql)
++static IPTR HOOK_PROTO(display, const char **dst, struct QueryLine *ql)
+ {
+     struct ClassData *data = hook->h_Data;
+ #else
+-static ULONG mDisplay(struct IClass *cl, Object *obj, 
++static IPTR mDisplay(struct IClass *cl, Object *obj, 
+ #ifdef USE_NLIST
+         struct MUIP_NList_Display *msg)
+ #else
+@@ -243,7 +243,7 @@
+     updateMenustrip(obj, *x);
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct ClassData *data;
+     struct TagItem *tags = msg->ops_AttrList;
+@@ -321,15 +321,15 @@
+     MUIAddCallback(obj, MUIA_List_TitleClick, MUIV_EveryTime, titleclick, MUIV_TriggerValue);
+ #endif
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mDispose(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mDispose(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+     struct MemPool *memPool = data->d_MemPool;
+     Object *menustrip = data->d_Menustrip;
+-    ULONG rc;
++    IPTR rc;
+ 
+     rc = DoSuperMethodA(cl, obj, msg);
+     if (menustrip) {
+@@ -342,13 +342,13 @@
+     return rc;
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     setattrs(cl, obj, msg->ops_AttrList);
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+ 
+@@ -359,19 +359,19 @@
+             return TRUE;
+ 
+         case MUIA_SFWList_Formats:
+-            *msg->opg_Storage = (ulong)data->d_Formats;
++            *msg->opg_Storage = (IPTR)data->d_Formats;
+             return TRUE;
+ 
+         case MUIA_SFWList_Titles:
+-            *msg->opg_Storage = (ulong)&data->d_TitleLine;
++            *msg->opg_Storage = (IPTR)&data->d_TitleLine;
+             return TRUE;
+ 
+         case MUIA_SFWList_Attributes:
+-            *msg->opg_Storage = (ulong)data->d_Attributes;
++            *msg->opg_Storage = (IPTR)data->d_Attributes;
+             return TRUE;
+ 
+         case MUIA_SFWList_Widths:
+-            *msg->opg_Storage = (ulong)data->d_Widths;
++            *msg->opg_Storage = (IPTR)data->d_Widths;
+             return TRUE;
+ 
+         case MUIA_SFWList_ActiveLine:
+@@ -387,7 +387,7 @@
+     return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG mSetup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mSetup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+ 
+@@ -403,7 +403,7 @@
+     return TRUE;
+ }
+ 
+-static ULONG mCleanup(struct IClass *cl, Object *obj, Msg msg)
++static IPTR mCleanup(struct IClass *cl, Object *obj, Msg msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+ 
+@@ -496,7 +496,7 @@
+     return FALSE;
+ }
+ 
+-static ULONG mHandleEvent(struct IClass *cl, Object *obj, 
++static IPTR mHandleEvent(struct IClass *cl, Object *obj, 
+         struct MUIP_HandleEvent *msg)
+ {
+     struct IntuiMessage *imsg = msg->imsg;
+@@ -648,7 +648,7 @@
+     }
+ }
+ 
+-static ULONG sfwListSetTitlesBodyHelp(struct IClass *cl, Object *obj, 
++static IPTR sfwListSetTitlesBodyHelp(struct IClass *cl, Object *obj, 
+         struct MUIP_SFWList_SetTitlesBody *sfwlstb)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+@@ -668,7 +668,7 @@
+ 
+     data->d_MemPool = CreatePool(0, 4096, 1024);
+     if (data->d_MemPool == NULL) {
+-        return (ULONG)GCS(MSG_Err_Mem);
++        return (IPTR)GCS(MSG_Err_Mem);
+     }
+ 
+     /*
+@@ -681,7 +681,7 @@
+     if (titles == NULL && body->el_Type != TYPE_LIST) {
+         qe = QueryElementToQueryEntry(body, NULL, data->d_MemPool);
+         if (qe == NULL) {
+-            return (ULONG)GCS(MSG_Err_Mem);
++            return (IPTR)GCS(MSG_Err_Mem);
+         }
+ 
+         sfwListSetStringInternal(cl, obj, qe->qe_String);
+@@ -704,7 +704,7 @@
+             data->d_Titles[i] = QueryElementToQueryEntry(elem, NULL, 
+                     data->d_MemPool);
+             if (data->d_Titles[i] == NULL) {
+-                return (ULONG)GCS(MSG_Err_Mem);
++                return (IPTR)GCS(MSG_Err_Mem);
+             }
+             if (elem->el_Type == TYPE_STRING) {
+                 data->d_Attributes[i] = elem->el_Contents.string.attr;
+@@ -784,7 +784,7 @@
+                 elem = list->el_Contents.list.head;
+                 if (!addEntry(cl, obj, elem, lineNum, qls)) {
+                     sfwListClear(cl, obj);
+-                    return (ULONG)GCS(MSG_Err_Mem);
++                    return (IPTR)GCS(MSG_Err_Mem);
+                 }
+                 lineNum++;
+             }
+@@ -796,7 +796,7 @@
+         } else if (body->el_Type != TYPE_NIL) {
+             if (!addEntry(cl, obj, body, 1, NULL)){
+                 sfwListClear(cl, obj);
+-                return (ULONG)GCS(MSG_Err_Mem);
++                return (IPTR)GCS(MSG_Err_Mem);
+             }
+         }
+     }
+@@ -808,10 +808,10 @@
+     return 0;
+ }
+ 
+-static ULONG sfwListSetTitlesBody(struct IClass *cl, Object *obj, 
++static IPTR sfwListSetTitlesBody(struct IClass *cl, Object *obj, 
+         struct MUIP_SFWList_SetTitlesBody *sfwlstb)
+ {
+-    ULONG result;
++    IPTR result;
+ 
+     set(obj, MUIA_List_Quiet, TRUE);
+     result = sfwListSetTitlesBodyHelp(cl, obj, sfwlstb);
+@@ -820,7 +820,7 @@
+     return result;
+ }
+ 
+-static ULONG sfwListSetElement(struct IClass *cl, Object *obj, 
++static IPTR sfwListSetElement(struct IClass *cl, Object *obj, 
+         struct MUIP_SFWList_SetElement *sfwlse)
+ {
+     const struct Element *elem = sfwlse->sfwl_Element;
+@@ -838,7 +838,7 @@
+     return DoMethod(obj, MUIM_SFWList_SetTitlesBody, titles, body);
+ }
+ 
+-static ULONG sfwListSetString(struct IClass *cl, Object *obj,
++static IPTR sfwListSetString(struct IClass *cl, Object *obj,
+         struct MUIP_SFWList_SetString *sfwlss)
+ {
+     set(obj, MUIA_List_Quiet, TRUE);
+@@ -850,20 +850,20 @@
+ }
+ 
+ #if 0
+-static ULONG sfwListSetSelected(struct IClass *cl, Object *obj,
++static IPTR sfwListSetSelected(struct IClass *cl, Object *obj,
+         struct MUIP_SFWList_SetSelected *sfwlss)
+ {
+     return 0;
+ }
+ 
+-static ULONG sfwListGetSelected(struct IClass *cl, Object *obj,
++static IPTR sfwListGetSelected(struct IClass *cl, Object *obj,
+         struct MUIP_SFWList_SetSelected *sfwlgs)
+ {
+     return 0;
+ }
+ #endif
+ 
+-static ULONG sfwListRemRecord(struct IClass *cl, Object *obj,
++static IPTR sfwListRemRecord(struct IClass *cl, Object *obj,
+         struct MUIP_SFWList_RemRecord *sfwlrm)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+@@ -892,7 +892,7 @@
+     return 0;
+ }
+ 
+-static ULONG sfwListRemAllRecords(struct IClass *cl, Object *obj, APTR msg)
++static IPTR sfwListRemAllRecords(struct IClass *cl, Object *obj, APTR msg)
+ {
+     struct ClassData *data = INST_DATA(cl, obj);
+     struct QueryLine *ql;
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/SFWList_mcc.h MUIbase-3.3.aros/src/amiga/mui/extclasses/SFWList_mcc.h
+--- MUIbase-3.3/src/amiga/mui/extclasses/SFWList_mcc.h	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/SFWList_mcc.h	2021-01-19 02:04:04.990000000 +0000
+@@ -69,41 +69,41 @@
+ 
+ struct MUIP_SFWList_SetTitlesBody
+ {
+-    ULONG MethodID;
+-    const struct Element *sfwl_Titles;
+-    const struct Element *sfwl_Body;
++    STACKED ULONG MethodID;
++    STACKED const struct Element *sfwl_Titles;
++    STACKED const struct Element *sfwl_Body;
+ };
+ 
+ struct MUIP_SFWList_SetElement
+ {
+-    ULONG MethodID;
+-    const struct Element *sfwl_Element;
++    STACKED ULONG MethodID;
++    STACKED const struct Element *sfwl_Element;
+ };
+ 
+ struct MUIP_SFWList_SetString
+ {
+-    ULONG MethodID;
+-    const char *sfwl_String;
++    STACKED ULONG MethodID;
++    STACKED const char *sfwl_String;
+ };
+ 
+ #if 0
+ struct MUIP_SFWList_SetSelected
+ {
+-    ULONG MethodID;
+-    const bool *sfwl_Selected;
++    STACKED ULONG MethodID;
++    STACKED const bool *sfwl_Selected;
+ };
+ 
+ struct MUIP_SFWList_GetSelected
+ {
+-    ULONG MethodID;
+-    bool *sfwl_Selected;
++    STACKED ULONG MethodID;
++    STACKED bool *sfwl_Selected;
+ };
+ #endif
+ 
+ struct MUIP_SFWList_RemRecord
+ {
+-    ULONG MethodID;
+-    const struct Record *sfwl_Record;
++    STACKED ULONG MethodID;
++    STACKED const struct Record *sfwl_Record;
+ };
+ 
+ #define SFWListObject NewObject(SFWListClass, NULL
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/StringText_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/StringText_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/StringText_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/StringText_mcc.c	2021-01-19 01:53:06.750000000 +0000
+@@ -50,13 +50,13 @@
+     if (tag) {
+ 	out->ops_AttrList = extra;
+ 	extra[0].ti_Tag = MUIA_Text_Contents;
+-	extra[0].ti_Data = (ULONG)tag->ti_Data;
++	extra[0].ti_Data = (IPTR)tag->ti_Data;
+ 	extra[1].ti_Tag = TAG_MORE;
+-	extra[1].ti_Data = (ULONG)tags;
++	extra[1].ti_Data = (IPTR)tags;
+     }
+ }
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct opSet copy;
+     struct TagItem extra[2];
+@@ -71,10 +71,10 @@
+     data = INST_DATA(cl, obj);
+     memset(data, 0, sizeof(struct Data));
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+-static ULONG mSet(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mSet(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct opSet copy;
+     struct TagItem extra[2];
+@@ -83,7 +83,7 @@
+     return DoSuperMethodA(cl, obj, (Msg)&copy);
+ }
+ 
+-static ULONG mGet(struct IClass *cl, Object *obj, struct opGet *msg)
++static IPTR mGet(struct IClass *cl, Object *obj, struct opGet *msg)
+ {
+     switch (msg->opg_AttrID)
+     {
+diff -ruN MUIbase-3.3/src/amiga/mui/extclasses/WindowButton_mcc.c MUIbase-3.3.aros/src/amiga/mui/extclasses/WindowButton_mcc.c
+--- MUIbase-3.3/src/amiga/mui/extclasses/WindowButton_mcc.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/extclasses/WindowButton_mcc.c	2021-01-19 01:49:42.740000000 +0000
+@@ -58,13 +58,13 @@
+ }
+ 
+ #if defined(__MORPHOS__)
+-static void HOOK_PROTO(onTextDisabled, GuiObject go, ULONG dummy)
++static void HOOK_PROTO(onTextDisabled, GuiObject go, IPTR dummy)
+ {
+     set(go, MUIA_Disabled, FALSE);
+ }
+ #endif
+ 
+-static ULONG mNew(struct IClass *cl, Object *obj, struct opSet *msg)
++static IPTR mNew(struct IClass *cl, Object *obj, struct opSet *msg)
+ {
+     struct TagItem *tags = msg->ops_AttrList;
+     Object *img, *text, *dots = NULL;
+@@ -94,8 +94,8 @@
+ 
+     text =  TextObject,
+         MUIA_Weight, 0,
+-        MUIA_Text_Contents, GetTagData(MUIA_Text_Contents, (ULONG)"", tags),
+-        MUIA_Text_PreParse, GetTagData(MUIA_Text_PreParse, (ULONG)"\33c", tags),
++        MUIA_Text_Contents, GetTagData(MUIA_Text_Contents, (IPTR)"", tags),
++        MUIA_Text_PreParse, GetTagData(MUIA_Text_PreParse, (IPTR)"\33c", tags),
+         End;
+     if (text) {
+         MUIAddMember(obj, HSpace(0));
+@@ -118,7 +118,7 @@
+         set(dots, MUIA_Text_Contents, "...");
+     }
+ 
+-    return (ULONG)obj;
++    return (IPTR)obj;
+ }
+ 
+ DISPATCHER_PROTO
+diff -ruN MUIbase-3.3/src/amiga/mui/filter_mui.c MUIbase-3.3.aros/src/amiga/mui/filter_mui.c
+--- MUIbase-3.3/src/amiga/mui/filter_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/filter_mui.c	2021-01-19 01:55:52.570000000 +0000
+@@ -77,7 +77,7 @@
+         bufferPos--;
+ 
+     SetAttrs(strobj,
+-        MUIA_String_Contents, (ULONG)buffer,
++        MUIA_String_Contents, (IPTR)buffer,
+         MUIA_String_DisplayPos, displayPos,
+         MUIA_String_BufferPos, bufferPos,
+         TAG_DONE);
+@@ -181,7 +181,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(finish, Object *obj, ulong *ok)
++static void HOOK_PROTO(finish, Object *obj, IPTR *ok)
+ {
+     struct EditFilterData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+diff -ruN MUIbase-3.3/src/amiga/mui/imexport_mui.c MUIbase-3.3.aros/src/amiga/mui/imexport_mui.c
+--- MUIbase-3.3/src/amiga/mui/imexport_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/imexport_mui.c	2021-01-19 01:57:09.510000000 +0000
+@@ -153,7 +153,7 @@
+     return TRUE;
+ }
+ 
+-static void HOOK_PROTO(closeImExport, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeImExport, Object *obj, IPTR *ok)
+ {
+     struct ImExportData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -277,17 +277,17 @@
+ 	End;
+ 
+     d->d_DoubleQuotes = MUI_MakeObject(MUIO_Checkmark, 
+-	    (ULONG)GCS(MSG_ImExport_DoubleQuotes));
++	    (IPTR)GCS(MSG_ImExport_DoubleQuotes));
+ 
+     if (isImport) {
+         extra_label = Label1(GCS(MSG_Import_OverwriteRecords));
+         extra_item = d->d_OverwriteRecords = MUI_MakeObject(MUIO_Checkmark, 
+-                (ULONG)GCS(MSG_Import_OverwriteRecords));
++                (IPTR)GCS(MSG_Import_OverwriteRecords));
+         has_extra = TRUE;
+     } else if (!sfw) {
+         extra_label = Label1(GCS(MSG_Filter));
+         extra_item = d->d_Filter = MUI_MakeObject(MUIO_Checkmark, 
+-                (ULONG)GCS(MSG_Filter));
++                (IPTR)GCS(MSG_Filter));
+         has_extra = TRUE;
+     }
+ 
+@@ -368,20 +368,20 @@
+ 
+     SetAttrs(d->d_DoubleQuotes,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ImExport_DoubleQuotesBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ImExport_DoubleQuotesBH),
+         MUIA_Selected, ImExportSettings.ies_DoubleQuotes,
+         TAG_DONE);
+     if (d->d_Filter) {
+         SetAttrs(d->d_Filter,
+             MUIA_CycleChain, TRUE,
+-            MUIA_ShortHelp, (ULONG)GCS(MSG_Export_FilterBH),
++            MUIA_ShortHelp, (IPTR)GCS(MSG_Export_FilterBH),
+             MUIA_Selected, ImExportSettings.ies_Filter,
+             TAG_DONE);
+     }
+     if (d->d_OverwriteRecords) {
+         SetAttrs(d->d_OverwriteRecords,
+             MUIA_CycleChain, TRUE,
+-            MUIA_ShortHelp, (ULONG)GCS(MSG_Import_OverwriteRecordsBH),
++            MUIA_ShortHelp, (IPTR)GCS(MSG_Import_OverwriteRecordsBH),
+             MUIA_Selected, ImExportSettings.ies_OverwriteRecords,
+             TAG_DONE);
+     }
+diff -ruN MUIbase-3.3/src/amiga/mui/menu_mui.c MUIbase-3.3.aros/src/amiga/mui/menu_mui.c
+--- MUIbase-3.3/src/amiga/mui/menu_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/menu_mui.c	2021-01-19 02:07:39.100000000 +0000
+@@ -51,15 +51,15 @@
+ 
+ ulong MenuItemChecked = FALSE;
+ 
+-static void callchecked(struct Project *pr, ulong funcptr, GuiObject win)
++static void callchecked(struct Project *pr, IPTR funcptr, GuiObject win)
+ {
+-    void (*func)(struct Project *, ulong, GuiObject);
++    void (*func)(struct Project *, IPTR, GuiObject);
+ 
+-    func = (void (*)(struct Project *, ulong, GuiObject))funcptr;
++    func = (void (*)(struct Project *, IPTR, GuiObject))funcptr;
+     func(pr, MenuItemChecked, win);
+ }
+ 
+-static void saveprojectinit(struct Project *pr, GuiObject go, ulong dummy)
++static void saveprojectinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     if (!ProjectAdminMode(pr) && ProjectChanges(pr) == 0) {
+         set(go, MUIA_Menuitem_Enabled, FALSE);
+@@ -67,7 +67,7 @@
+ }
+ 
+ #ifdef ENABLE_ADMIN_MODE
+-static void adminmodeinit(struct Project *pr, GuiObject go, ulong dummy)
++static void adminmodeinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     bool admin = ProjectAdminMode(pr);
+     const char *title= GCS(admin? MSG_MenuItem_UserMode:MSG_MenuItem_AdminMode);
+@@ -79,7 +79,7 @@
+ #endif
+ 
+ #ifdef ENABLE_STRUCTURE_EDITOR
+-static void structureeditorinit(struct Project *pr, GuiObject go, ulong dummy)
++static void structureeditorinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     GuiObject se = ProjectStructureEditor(pr);
+     const char *title = GCS(se? MSG_MenuItem_CloseStructureEditor : 
+@@ -91,7 +91,7 @@
+ }
+ #endif
+ 
+-static void reverttosavedinit(struct Project *pr, GuiObject go, ulong dummy)
++static void reverttosavedinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     bool hasChanged = ProjectChanges(pr) != 0;
+     const char *title = GCS(hasChanged? MSG_MenuItem_RevertToSaved : 
+@@ -108,12 +108,12 @@
+         set(go, MUIA_Menuitem_Checked, active);
+ }
+ 
+-static void confirmdeleterecordinit(struct Project *pr, GuiObject go, ulong dummy)
++static void confirmdeleterecordinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_CONFIRMDELETERECORD));
+ }
+ 
+-static void sorttriggerfunctionsinit(struct Project *pr, GuiObject go, ulong dummy)
++static void sorttriggerfunctionsinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PROGRAMSORTTRIGGERFUNCTIONS));
+ }
+@@ -121,83 +121,83 @@
+ static long memtable[] = 
+ { 1000000, 2000000, 4000000, 8000000, 16000000, 32000000, 0x7fffffff };
+ 
+-static void recordmeminit(struct Project *pr, GuiObject go, ulong num)
++static void recordmeminit(struct Project *pr, GuiObject go, IPTR num)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_RECORDMEMORY) == memtable[num]);
+ }
+ 
+ static void extrabuttonsintabchaininit(struct Project *pr, GuiObject go,
+-    ulong dummy)
++    IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_EXTRABUTTONSINTABCHAIN));
+ }
+ 
+ static void advanceonenterinit(struct Project *pr, GuiObject go,
+-    ulong dummy)
++    IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_ADVANCEONENTER));
+ }
+ 
+-static void logactiveinit(struct Project *pr, GuiObject go, ulong dummy)
++static void logactiveinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, LogActive(ProjectLog(pr)));
+ }
+ 
+-static void logsetlabelinit(struct Project *pr, GuiObject go, ulong dummy)
++static void logsetlabelinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     if (FindUserFunctionName(ProjectProgram(pr), logLabel)) {
+         set(go, MUIA_Menuitem_Enabled, FALSE);
+     }
+ }
+ 
+-static void cleanupexternalsourceinit(struct Project *pr, GuiObject go, ulong dummy)
++static void cleanupexternalsourceinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PROGRAMSOURCEEXTERNAL_CLEANUP));
+ }
+ 
+-static void confirmautoreloadinit(struct Project *pr, GuiObject go, ulong dummy)
++static void confirmautoreloadinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_CONFIRMAUTORELOAD));
+ }
+ 
+-static void confirmsavereorginit(struct Project *pr, GuiObject go, ulong dummy)
++static void confirmsavereorginit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_CONFIRMSAVEREORG));
+ }
+ 
+-static void confirmquitinit(struct Project *pr, GuiObject go, ulong dummy)
++static void confirmquitinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_CONFIRMQUIT));
+ }
+ 
+ static void pathsrelativetoprojectinit(struct Project *pr, GuiObject go, 
+-	ulong dummy)
++	IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PATHSRELATIVETOPROJECT));
+ }
+ 
+-static void programsourceinit(struct Project *pr, GuiObject go, ulong num)
++static void programsourceinit(struct Project *pr, GuiObject go, IPTR num)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PROGRAMSOURCEEXTERNAL) == num);
+ }
+ 
+-static void programdebuginfoinit(struct Project *pr, GuiObject go, ulong dummy)
++static void programdebuginfoinit(struct Project *pr, GuiObject go, IPTR dummy)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PROGRAMDEBUGINFO));
+ }
+ 
+ static void programobsoletefunctionsinit(struct Project *pr, 
+-        GuiObject go, ulong num)
++        GuiObject go, IPTR num)
+ {
+     setactive(go, GetPrefsValue(pr, PREFS_PROGRAMOBSOLETEFUNCTIONS) == num);
+ }
+ 
+-static void projectopen(struct Project *pr, ulong all, GuiObject go)
++static void projectopen(struct Project *pr, IPTR all, GuiObject go)
+ {
+     MenuProjectOpen(pr, all, NULL);
+ }
+ 
+-static void recordmem(struct Project *pr, ulong num, GuiObject go)
++static void recordmem(struct Project *pr, IPTR num, GuiObject go)
+ {
+     SetPrefsValue(pr, PREFS_RECORDMEMORY, memtable[num]);
+ }
+@@ -292,7 +292,7 @@
+                 mnm->mnm_Shortcut = GCS(mnm->mnm_ShortcutId);
+             }
+ #else
+-#warning "MUIA_Menuitem_CommandString discarded on AROS"
++// TODO: "MUIA_Menuitem_CommandString discarded on AROS"
+ #endif
+ 	}
+     }
+@@ -339,7 +339,7 @@
+         }
+ 	if (mnm->mnm_Shortcut) {
+ 	    SetAttrs(cur,
+-                MUIA_Menuitem_Shortcut, (ULONG)mnm->mnm_Shortcut,
++                MUIA_Menuitem_Shortcut, (IPTR)mnm->mnm_Shortcut,
+                 MUIA_Menuitem_CommandString, mnm->mnm_ShortcutId != NULL,
+                 TAG_DONE);
+         }
+diff -ruN MUIbase-3.3/src/amiga/mui/mui.c MUIbase-3.3.aros/src/amiga/mui/mui.c
+--- MUIbase-3.3/src/amiga/mui/mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/mui.c	2021-01-19 01:39:53.230000000 +0000
+@@ -1045,7 +1045,7 @@
+ 	    ie.ie_Code = imsg->Code;
+ 	    ie.ie_Qualifier = imsg->Qualifier;
+ 	    /* recover dead key codes & qualifiers */
+-	    ie.ie_EventAddress = (APTR *)*((ULONG *)imsg->IAddress);
++	    ie.ie_EventAddress = (APTR *)*((IPTR *)imsg->IAddress);
+ 
+ 	    return MapRawKey(&ie, (STRPTR)buffer, size, NULL);
+ 	}
+@@ -1075,7 +1075,7 @@
+         char buffer[31];
+ 
+         sprintf(buffer, "#%ld/%ld", num, all);
+-        set(go, MUIA_Text_Contents, (ULONG)buffer);
++        set(go, MUIA_Text_Contents, (IPTR)buffer);
+     }
+ }
+ 
+@@ -1345,7 +1345,7 @@
+ {
+     if(edit != NULL)
+     {
+-        set(edit, MUIA_ExtEditor_Contents, (ULONG)str);
++        set(edit, MUIA_ExtEditor_Contents, (IPTR)str);
+         set(edit, MUIA_ExtEditor_HasChanged, TRUE);
+     }
+ }
+@@ -1385,7 +1385,7 @@
+ 
+     if(wi && go)
+         SetAttrs(wi, MUIA_NoNotify, TRUE,
+-            MUIA_Window_ActiveObject, (ULONG)go,
++            MUIA_Window_ActiveObject, (IPTR)go,
+             TAG_DONE);
+ }
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/mui.h MUIbase-3.3.aros/src/amiga/mui/mui.h
+--- MUIbase-3.3/src/amiga/mui/mui.h	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/mui.h	2021-01-19 02:13:30.270000000 +0000
+@@ -27,6 +27,9 @@
+ #include <libraries/mui.h>
+ #include <proto/intuition.h>
+ #include <proto/muimaster.h>
++#if defined(__AROS__)
++#include <clib/alib_protos.h>
++#endif
+ #include "extclasses/ExtApplication_mcc.h"
+ #include "extclasses/ExtWindow_mcc.h"
+ #include "extclasses/SFWList_mcc.h"
+@@ -158,17 +161,23 @@
+ /* intuition stuff */
+ 
+ #ifdef __SASC
++
+     APTR DoSuperNew(Class *cl, APTR obj, ULONG tag1, ...);
++
+ #elif defined(__amigaos4__)
++
+     APTR VARARGS68K DoSuperNew(struct IClass *cl,Object *obj,...);
+     APTR DoSuperNewA(Class *cl, APTR obj, struct TagItem *tagList);
++
+ #elif (defined __GNUC__) && (!defined __MORPHOS__)
++
+     APTR DoSuperNewA(Class *cl, APTR obj, struct TagItem *tagList);
+-    #define DoSuperNew(cl, obj, tag1, ...) \
+-        ({ULONG _tags[] = { tag1, __VA_ARGS__ }; \
++# define DoSuperNew(cl, obj, tag1, ...) \
++        ({IPTR _tags[] = { tag1, __VA_ARGS__ }; \
+         DoSuperNewA((cl), (obj), (struct TagItem *) _tags); })
+-    #define SetSuperAttrs( cl, obj, tag1, ...) \
+-	({ ULONG _tags[] = { tag1, __VA_ARGS__ }; \
++#if !defined(__AROS__)
++# define SetSuperAttrs( cl, obj, tag1, ...) \
++	({ IPTR _tags[] = { tag1, __VA_ARGS__ }; \
+ 	struct opSet MyopSet; \
+ 	MyopSet.MethodID = OM_SET; \
+ 	MyopSet.ops_AttrList = (struct TagItem*) _tags; \
+@@ -176,6 +185,7 @@
+ 	DoSuperMethodA((cl) , (obj), (APTR) &MyopSet); \
+ 	})
+ #endif
++#endif
+ 
+ #define GuiBeep() DisplayBeep(NULL)
+ 
+@@ -199,7 +209,7 @@
+         (hook)->h_SubEntry = (HOOKFUNC)name ## Func;			\
+ 
+     #define DISPATCHER_PROTO						\
+-    static ULONG SAVEDS STDARGS Dispatcher(struct IClass *cl, 		\
++    static IPTR SAVEDS STDARGS Dispatcher(struct IClass *cl, 		\
+     	Object *obj, Msg msg)						\
+ 
+     #define DISPATCHER_INIT(cl)						\
+@@ -221,7 +231,7 @@
+         (hook)->h_SubEntry = (HOOKFUNC)NULL;				\
+ 
+     #define DISPATCHER_PROTO						\
+-    static ULONG ASM SAVEDS Dispatcher(REG(a0, struct IClass *cl), 		\
++    static IPTR ASM SAVEDS Dispatcher(REG(a0, struct IClass *cl), 		\
+     	REG(a2, Object *obj), REG(a1, Msg msg))				\
+ 
+     #define DISPATCHER_INIT(cl)						\
+@@ -260,7 +270,7 @@
+ 		    3, MUIM_CallHook, &name ## Hook, data); 		\
+         }								\
+ 
+-ulong nget(GuiObject go, ulong attr);
++IPTR nget(GuiObject go, ulong attr);
+ #define pget(go, attr) ((void *)(nget(go, attr)))
+ 
+ void MUIAddAppMessageNotification(GuiObject source, GuiObject target);
+@@ -269,7 +279,7 @@
+ void HOOK_PROTO(GuiObjectEditFileCallback, GuiObject go, GuiObject *str);
+ 
+ void HOOK_PROTO(PopButtonSetCWD, Object *obj, struct Project **x);
+-GuiObject GuiPopButtonSetCWD(ulong type, struct Project *pr);
++GuiObject GuiPopButtonSetCWD(IPTR type, struct Project *pr);
+ 
+ bool MUIFindObject(GuiObject root, GuiObject find);
+ 
+@@ -403,7 +413,7 @@
+ #ifndef MUIM_List_Compare
+ #define MUIM_List_Compare 0x80421b68
+ 
+-struct  MUIP_List_Compare { ULONG MethodID; APTR entry1; APTR entry2; };
++struct  MUIP_List_Compare { STACKED IPTR MethodID; STACKED APTR entry1; STACKED APTR entry2; };
+ #endif
+ 
+ #ifndef MUIA_List_ColumnOrder
+diff -ruN MUIbase-3.3/src/amiga/mui/order_mui.c MUIbase-3.3.aros/src/amiga/mui/order_mui.c
+--- MUIbase-3.3/src/amiga/mui/order_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/order_mui.c	2021-01-19 01:55:37.920000000 +0000
+@@ -64,7 +64,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(finish, Object *obj, ulong *ok)
++static void HOOK_PROTO(finish, Object *obj, IPTR *ok)
+ {
+     struct EditOrderData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -173,12 +173,12 @@
+     insertattr(lva, *x, MUIV_List_Insert_Bottom);
+ }
+ 
+-static ulong dragQuery(GuiObject lv, struct MUIP_DragDrop *msg, void *dragData)
++static IPTR dragQuery(GuiObject lv, struct MUIP_DragDrop *msg, void *dragData)
+ {
+-    return((ulong)((msg->obj == dragData)? MUIV_DragQuery_Accept : MUIV_DragQuery_Refuse));
++    return((IPTR)((msg->obj == dragData)? MUIV_DragQuery_Accept : MUIV_DragQuery_Refuse));
+ }
+ 
+-ulong dragDropToOrder(GuiObject lvo, struct MUIP_DragDrop *msg, void *dragData)
++IPTR dragDropToOrder(GuiObject lvo, struct MUIP_DragDrop *msg, void *dragData)
+ {
+     GuiObject lva = msg->obj;
+     long dropmark = 0;
+@@ -190,13 +190,13 @@
+     return(0);
+ }
+ 
+-ulong dragDropToAttr(GuiObject lva, struct MUIP_DragDrop *msg, void *dragData)
++IPTR dragDropToAttr(GuiObject lva, struct MUIP_DragDrop *msg, void *dragData)
+ {
+     DoMethod(msg->obj, MUIM_List_Remove, MUIV_List_Remove_Active);
+     return(0);
+ }
+ 
+-static void HOOK_PROTO(orderClick, GuiObject lvo, ulong dummy)
++static void HOOK_PROTO(orderClick, GuiObject lvo, IPTR dummy)
+ {
+     struct OrderAttribute *oa = NULL;
+ 
+@@ -458,7 +458,7 @@
+ 
+   SetAttrs(d->d_Clear, 
+ 	   MUIA_CycleChain, TRUE,
+-	   MUIA_ShortHelp, (ULONG)GCS(MSG_Order_ClearBH),
++	   MUIA_ShortHelp, (IPTR)GCS(MSG_Order_ClearBH),
+ 	   TAG_DONE);
+   set(d->d_Ok, MUIA_CycleChain, TRUE);
+   set(d->d_Cancel, MUIA_CycleChain, TRUE);
+diff -ruN MUIbase-3.3/src/amiga/mui/progoutput_mui.c MUIbase-3.3.aros/src/amiga/mui/progoutput_mui.c
+--- MUIbase-3.3/src/amiga/mui/progoutput_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/progoutput_mui.c	2021-01-19 01:54:29.710000000 +0000
+@@ -53,7 +53,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeProgOutput, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeProgOutput, Object *obj, IPTR *ok)
+ {
+     struct ProgOutputData *d = pget(obj, MUIA_UserData);
+     Object *app = pget(obj, MUIA_ApplicationObject);
+@@ -121,10 +121,10 @@
+ 	End;
+ 
+     d->d_Default = MUI_MakeObject(MUIO_Checkmark,
+-            (ULONG)GCS(MSG_ProgOutput_Default));
++            (IPTR)GCS(MSG_ProgOutput_Default));
+ 
+     d->d_Append = MUI_MakeObject(MUIO_Checkmark,
+-            (ULONG)GCS(MSG_ProgOutput_Append));
++            (IPTR)GCS(MSG_ProgOutput_Append));
+ 
+     group = VGroup,
+ 	MUIA_Frame, MUIV_Frame_Group,
+@@ -180,7 +180,7 @@
+ 
+     SetAttrs(d->d_Default,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ProgOutput_DefaultBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ProgOutput_DefaultBH),
+         MUIA_Selected, def,
+         TAG_DONE);
+     DoMethod(d->d_Default,
+@@ -192,7 +192,7 @@
+ 
+     SetAttrs(d->d_Append,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ProgOutput_AppendBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ProgOutput_AppendBH),
+         MUIA_Selected, GetPrefsValue(pr, PREFS_PROGRAMOUTPUT_APPEND),
+         TAG_DONE);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/programeditor_mui.c MUIbase-3.3.aros/src/amiga/mui/programeditor_mui.c
+--- MUIbase-3.3/src/amiga/mui/programeditor_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/programeditor_mui.c	2021-01-19 01:54:46.320000000 +0000
+@@ -108,7 +108,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(closeProgramEditor, Object *obj, ulong *ok)
++static void HOOK_PROTO(closeProgramEditor, Object *obj, IPTR *ok)
+ {
+     if (*ok && !compile(obj, FALSE)) {
+         return;
+@@ -190,15 +190,15 @@
+ 
+     set(d->d_Editor, MUIA_CycleChain, TRUE);
+     SetAttrs(compclose,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ProgramEditor_CompileAndCloseBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ProgramEditor_CompileAndCloseBH),
+         MUIA_CycleChain, TRUE,
+         TAG_DONE);
+     SetAttrs(comp,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ProgramEditor_CompileBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ProgramEditor_CompileBH),
+         MUIA_CycleChain, TRUE,
+         TAG_DONE);
+     SetAttrs(undo,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_ProgramEditor_RevertBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_ProgramEditor_RevertBH),
+         MUIA_CycleChain, TRUE,
+         TAG_DONE);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/queryeditor_mui.c MUIbase-3.3.aros/src/amiga/mui/queryeditor_mui.c
+--- MUIbase-3.3/src/amiga/mui/queryeditor_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/queryeditor_mui.c	2021-01-19 01:55:03.210000000 +0000
+@@ -312,7 +312,7 @@
+         showerror(obj, error, line, col);
+ }
+ 
+-static ulong HOOK_PROTO(popListDisplay, const char **dst, struct Query *sq)
++static IPTR HOOK_PROTO(popListDisplay, const char **dst, struct Query *sq)
+ {
+     const char *name = QueryName(sq);
+ 
+@@ -630,28 +630,28 @@
+ 
+     SetAttrs(run,
+ 	MUIA_CycleChain, TRUE,
+-	MUIA_ShortHelp, (ULONG)GCS(MSG_Query_RunBH),
++	MUIA_ShortHelp, (IPTR)GCS(MSG_Query_RunBH),
+ 	TAG_DONE);
+     SetAttrs(d->d_Export,
+         MUIA_Disabled, TRUE,
+         MUIA_CycleChain, TRUE,
+-	MUIA_ShortHelp, (ULONG)GCS(MSG_Query_ExportBH),
++	MUIA_ShortHelp, (IPTR)GCS(MSG_Query_ExportBH),
+         TAG_DONE);
+ #ifdef USE_HPDF
+     SetAttrs(d->d_PDF,
+         MUIA_Disabled, TRUE,
+         MUIA_CycleChain, TRUE,
+-	MUIA_ShortHelp, (ULONG)GCS(MSG_Query_PDFBH),
++	MUIA_ShortHelp, (IPTR)GCS(MSG_Query_PDFBH),
+         TAG_DONE);
+ #endif
+     SetAttrs(d->d_Print,
+         MUIA_Disabled, TRUE,
+         MUIA_CycleChain, TRUE,
+-	MUIA_ShortHelp, (ULONG)GCS(MSG_Query_PrintBH),
++	MUIA_ShortHelp, (IPTR)GCS(MSG_Query_PrintBH),
+         TAG_DONE);
+     SetAttrs(d->d_Editor,
+ 	MUIA_CycleChain, TRUE,
+-	MUIA_ShortHelp, (ULONG)GCS(MSG_Query_ProgramBH),
++	MUIA_ShortHelp, (IPTR)GCS(MSG_Query_ProgramBH),
+         TAG_DONE);
+     set(d->d_Queries, MUIA_UserData, d->d_QueriesPopup);
+ 
+diff -ruN MUIbase-3.3/src/amiga/mui/recorddescriptionspec_mui.c MUIbase-3.3.aros/src/amiga/mui/recorddescriptionspec_mui.c
+--- MUIbase-3.3/src/amiga/mui/recorddescriptionspec_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/recorddescriptionspec_mui.c	2021-01-19 01:58:16.500000000 +0000
+@@ -41,7 +41,7 @@
+     GuiObject d_MultiColumn;
+ };
+ 
+-static ulong HOOK_PROTO(attrListDisplay, char **dst, struct Attribute *attr)
++static IPTR HOOK_PROTO(attrListDisplay, char **dst, struct Attribute *attr)
+ {
+     if (attr == RDS_ATTR_RECNUM) {
+         static char buf[100];
+@@ -189,7 +189,7 @@
+         End;
+     
+     d->d_MultiColumn = MUI_MakeObject(MUIO_Checkmark, 
+-            (ULONG)GCS(MSG_RecordDescription_UseMultiColumnList));
++            (IPTR)GCS(MSG_RecordDescription_UseMultiColumnList));
+     if (d->d_MultiColumn) {
+         SetAttrs(d->d_MultiColumn,
+             MUIA_CycleChain, TRUE,
+diff -ruN MUIbase-3.3/src/amiga/mui/requesters_mui.c MUIbase-3.3.aros/src/amiga/mui/requesters_mui.c
+--- MUIbase-3.3/src/amiga/mui/requesters_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/requesters_mui.c	2021-01-19 02:01:37.540000000 +0000
+@@ -61,12 +61,12 @@
+ 
+     filerequester = (struct FileRequester *)
+ 	MUI_AllocAslRequestTags(ASL_FileRequest,
+-	    wi? ASLFR_Window : TAG_IGNORE, (ULONG)wi,
++	    wi? ASLFR_Window : TAG_IGNORE, (IPTR)wi,
+ 	    ASLFR_PrivateIDCMP, TRUE,
+-	    title? ASLFR_TitleText : TAG_IGNORE, (ULONG)title,
+-	    oktext? ASLFR_PositiveText : TAG_IGNORE, (ULONG)oktext,
+-	    (!isdir && file)? ASLFR_InitialFile : TAG_IGNORE, (ULONG)file,
+-	    ASLFR_InitialDrawer, (ULONG)dir,
++	    title? ASLFR_TitleText : TAG_IGNORE, (IPTR)title,
++	    oktext? ASLFR_PositiveText : TAG_IGNORE, (IPTR)oktext,
++	    (!isdir && file)? ASLFR_InitialFile : TAG_IGNORE, (IPTR)file,
++	    ASLFR_InitialDrawer, (IPTR)dir,
+ 	    ASLFR_DrawersOnly, isdir,
+ 	    ASLFR_DoSaveMode, save_mode,
+ 	    ASLFR_DoPatterns, TRUE,
+@@ -324,8 +324,8 @@
+     static char filebuffer[FILELEN + 1];
+     static struct TagItem tags[] =
+     {
+-	{ ASLFR_InitialDrawer, (ulong)dirbuffer },
+-	{ ASLFR_InitialFile, (ulong)filebuffer },
++	{ ASLFR_InitialDrawer, (IPTR)dirbuffer },
++	{ ASLFR_InitialFile, (IPTR)filebuffer },
+ 	{ ASLFR_RejectIcons, TRUE },
+ 	{ TAG_DONE, 0 }
+     };
+@@ -380,7 +380,7 @@
+         if (tagList[i].ti_Tag == TAG_DONE)
+             break;
+     tagList[i].ti_Tag = TAG_MORE;
+-    tagList[i].ti_Data = (ulong)tags;
++    tagList[i].ti_Data = (IPTR)tags;
+ 
+     return TRUE;
+ }
+diff -ruN MUIbase-3.3/src/amiga/mui/rexx_mui.c MUIbase-3.3.aros/src/amiga/mui/rexx_mui.c
+--- MUIbase-3.3/src/amiga/mui/rexx_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/rexx_mui.c	2021-01-19 02:07:08.000000000 +0000
+@@ -113,7 +113,7 @@
+ 		        msg->rm_Result2 = 0;
+     		    }
+ #endif
+-		    msg->rm_Result2=(LONG)CreateArgstring((STRPTR)result, len);
++		    msg->rm_Result2=(SIPTR)CreateArgstring((STRPTR)result, len);
+ 		} else {
+ 		    error = AREXXERR_RESULTTOOLONG;
+ 		    result = GES(error);
+@@ -156,7 +156,7 @@
+     }
+ }
+ 
+-static long HOOK_PROTO(rexxConnect, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxConnect, GuiObject app, IPTR *args)
+ {
+     char *name = (char *)args[0];
+     bool gui = (bool)args[1];
+@@ -195,7 +195,7 @@
+ 
+ static HOOK_STRUCT(rexxConnect)
+ 
+-static long HOOK_PROTO(rexxDisconnect, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxDisconnect, GuiObject app, IPTR *args)
+ {
+     long handle = *(long *)args[0];
+     struct RexxMsg *msg = pget(app, MUIA_Application_RexxMsg);
+@@ -262,7 +262,7 @@
+ static HOOK_STRUCT(rexxConnections)
+ 
+ 
+-static long HOOK_PROTO(rexxEval, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxEval, GuiObject app, IPTR *args)
+ {
+     long handle = *(long *)args[0];
+     char *cmd = NULL;
+@@ -323,7 +323,7 @@
+ 
+ static HOOK_STRUCT(rexxEval)
+ 
+-static long HOOK_PROTO(rexxTransaction, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxTransaction, GuiObject app, IPTR *args)
+ {
+     long handle = *(long *)args[0];
+     struct RexxMsg *msg = pget(app, MUIA_Application_RexxMsg);
+@@ -356,7 +356,7 @@
+ 
+ static HOOK_STRUCT(rexxTransaction)
+ 
+-static long HOOK_PROTO(rexxCommit, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxCommit, GuiObject app, IPTR *args)
+ {
+     long handle = *(long *)args[0];
+     struct RexxMsg *msg = pget(app, MUIA_Application_RexxMsg);
+@@ -389,7 +389,7 @@
+ 
+ static HOOK_STRUCT(rexxCommit)
+ 
+-static long HOOK_PROTO(rexxRollback, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxRollback, GuiObject app, IPTR *args)
+ {
+     long handle = *(long *)args[0];
+     struct RexxMsg *msg = pget(app, MUIA_Application_RexxMsg);
+@@ -422,7 +422,7 @@
+ 
+ static HOOK_STRUCT(rexxRollback)
+ 
+-static long HOOK_PROTO(rexxCompile, GuiObject app, ulong *args)
++static long HOOK_PROTO(rexxCompile, GuiObject app, IPTR *args)
+ {
+     struct RexxMsg *msg = pget(app, MUIA_Application_RexxMsg);
+     const char *sourcename = (const char *)args[0];
+diff -ruN MUIbase-3.3/src/amiga/mui/search_mui.c MUIbase-3.3.aros/src/amiga/mui/search_mui.c
+--- MUIbase-3.3/src/amiga/mui/search_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/search_mui.c	2021-01-19 01:55:23.550000000 +0000
+@@ -52,8 +52,8 @@
+ 	End;
+     MUIStringPreselectAll(pattern, TRUE);
+ 
+-    sensitive = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_CaseSensitive));
+-    all = MUI_MakeObject(MUIO_Checkmark, (ULONG)GCS(MSG_AllFields));
++    sensitive = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_CaseSensitive));
++    all = MUI_MakeObject(MUIO_Checkmark, (IPTR)GCS(MSG_AllFields));
+ 
+     methodstr[0] = GCS(MSG_Forward);
+     methodstr[1] = GCS(MSG_Backward);
+@@ -135,12 +135,12 @@
+ 
+     SetAttrs(sensitive,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_CaseSensitiveBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_CaseSensitiveBH),
+ 	MUIA_Selected, sf->sf_CaseSensitive, 
+         TAG_DONE);
+     SetAttrs(all,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_AllFieldsBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_AllFieldsBH),
+         MUIA_Selected, (sf->sf_Attribute == NULL || sf->sf_AllFields),
+         MUIA_Disabled, (sf->sf_Attribute == NULL),
+         TAG_DONE);
+diff -ruN MUIbase-3.3/src/amiga/mui/structureeditor_mui.c MUIbase-3.3.aros/src/amiga/mui/structureeditor_mui.c
+--- MUIbase-3.3/src/amiga/mui/structureeditor_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/structureeditor_mui.c	2021-01-19 02:00:44.510000000 +0000
+@@ -50,7 +50,7 @@
+ ** UserFunctions Popup
+ */
+ 
+-static ulong HOOK_PROTO(userFunctionDisplay, const char **dst,
++static IPTR HOOK_PROTO(userFunctionDisplay, const char **dst,
+ 	struct UserFunction *uf)
+ {
+     *dst = EmptyNullStr(UserFunctionName(uf));
+@@ -108,7 +108,7 @@
+     set(pop, MUIA_List_Quiet, TRUE);
+     DoMethod(pop, MUIM_List_Clear);
+     if (sort) {
+-	set(pop, MUIA_List_CompareHook, (ULONG)&userFunctionCompareHook);
++	set(pop, MUIA_List_CompareHook, (IPTR)&userFunctionCompareHook);
+     }
+     if (uflist) {
+         FORNODE(uf, uflist) {
+@@ -144,7 +144,7 @@
+ 
+ static void HOOK_PROTO(userFunctionWindow, Object *pop, Object *win)
+ {
+-    set(win, MUIA_Window_DefaultObject, (ULONG)pop);
++    set(win, MUIA_Window_DefaultObject, (IPTR)pop);
+ }
+ static HOOK_STRUCT(userFunctionWindow)
+ 
+@@ -244,7 +244,7 @@
+                 ProjectRootDisplayObject((d)->d_Project) : \
+                 TableDisplayObject((d)->d_CurrentTable))
+ 
+-static ulong HOOK_PROTO(tabDisplay, const char **dst, struct Table *tab)
++static IPTR HOOK_PROTO(tabDisplay, const char **dst, struct Table *tab)
+ {
+     *dst = TableName(tab);
+     return(0);
+@@ -287,7 +287,7 @@
+     }
+ }
+ 
+-static ulong HOOK_PROTO(attrDisplay, const char **dst, struct Attribute *attr)
++static IPTR HOOK_PROTO(attrDisplay, const char **dst, struct Attribute *attr)
+ {
+     static char buffer[BUF_LEN + 1];
+     short type = AttributeType(attr);
+@@ -321,7 +321,7 @@
+     return (d && d->d_RootDisplay);
+ }
+ 
+-static ulong HOOK_PROTO(displayDisplay, const char **dst,
++static IPTR HOOK_PROTO(displayDisplay, const char **dst,
+ 	struct DisplayObject *dio)
+ {
+     static char *arrowstr[] = { "", "\33I[6:30]", "\33I[6:39]", };
+@@ -656,16 +656,16 @@
+ 
+     if (d->d_TableSortMethod == 0)
+     {
+-	set(d->d_Tables, MUIA_List_CompareHook, (ULONG)&tabCompareAlphaHook);
++	set(d->d_Tables, MUIA_List_CompareHook, (IPTR)&tabCompareAlphaHook);
+ 	set(d->d_SortTables, 
+-		MUIA_Text_Contents, (ULONG)GCS(MSG_StructureEditor_Sort2));
++		MUIA_Text_Contents, (IPTR)GCS(MSG_StructureEditor_Sort2));
+ 	d->d_TableSortMethod = 1;
+     }
+     else
+     {
+-	set(d->d_Tables, MUIA_List_CompareHook, (ULONG)&tabCompareDisplayHook);
++	set(d->d_Tables, MUIA_List_CompareHook, (IPTR)&tabCompareDisplayHook);
+ 	set(d->d_SortTables, 
+-		MUIA_Text_Contents, (ULONG)GCS(MSG_StructureEditor_Sort1));
++		MUIA_Text_Contents, (IPTR)GCS(MSG_StructureEditor_Sort1));
+ 	d->d_TableSortMethod = 0;
+     }
+ 
+@@ -782,17 +782,17 @@
+ 	if (d->d_AttributeSortMethod == 0)
+ 	{
+ 	    set(d->d_Attributes, 
+-		MUIA_List_CompareHook, (ULONG)&attrCompareAlphaHook);
++		MUIA_List_CompareHook, (IPTR)&attrCompareAlphaHook);
+ 	    set(d->d_SortAttributes, 
+-		    MUIA_Text_Contents, (ULONG)GCS(MSG_StructureEditor_Sort2));
++		    MUIA_Text_Contents, (IPTR)GCS(MSG_StructureEditor_Sort2));
+ 	    d->d_AttributeSortMethod = 1;
+ 	}
+ 	else
+ 	{
+ 	    set(d->d_Attributes,MUIA_List_CompareHook, 
+-		(ULONG)&attrCompareDisplayHook);
++		(IPTR)&attrCompareDisplayHook);
+ 	    set(d->d_SortAttributes, 
+-		    MUIA_Text_Contents, (ULONG)GCS(MSG_StructureEditor_Sort1));
++		    MUIA_Text_Contents, (IPTR)GCS(MSG_StructureEditor_Sort1));
+ 	    d->d_AttributeSortMethod = 0;
+ 	}
+ 
+@@ -920,7 +920,7 @@
+     long active = 0;
+ 
+     get(d->d_DisplayType, MUIA_Cycle_Active, &active);
+-    set(d->d_Add, MUIA_ShortHelp, (ULONG)(GCS((active == 1)? 
++    set(d->d_Add, MUIA_ShortHelp, (IPTR)(GCS((active == 1)? 
+ 		MSG_StructureEditor_AddBH1 : MSG_StructureEditor_AddBH2)));
+     d->d_RootDisplay = (active == 1);
+     setDisplay(obj);
+@@ -1384,93 +1384,93 @@
+     SetRootWindowTitle(pr, se);
+     SetAttrs(d->d_NewTable,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Table_NewBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Table_NewBH),
+         TAG_DONE);
+ 
+     SetAttrs(d->d_DeleteTable,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Table_DeleteBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Table_DeleteBH),
+         MUIA_Disabled, TRUE,
+         TAG_DONE);
+ 
+     SetAttrs(d->d_SortTables,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Table_SortBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Table_SortBH),
+         TAG_DONE);
+ 
+     SetAttrs(d->d_NewAttribute,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Attribute_NewBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Attribute_NewBH),
+         TAG_DONE);
+ 
+     SetAttrs(d->d_CopyAttribute,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Attribute_CopyBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Attribute_CopyBH),
+         MUIA_Disabled, TRUE,
+         TAG_DONE);
+ 
+     SetAttrs(d->d_DeleteAttribute,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Attribute_DeleteBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Attribute_DeleteBH),
+         MUIA_Disabled, TRUE,
+         TAG_DONE);
+ 
+     SetAttrs(d->d_SortAttributes,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_Attribute_SortBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_Attribute_SortBH),
+         TAG_DONE);
+ 
+     SetAttrs(d->d_Add,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_AddBH2),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_AddBH2),
+         MUIA_CycleChain, TRUE,
+         TAG_DONE);
+     SetAttrs(d->d_Rem,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_RemBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_RemBH),
+         TAG_DONE);
+     SetAttrs(d->d_Up,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_UpBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_UpBH),
+         TAG_DONE);
+     SetAttrs(d->d_Down,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_DownBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_DownBH),
+         TAG_DONE);
+     SetAttrs(d->d_In,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_InBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_InBH),
+         TAG_DONE);
+     SetAttrs(d->d_Out,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_OutBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_OutBH),
+         TAG_DONE);
+     SetAttrs(d->d_Text,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_TextBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_TextBH),
+         TAG_DONE);
+     SetAttrs(d->d_Image,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_ImageBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_ImageBH),
+         TAG_DONE);
+     SetAttrs(d->d_Space,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_SpaceBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_SpaceBH),
+         TAG_DONE);
+     SetAttrs(d->d_Balance,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_BalanceBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_BalanceBH),
+         TAG_DONE);
+     SetAttrs(d->d_Group,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_GroupBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_GroupBH),
+         TAG_DONE);
+     SetAttrs(d->d_Register,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_RegisterBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_RegisterBH),
+         TAG_DONE);
+     SetAttrs(d->d_Window,
+         MUIA_CycleChain, TRUE,
+-        MUIA_ShortHelp, (ULONG)GCS(MSG_StructureEditor_WindowBH),
++        MUIA_ShortHelp, (IPTR)GCS(MSG_StructureEditor_WindowBH),
+         TAG_DONE);
+ 
+     MUIAddCallback2(d->d_Tables, MUIA_List_Active, MUIV_EveryTime,
+diff -ruN MUIbase-3.3/src/amiga/mui/table_mui.c MUIbase-3.3.aros/src/amiga/mui/table_mui.c
+--- MUIbase-3.3/src/amiga/mui/table_mui.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/amiga/mui/table_mui.c	2021-01-19 02:00:15.380000000 +0000
+@@ -65,7 +65,7 @@
+     }
+ }
+ 
+-static void HOOK_PROTO(finish, Object *obj, ulong *ok)
++static void HOOK_PROTO(finish, Object *obj, IPTR *ok)
+ {
+     struct EditTableData *d = pget(obj, MUIA_UserData);
+     struct Project *pr = d->d_Project;
+@@ -203,7 +203,7 @@
+ 	End;
+ 
+     d->d_CountChanges = MUI_MakeObject(MUIO_Checkmark,
+-            (ULONG)GCS(MSG_CountChanges));
++            (IPTR)GCS(MSG_CountChanges));
+     if (d->d_CountChanges) {
+         SetAttrs(d->d_CountChanges,
+                 MUIA_ShortHelp, GCS(MSG_Table_CountChangesBH),
+@@ -212,7 +212,7 @@
+                 TAG_DONE);
+     }
+     d->d_LogChanges = MUI_MakeObject(MUIO_Checkmark,
+-            (ULONG)GCS(MSG_LogChanges));
++            (IPTR)GCS(MSG_LogChanges));
+     if (d->d_LogChanges) {
+         SetAttrs(d->d_LogChanges,
+                 MUIA_ShortHelp, GCS(MSG_Table_LogChangesBH),
+diff -ruN MUIbase-3.3/src/base/main.c MUIbase-3.3.aros/src/base/main.c
+--- MUIbase-3.3/src/base/main.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/base/main.c	2021-01-19 01:43:14.950000000 +0000
+@@ -69,7 +69,7 @@
+ 		sizeof (struct EasyStruct),
+ 		0, (STRPTR)APP_NAME, (STRPTR)"%s", (STRPTR)"Quit"
+ 	    };
+-	    EasyRequest(NULL, &failES, NULL, (ULONG)s);
++	    EasyRequest(NULL, &failES, NULL, (IPTR)s);
+ 	} else 
+ #endif
+ 	{
+diff -ruN MUIbase-3.3/src/base/util.c MUIbase-3.3.aros/src/base/util.c
+--- MUIbase-3.3/src/base/util.c	2016-06-09 05:21:28.000000000 +0000
++++ MUIbase-3.3.aros/src/base/util.c	2021-01-19 02:18:18.770000000 +0000
+@@ -1349,14 +1349,17 @@
+ 
+ ushort HashReal(double real)
+ {
+-    long l[2];
++    union {
++        ULONG l[4];
++        UQUAD q[2];
++    } realval;
+     ushort val = 0;
+ 
+-    memcpy(l, &real, sizeof(l));
++    memcpy(&realval.l[0], &real, sizeof(real));
+ 
+-    val = (val ^ HashInteger(l[0])) * 69 + 32767;
++    val = (val ^ HashInteger(realval.l[0])) * 69 + 32767;
+     val = (val << 1) | ((val & 0x8000)? 1 : 0);
+-    val = (val ^ HashInteger(l[1])) * 69 + 32767;
++    val = (val ^ HashInteger(realval.l[1])) * 69 + 32767;
+     val = (val << 1) | ((val & 0x8000)? 1 : 0);
+ 
+     return(val);

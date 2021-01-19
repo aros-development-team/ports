@@ -9,16 +9,18 @@ VERSION      := 4.14
 TARGETDIR    := $(AROS_CONTRIB)/Utilities/Print/A2ps
 REPOSITORIES := gnu://a2ps
 
+NOWARN_FLAGS := $(NOWARN_IMPLICIT_FUNCTION_DECL) $(NOWARN_BUILTIN_DECLARATION_MISMATCH)
+USER_CFLAGS := $(NOWARN_FLAGS)
+A2PS_OPTS=--datarootdir='$$(PROGDIR)share' --sysconfdir='$$(PROGDIR)etc'
+
 %fetch_and_build mmake=ports-print-a2ps prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \
 	patch=yes nix=yes nix_dir_layout=no package_repo=$(REPOSITORIES) \
-	extraoptions="--datarootdir='$$(PROGDIR)share' --sysconfdir='$$(PROGDIR)etc'"
-
+	extraoptions="$(A2PS_OPTS)"
 
 #MM
 ports-print-a2ps-clean :
 	$(RM) $(TARGETDIR)
 	$(RM) $(GENDIR)/$(CURDIR)
-
 
 %common

@@ -21,7 +21,7 @@ USER_LDFLAGS := -static-libstdc++ -lfreetype2
 
 %fetch_and_build mmake=ports-emulation-scummvm prefix=$(TARGETDIR) \
     package=$(PACKAGE) version=$(VERSION) suffixes="tar.xz tar.bz2 tar.gz" \
-    package_repo=$(REPOSITORIES) patch=no extraoptions="$(SCUMMVM_OPTS)" \
+    package_repo=$(REPOSITORIES) patch=yes extraoptions="$(SCUMMVM_OPTS)" \
     crossbuild=no use_build_env=yes buildflags=no nix=no nix_dir_layout=no gnuflags=no
 
 #MM

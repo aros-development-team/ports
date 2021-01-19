@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#DISABLED #MM- ports-emulation : ports-emulation-scummvm
+#MM- ports-emulation : ports-emulation-scummvm
 
 #MM- ports-emulation-scummvm : \
 #MM     contrib-sdl
@@ -10,14 +10,19 @@ include $(SRCDIR)/config/aros-contrib.cfg
 PACKAGE      := scummvm
 VERSION      := 1.8.0
 TARGETDIR    := $(AROS_CONTRIB)/Emu/Scummvm
-REPOSITORIES := https://www.scummvm.org/frs/scummvm/1.8.0
+REPOSITORIES := https://downloads.scummvm.org/frs/scummvm/1.8.0
 
+SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-freetype2
+NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
+                $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
+                $(NOWARN_FORMAT_OVERFLOW)
+USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
+USER_LDFLAGS := -static-libstdc++ -lfreetype2
 
 %fetch_and_build mmake=ports-emulation-scummvm prefix=$(TARGETDIR) \
-    package=$(PACKAGE) version=$(VERSION) suffixes="tar.bz2" \
-    patch=yes package_repo=$(REPOSITORIES) nix=no nix_dir_layout=no gnuflags=no\
-    extraoptions="--host=i386-aros --enable-verbose-build"
-
+    package=$(PACKAGE) version=$(VERSION) suffixes="tar.xz tar.bz2 tar.gz" \
+    package_repo=$(REPOSITORIES) patch=no extraoptions="$(SCUMMVM_OPTS)" \
+    crossbuild=no use_build_env=yes buildflags=no nix=no nix_dir_layout=no gnuflags=no
 
 #MM
 ports-emulation-scummvm-clean :

@@ -17,7 +17,7 @@ NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
                 $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
                 $(NOWARN_FORMAT_OVERFLOW)
 USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
-USER_LDFLAGS := -static-libstdc++ -lfreetype2
+USER_LDFLAGS := -static-libstdc++
 
 %fetch_and_build mmake=ports-emulation-scummvm prefix=$(TARGETDIR) \
     package=$(PACKAGE) version=$(VERSION) suffixes="tar.xz tar.bz2 tar.gz" \

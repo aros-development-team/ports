@@ -1,6 +1,838 @@
-diff -Naur muimathx-src-svn46-orig/Graph2D.cpp muimathx-src-svn46/Graph2D.cpp
---- muimathx-src-svn46-orig/Graph2D.cpp	2013-09-10 23:11:01.497181952 +0200
-+++ muimathx-src-svn46/Graph2D.cpp	2013-09-10 23:18:37.377204006 +0200
+diff -ruN muimathx-src-svn46/AGraphics.cpp muimathx-src-svn46.aros/AGraphics.cpp
+--- muimathx-src-svn46/AGraphics.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/AGraphics.cpp	2021-01-20 09:09:23.300000000 +0000
+@@ -63,7 +63,7 @@
+ 	{
+ 
+ 		BOOL failed = FALSE;
+-		bitmap = (struct BitMap*)AllocMem(sizeof(*bitmap), NULL);
++		bitmap = (struct BitMap*)AllocMem(sizeof(*bitmap), MEMF_ANY);
+   	if (bitmap)
+ 		{
+ 			InitBitMap(bitmap, depth, width, height);
+diff -ruN muimathx-src-svn46/About.cpp muimathx-src-svn46.aros/About.cpp
+--- muimathx-src-svn46/About.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/About.cpp	2021-01-20 09:07:04.060000000 +0000
+@@ -41,7 +41,7 @@
+ 	Quit
+ ******************************************************************************/
+ 
+-static ULONG About_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR About_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct About_Data* data = (About_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -54,7 +54,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG About_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR About_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	About_Data tmp;
+ 
+@@ -139,7 +139,7 @@
+ 		DoMethod(obj       , MUIM_Notify, MUIA_Window_CloseRequest, TRUE , obj										, 1, MUIM_About_Quit		);
+ 		struct About_Data* data = (About_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+diff -ruN muimathx-src-svn46/ControlPanel.cpp muimathx-src-svn46.aros/ControlPanel.cpp
+--- muimathx-src-svn46/ControlPanel.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/ControlPanel.cpp	2021-01-20 09:22:01.010000000 +0000
+@@ -67,7 +67,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG _Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -82,7 +82,7 @@
+ 	AboutMUI
+ ****************************************************************************************/
+ 
+-static ULONG _AboutMUI(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _AboutMUI(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -99,7 +99,7 @@
+ 	ClearList
+ ****************************************************************************************/
+ 
+-static ULONG _ClearList(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _ClearList(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -116,7 +116,7 @@
+ 	OpenMathWin
+ ****************************************************************************************/
+ 
+-static ULONG _OpenMathWin(struct IClass* cl, Object* obj, 
++static IPTR _OpenMathWin(struct IClass* cl, Object* obj, 
+ 												 struct MUIP_ControlPanel_OpenMathWin* msg)
+ {
+ 	struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+@@ -168,7 +168,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *strip,
+ 				 *BT_Derivation  , *BT_Integration, *BT_Tangente, 
+@@ -241,16 +241,16 @@
+ 
+ 	struct MUIP_Toolbar_Description TB_Description[] =
+ 	{
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEW2D),			NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEW3D),			NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEWSIRDS),	NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEW2D),			0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEW3D),			0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_NEWSIRDS),	0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_MATRIX),		NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_TABDATA),		NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_DISPLAY),		NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_MATRIX),		0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_TABDATA),		0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_DISPLAY),		0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_SETTINGS),	NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_AREXX),			NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_SETTINGS),	0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_CP_HELP_AREXX),			0},
+ 		Toolbar_End,
+ 	};
+ 
+@@ -392,7 +392,7 @@
+ 
+ 		struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return 0;
+ }
+@@ -402,7 +402,7 @@
+ 	Set / Get
+ ****************************************************************************************/
+ 
+-static ULONG _Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -415,7 +415,7 @@
+   return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG _Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR _Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct ControlPanel_Data* data = (ControlPanel_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -425,7 +425,7 @@
+ 		{
+ 			Object* Termstring = (Object*)xget(data->TP_Terms, MUIA_TermPanel_String);
+ 			Ausdruck* term = (Ausdruck*)xget(Termstring, MUIA_TermString_Term);
+-			*(msg->opg_Storage) = (ULONG)term;
++			*(msg->opg_Storage) = (IPTR)term;
+ 			return TRUE;
+ 		}
+ 
+diff -ruN muimathx-src-svn46/ControlPanel.hpp muimathx-src-svn46.aros/ControlPanel.hpp
+--- muimathx-src-svn46/ControlPanel.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/ControlPanel.hpp	2021-01-20 09:06:06.880000000 +0000
+@@ -37,8 +37,8 @@
+ #define MUIM_ControlPanel_Mouse				(TAGBASE_KAI | 0x1110)
+ #define MUIA_ControlPanel_ToolbarPath (TAGBASE_KAI | 0x1111)
+ 
+-struct  MUIP_ControlPanel_OpenMathWin {ULONG MethodID; LONG type;};
+-struct  MUIP_ControlPanel_Mouse				{ULONG MethodID; Object* mobj;};
++struct  MUIP_ControlPanel_OpenMathWin {STACKED ULONG MethodID; STACKED LONG type;};
++struct  MUIP_ControlPanel_Mouse				{STACKED ULONG MethodID; STACKED Object* mobj;};
+ 
+ BOOL ControlPanel_Init();
+ void ControlPanel_Exit();
+diff -ruN muimathx-src-svn46/Derivation.cpp muimathx-src-svn46.aros/Derivation.cpp
+--- muimathx-src-svn46/Derivation.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Derivation.cpp	2021-01-20 09:05:46.000000000 +0000
+@@ -44,7 +44,7 @@
+ 	Quit
+ ******************************************************************************/
+ 
+-static ULONG _Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Derivation_Data* data = (Derivation_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -57,7 +57,7 @@
+ 	Derive
+ ******************************************************************************/
+ 
+-static ULONG _Derive(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Derive(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Derivation_Data* data = (Derivation_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -91,7 +91,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Derivation_Data tmp;
+ 	Object 					*BT_Ok, *BT_Derive;
+@@ -139,7 +139,7 @@
+ 
+ 		struct Derivation_Data* data = (Derivation_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return 0;
+ }
+@@ -149,7 +149,7 @@
+ 	Set
+ ******************************************************************************/
+ 
+-static ULONG _Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Derivation_Data* data = (Derivation_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/Discussion.cpp muimathx-src-svn46.aros/Discussion.cpp
+--- muimathx-src-svn46/Discussion.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Discussion.cpp	2021-01-20 09:05:35.030000000 +0000
+@@ -44,7 +44,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Discussion_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Discussion_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Discussion_Data* data = (Discussion_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -57,7 +57,7 @@
+ 	Calculate
+ ****************************************************************************************/
+ 
+-static ULONG Discussion_Calculate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Discussion_Calculate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	/*
+ 	**	GUI-Werte besorgen
+@@ -448,7 +448,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Discussion_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Discussion_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Discussion_Data 	tmp;
+ 	Object 						*BT_Ok, *BT_Calculate;
+@@ -571,7 +571,7 @@
+ 
+ 		struct Discussion_Data* data = (Discussion_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -581,7 +581,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Discussion_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Discussion_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Discussion_Data* data = (Discussion_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/Edit2D.cpp muimathx-src-svn46.aros/Edit2D.cpp
+--- muimathx-src-svn46/Edit2D.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Edit2D.cpp	2021-01-20 09:04:42.460000000 +0000
+@@ -67,7 +67,7 @@
+ 		{
+ 			sprintf(data->buf, "%3ld", (long int)m->value);
+ 		}
+-		return (ULONG)data->buf;
++		return (IPTR)data->buf;
+ 	}
+ 	return DoSuperMethodA(cl,obj,msg);
+ }
+@@ -224,7 +224,7 @@
+ 	Open / Close
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_Open(struct IClass* cl, Object* obj, 
++static IPTR Edit2D_Open(struct IClass* cl, Object* obj, 
+ 											 	 struct MUIP_Edit2D_Open* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+@@ -242,7 +242,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_Close(struct IClass* cl, Object* obj, struct MUIP_Edit2D_Close* msg)
++static IPTR Edit2D_Close(struct IClass* cl, Object* obj, struct MUIP_Edit2D_Close* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	if (msg->typ != 2) setatt(obj, MUIA_Window_Open, FALSE);
+@@ -270,7 +270,7 @@
+ 
+ static const int pages = 6;	// Anzahl der Einstellungsseiten (ohne die Funktionen)
+ 
+-static ULONG Edit2D_AddFunction(struct IClass* cl, Object* obj, 
++static IPTR Edit2D_AddFunction(struct IClass* cl, Object* obj, 
+ 																struct MUIP_Edit2D_AddFunction* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+@@ -305,14 +305,14 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_NewFkt(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_NewFkt(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	DoMethod(obj, MUIM_Edit2D_AddFunction, NULL);
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_RemFkt(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_RemFkt(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 
+@@ -348,7 +348,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_RemAllFkt(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_RemAllFkt(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 
+@@ -399,7 +399,7 @@
+ 	SelectPage
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_SelectPage(struct IClass* cl, Object* obj, 
++static IPTR Edit2D_SelectPage(struct IClass* cl, Object* obj, 
+ 															 struct MUIP_Edit2D_SelectPage* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+@@ -416,7 +416,7 @@
+ 	SetNewRange
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_SetNewRange(struct IClass* cl, Object* obj, 
++static IPTR Edit2D_SetNewRange(struct IClass* cl, Object* obj, 
+ 																struct MUIP_Edit2D_SetNewRange* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+@@ -439,7 +439,7 @@
+ 	Save/Load
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_Save(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_Save(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	char* fname = GetFilename(obj, TRUE, GetStr(MSG_SELECT2DGRAPH), "#?.2D", "Data");
+@@ -455,7 +455,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_SaveDefault(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_SaveDefault(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	DoMethod(obj, MUIM_Edit2D_ReadSettings);
+@@ -467,7 +467,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_Load(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_Load(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	char* fname = GetFilename(obj, FALSE, GetStr(MSG_SELECT2DGRAPH), "#?.2D", "Data");
+@@ -493,7 +493,7 @@
+ ******************************************************************************/
+ 
+ 
+-static ULONG Edit2D_ReadSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_ReadSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	Settings2D* s = data->sett;
+@@ -591,7 +591,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_WriteSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Edit2D_WriteSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	Settings2D* s = data->sett;
+@@ -715,7 +715,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Edit2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *buttonUse, *buttonCancel, *buttonTest, 
+ 				 *buttonNew, 
+@@ -1065,12 +1065,12 @@
+ 		else
+ 			DoMethod(obj, MUIM_Edit2D_ReadSettings);
+ 
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+ 
+-static ULONG Edit2D_Dispose(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Edit2D_Dispose(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	delete data->sett;
+@@ -1083,7 +1083,7 @@
+ 	Get
+ ****************************************************************************************/
+ 
+-static ULONG Edit2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR Edit2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Edit2D_Data* data = (Edit2D_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -1091,7 +1091,7 @@
+ 		case MUIA_Edit2D_Eigenschaften: 
+ 		{
+ 
+-			*(msg->opg_Storage) = (ULONG)data->sett;
++			*(msg->opg_Storage) = (IPTR)data->sett;
+ 			return TRUE;
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/Edit2D.hpp muimathx-src-svn46.aros/Edit2D.hpp
+--- muimathx-src-svn46/Edit2D.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Edit2D.hpp	2021-01-20 09:04:18.960000000 +0000
+@@ -119,18 +119,16 @@
+ #define MUIM_Edit2D_RemAllFkt		   		(TAGBASE_KAI | 0x142D)
+ #define MUIM_Edit2D_SelectPage	   		(TAGBASE_KAI | 0x142F)
+ 
+-struct  MUIP_Edit2D_Close         		{ULONG MethodID; LONG typ;};
+-struct  MUIP_Edit2D_Open				    	{ULONG MethodID; LONG page;};
+-struct  MUIP_Edit2D_AddFunction	    	{ULONG MethodID; Ausdruck* f;};
+-struct  MUIP_Edit2D_SetNewRange   		{ULONG MethodID; double xfrom, xto, yfrom, yto;};
+-struct  MUIP_Edit2D_SelectPage	    	{ULONG MethodID; LONG page;};
++struct  MUIP_Edit2D_Close         		{STACKED ULONG MethodID; STACKED LONG typ;};
++struct  MUIP_Edit2D_Open				    	{STACKED ULONG MethodID; STACKED LONG page;};
++struct  MUIP_Edit2D_AddFunction	    	{STACKED ULONG MethodID; STACKED Ausdruck* f;};
++struct  MUIP_Edit2D_SetNewRange   		{STACKED ULONG MethodID; STACKED double xfrom; STACKED double xto; STACKED double yfrom; STACKED double yto;};
++struct  MUIP_Edit2D_SelectPage	    	{STACKED ULONG MethodID; STACKED LONG page;};
+ 
+ BOOL Edit2D_Init();
+ void Edit2D_Exit();
+ 
+ 
+-
+-
+ /******************************************************************************
+ 													NoneSlider (SLIDER)
+ ******************************************************************************/
+diff -ruN muimathx-src-svn46/Edit3D.cpp muimathx-src-svn46.aros/Edit3D.cpp
+--- muimathx-src-svn46/Edit3D.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Edit3D.cpp	2021-01-20 09:03:08.510000000 +0000
+@@ -63,7 +63,7 @@
+ 	StartEdit
+ ******************************************************************************/
+ 
+-static ULONG _StartEdit(struct IClass* cl, Object* obj, 
++static IPTR _StartEdit(struct IClass* cl, Object* obj, 
+                        struct MUIP_Edit3D_StartEdit* msg)
+ {
+ 	struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+@@ -82,7 +82,7 @@
+ 	Save / SaveDefault / Load
+ ******************************************************************************/
+ 
+-static ULONG _Save(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Save(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -97,7 +97,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _SaveDefault(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _SaveDefault(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -108,7 +108,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Load(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Load(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -130,7 +130,7 @@
+ 	Close / Test
+ ******************************************************************************/
+ 
+-static ULONG _Close(struct IClass* cl, Object* obj, struct MUIP_Edit3D_Close* msg)
++static IPTR _Close(struct IClass* cl, Object* obj, struct MUIP_Edit3D_Close* msg)
+ {
+ 	struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	setatt(obj, MUIA_Window_Open, FALSE);
+@@ -147,7 +147,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Test(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Test(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	Graph3D_Settings* s = (Graph3D_Settings*)xget(obj, MUIA_Edit3D_Settings);
+@@ -160,7 +160,7 @@
+ 	New / Dispose
+ ******************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *BT_Use, *BT_Cancel, *BT_Test, *strip;
+ 	Edit3D_Data tmp;
+@@ -391,12 +391,12 @@
+ 
+ 		struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return 0;
+ }
+ 
+-static ULONG _Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Edit3D_Data *data = (Edit3D_Data*)INST_DATA(cl,obj);
+ 	if (data->undo) delete data->undo;
+@@ -408,7 +408,7 @@
+ 	Set / get
+ ******************************************************************************/
+ 
+-static ULONG _Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -447,7 +447,7 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG _Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR _Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Edit3D_Data* data = (Edit3D_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -483,7 +483,7 @@
+ 			s->drawaxes 	 = (BOOL) xget(data->CH_Axes , MUIA_Selected       );
+ 			s->axespenspec = *(MUI_PenSpec*)xget(data->PP_Axes, MUIA_Pendisplay_Spec);
+ 
+-			*(msg->opg_Storage) = (ULONG)s;
++			*(msg->opg_Storage) = (IPTR)s;
+ 			return TRUE;
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/Edit3D.hpp muimathx-src-svn46.aros/Edit3D.hpp
+--- muimathx-src-svn46/Edit3D.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Edit3D.hpp	2021-01-20 09:02:40.030000000 +0000
+@@ -36,8 +36,8 @@
+ #define MUIM_Edit3D_Load		      		(TAGBASE_KAI | 0x2116)
+ #define MUIM_Edit3D_Test		      		(TAGBASE_KAI | 0x2117)
+ 
+-struct  MUIP_Edit3D_Close       			{ULONG MethodID; LONG typ;};
+-struct  MUIP_Edit3D_StartEdit	   			{ULONG MethodID; Object* graph3d; LONG page;};
++struct  MUIP_Edit3D_Close       			{STACKED ULONG MethodID; STACKED LONG typ;};
++struct  MUIP_Edit3D_StartEdit	   			{STACKED ULONG MethodID; STACKED Object* graph3d; STACKED LONG page;};
+ 
+ BOOL Edit3D_Init();
+ void Edit3D_Exit();
+diff -ruN muimathx-src-svn46/EditSIRDS.cpp muimathx-src-svn46.aros/EditSIRDS.cpp
+--- muimathx-src-svn46/EditSIRDS.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/EditSIRDS.cpp	2021-01-20 09:02:20.120000000 +0000
+@@ -52,7 +52,7 @@
+ 	StartEdit
+ ******************************************************************************/
+ 
+-static ULONG EditSIRDS_StartEdit(struct IClass* cl, Object* obj, 
++static IPTR EditSIRDS_StartEdit(struct IClass* cl, Object* obj, 
+                           struct MUIP_EditSIRDS_StartEdit* msg)
+ {
+ 	struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+@@ -70,7 +70,7 @@
+ 	Save/Load
+ ******************************************************************************/
+ 
+-static ULONG EditSIRDS_Save(struct IClass* cl, Object* obj, Msg msg)
++static IPTR EditSIRDS_Save(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -85,7 +85,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG EditSIRDS_SaveDefault(struct IClass* cl, Object* obj, Msg msg)
++static IPTR EditSIRDS_SaveDefault(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -96,7 +96,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG EditSIRDS_Load(struct IClass* cl, Object* obj, Msg msg)
++static IPTR EditSIRDS_Load(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -119,7 +119,7 @@
+ 	Close
+ ******************************************************************************/
+ 
+-static ULONG EditSIRDS_Close(struct IClass* cl, Object* obj, struct MUIP_EditSIRDS_Close* msg)
++static IPTR EditSIRDS_Close(struct IClass* cl, Object* obj, struct MUIP_EditSIRDS_Close* msg)
+ {
+ 	struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	setatt(obj, MUIA_Window_Open, FALSE);
+@@ -137,7 +137,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG EditSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR EditSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *BT_Use, *BT_Cancel, *BT_Save, *BT_Load, *strip;
+ 	EditSIRDS_Data tmp;
+@@ -252,7 +252,7 @@
+ 
+ 		struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return(0);
+ }
+@@ -263,7 +263,7 @@
+ 	Set/get
+ ******************************************************************************/
+ 
+-static ULONG EditSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR EditSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -287,7 +287,7 @@
+   return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG EditSIRDS_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR EditSIRDS_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct EditSIRDS_Data* data = (EditSIRDS_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -308,7 +308,7 @@
+ 			s->term        = (Ausdruck*)xget(data->ST_Term      , MUIA_TermString_Term);
+ 			s->prec  			 = (ULONG)xget(data->CY_Prec      , MUIA_Cycle_Active	  );
+ 
+-			*(msg->opg_Storage) = (ULONG)s;
++			*(msg->opg_Storage) = (IPTR)s;
+ 			return(TRUE);
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/EditSIRDS.hpp muimathx-src-svn46.aros/EditSIRDS.hpp
+--- muimathx-src-svn46/EditSIRDS.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/EditSIRDS.hpp	2021-01-20 09:08:12.300000000 +0000
+@@ -35,8 +35,8 @@
+ #define MUIM_EditSIRDS_SaveDefault   	(TAGBASE_KAI | 0x1F15)
+ #define MUIM_EditSIRDS_Load		      	(TAGBASE_KAI | 0x1F16)
+ 
+-struct  MUIP_EditSIRDS_Close       		{ULONG MethodID; LONG typ;};
+-struct  MUIP_EditSIRDS_StartEdit	   	{ULONG MethodID; Object* graphsirds; LONG page;};
++struct  MUIP_EditSIRDS_Close       		{STACKED ULONG MethodID; STACKED LONG typ;};
++struct  MUIP_EditSIRDS_StartEdit	   	{STACKED ULONG MethodID; STACKED Object* graphsirds; STACKED LONG page;};
+ 
+ 
+ BOOL EditSIRDS_Init();
+diff -ruN muimathx-src-svn46/Eval.cpp muimathx-src-svn46.aros/Eval.cpp
+--- muimathx-src-svn46/Eval.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Eval.cpp	2021-01-20 09:01:25.480000000 +0000
+@@ -41,7 +41,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Eval_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Eval_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Eval_Data* data = (Eval_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -55,7 +55,7 @@
+ 	Calculate
+ ****************************************************************************************/
+ 
+-static ULONG Eval_Calculate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Eval_Calculate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Eval_Data* data = (Eval_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -90,7 +90,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Eval_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Eval_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Eval_Data tmp;
+ 	Object		*BT_Ok, *BT_Calculate;
+@@ -145,7 +145,7 @@
+ 
+ 		struct Eval_Data* data = (Eval_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return(0);
+ }
+@@ -156,7 +156,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Eval_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Eval_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Eval_Data* data = (Eval_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/FEditor.cpp muimathx-src-svn46.aros/FEditor.cpp
+--- muimathx-src-svn46/FEditor.cpp	2012-07-28 10:32:17.000000000 +0000
++++ muimathx-src-svn46.aros/FEditor.cpp	2021-01-20 09:01:11.170000000 +0000
+@@ -98,7 +98,7 @@
+ 	Read- / WriteSettings
+ ******************************************************************************/
+ 
+-static ULONG FEditor_ReadSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR FEditor_ReadSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 	Function2D* f = data->f;
+@@ -119,7 +119,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG FEditor_WriteSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR FEditor_WriteSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 	Function2D* f = data->f;
+@@ -141,7 +141,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG FEditor_CheckSecondArg(struct IClass* cl, Object* obj, Msg msg)
++static IPTR FEditor_CheckSecondArg(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 
+@@ -176,7 +176,7 @@
+ 	NewTerm
+ ******************************************************************************/
+ 
+-static ULONG FEditor_NewTerm(struct IClass* cl, Object* obj, Msg msg)
++static IPTR FEditor_NewTerm(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 	Ausdruck* a = (Ausdruck*)xget(data->stringTerm, MUIA_TermString_Term);
+@@ -191,7 +191,7 @@
+ 	New / Dispose
+ ******************************************************************************/
+ 
+-static ULONG FEditor_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR FEditor_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct FEditor_Data tmp;
+ 
+@@ -265,10 +265,10 @@
+ 		}
+ 		DoMethod(obj, MUIM_FEditor_CheckSecondArg);
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG FEditor_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR FEditor_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 	if (data->f) delete data->f;
+@@ -280,7 +280,7 @@
+ 	Get / Set
+ ******************************************************************************/
+ 
+-static ULONG FEditor_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR FEditor_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct FEditor_Data* data = (FEditor_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -292,7 +292,7 @@
+ 		case MUIA_FEditor_Function2D:
+ 		{
+ 			DoMethod(obj, MUIM_FEditor_ReadSettings);
+-			*(msg->opg_Storage) = (ULONG)data->f;
++			*(msg->opg_Storage) = (IPTR)data->f;
+ 			return TRUE;
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/Graph2D.cpp muimathx-src-svn46.aros/Graph2D.cpp
+--- muimathx-src-svn46/Graph2D.cpp	2012-07-28 10:32:17.000000000 +0000
++++ muimathx-src-svn46.aros/Graph2D.cpp	2021-01-20 08:58:24.070000000 +0000
+@@ -77,7 +77,7 @@
+ 	Edit
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_Edit(struct IClass* cl, Object* obj, struct MUIP_Graph2D_Edit* msg)
++static IPTR Graph2D_Edit(struct IClass* cl, Object* obj, struct MUIP_Graph2D_Edit* msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(cl, obj);
+ 	Object* app  =	(Object*)xget(obj					 , MUIA_ApplicationObject);
+@@ -95,7 +95,7 @@
+ 	SaveIFF / Print
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_SaveIFF(struct IClass* clss, Object* obj, Msg msg)
++static IPTR Graph2D_SaveIFF(struct IClass* clss, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(clss, obj);
+ 	Object *app = (Object*)xget(obj, MUIA_ApplicationObject),
 @@ -108,7 +108,7 @@
  	if (fname)
  	{
@@ -10,9 +842,191 @@ diff -Naur muimathx-src-svn46-orig/Graph2D.cpp muimathx-src-svn46/Graph2D.cpp
           width  = ((320) / 16) * 16,
  		  	 height = 256;
  		double w, h;
-diff -Naur muimathx-src-svn46-orig/Graph3D.cpp muimathx-src-svn46/Graph3D.cpp
---- muimathx-src-svn46-orig/Graph3D.cpp	2013-09-10 23:11:01.497181952 +0200
-+++ muimathx-src-svn46/Graph3D.cpp	2013-09-10 23:20:50.257210446 +0200
+@@ -128,7 +128,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Graph2D_Print(struct IClass* clss, Object* obj, Msg msg)
++static IPTR Graph2D_Print(struct IClass* clss, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(clss, obj);
+ 	Object *app = (Object*)xget(obj, MUIA_ApplicationObject),
+@@ -161,7 +161,7 @@
+ 	Zoom / Scroll
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_Zoom(struct IClass* cl, Object* obj, 
++static IPTR Graph2D_Zoom(struct IClass* cl, Object* obj, 
+ 													struct MUIP_Graph2D_Zoom* msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(cl, obj);
+@@ -184,7 +184,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG Graph2D_Scroll(struct IClass* cl, Object* obj, 
++static IPTR Graph2D_Scroll(struct IClass* cl, Object* obj, 
+ 										 struct MUIP_Graph2D_Scroll* msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(cl, obj);
+@@ -206,7 +206,7 @@
+ 	ClearTerms
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_ClearTerms(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Graph2D_ClearTerms(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(cl, obj);
+ 
+@@ -219,7 +219,7 @@
+ 	AskMinMax
+ ****************************************************************************************/
+ 
+-static SAVEDS ULONG Graph2D_AskMinMax(struct IClass *cl, Object *obj, 
++static SAVEDS IPTR Graph2D_AskMinMax(struct IClass *cl, Object *obj, 
+ 															 struct MUIP_AskMinMax *msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -237,7 +237,7 @@
+ 	Setup / Cleanup
+ ****************************************************************************************/
+ 
+-static SAVEDS ULONG Graph2D_Setup(struct IClass* cl, Object* obj, Msg msg)
++static SAVEDS IPTR Graph2D_Setup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	if (!DoSuperMethodA(cl, obj, msg)) return(FALSE);
+ 	struct Graph2D_Data *data = (Graph2D_Data*)INST_DATA(cl,obj);
+@@ -248,7 +248,7 @@
+ 	return TRUE;
+ }
+ 
+-static SAVEDS ULONG Graph2D_Cleanup(struct IClass* cl, Object* obj, Msg msg)
++static SAVEDS IPTR Graph2D_Cleanup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data *data = (Graph2D_Data*)INST_DATA(cl,obj);
+ 
+@@ -287,7 +287,7 @@
+ 	HandleInput
+ ****************************************************************************************/
+ 
+-static SAVEDS ULONG Graph2D_HandleInput(	struct IClass* cl, Object* obj, 
++static SAVEDS IPTR Graph2D_HandleInput(	struct IClass* cl, Object* obj, 
+ 			   																	struct MUIP_HandleInput* msg)
+ {
+ 	struct Graph2D_Data *data = (Graph2D_Data*)INST_DATA(cl,obj);
+@@ -440,7 +440,7 @@
+ 	Draw
+ ****************************************************************************************/
+ 
+-static SAVEDS ASM ULONG Graph2D_Draw(struct IClass*	  cl, 
++static SAVEDS ASM IPTR Graph2D_Draw(struct IClass*	  cl, 
+ 																		Object* 					obj, 
+ 																		struct MUIP_Draw* msg)
+ {
+@@ -571,7 +571,7 @@
+ 	NewSettings
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_NewSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Graph2D_NewSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data *data = (Graph2D_Data*)INST_DATA(cl,obj);
+ 
+@@ -589,7 +589,7 @@
+ 	Graph2D_DragDrop
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_DragDrop(struct IClass* cl, Object* obj, struct MUIP_DragDrop* msg)
++static IPTR Graph2D_DragDrop(struct IClass* cl, Object* obj, struct MUIP_DragDrop* msg)
+ {
+ 	Ausdruck *drop;
+ 	if (!getatt(msg->obj, MUIA_TermString_Term, &drop))
+@@ -612,7 +612,7 @@
+ enum {MEN_QUIT = 2000, MEN_CLEARTERMS, MEN_SAVEIFF, MEN_PRINT,
+ 			MEN_EDIT1, MEN_EDIT2, MEN_EDIT3, MEN_EDIT4, MEN_EDIT5, MEN_EDIT6};
+ 
+-static ULONG Graph2D_ContextMenuChoice(struct IClass* 								cl, 
++static IPTR Graph2D_ContextMenuChoice(struct IClass* 								cl, 
+ 																			 Object* 											  obj, 
+ 																			 struct MUIP_ContextMenuChoice* msg)
+ {
+@@ -638,7 +638,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Graph2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct NewMenu Menu[] =
+ 	{
+@@ -690,10 +690,10 @@
+ 		DoMethod(obj, MUIM_Graph2D_NewSettings);
+ 
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG Graph2D_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Graph2D_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph2D_Data *data = (Graph2D_Data*)INST_DATA(cl,obj);
+ 	DisposeObject(data->contextMenu);
+@@ -714,7 +714,7 @@
+ 	Get
+ ****************************************************************************************/
+ 
+-static ULONG Graph2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR Graph2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Graph2D_Data* data = (Graph2D_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -722,7 +722,7 @@
+ 		case MUIA_Graph2D_Settings:
+ 		{
+ 			Settings2D* s = (Settings2D*)xget(data->editwin, MUIA_Edit2D_Eigenschaften);
+-			*(msg->opg_Storage) = (ULONG)s;
++			*(msg->opg_Storage) = (IPTR)s;
+ 			return TRUE;
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/Graph2D.hpp muimathx-src-svn46.aros/Graph2D.hpp
+--- muimathx-src-svn46/Graph2D.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Graph2D.hpp	2021-01-20 09:00:37.520000000 +0000
+@@ -38,9 +38,9 @@
+ #define MUIA_Graph2D_Settings  				(TAGBASE_KAI | 0x142E)	//	[..G]
+ 
+ 
+-struct  MUIP_Graph2D_Edit             {ULONG MethodID; long page;};
+-struct  MUIP_Graph2D_Scroll		    		{ULONG MethodID; long direction;};
+-struct  MUIP_Graph2D_Zoom			    		{ULONG MethodID; long in;};
++struct  MUIP_Graph2D_Edit             {STACKED ULONG MethodID; STACKED long page;};
++struct  MUIP_Graph2D_Scroll		    		{STACKED ULONG MethodID; STACKED long direction;};
++struct  MUIP_Graph2D_Zoom			    		{STACKED ULONG MethodID; STACKED long in;};
+ 
+ 
+ BOOL Graph2D_Init();
+diff -ruN muimathx-src-svn46/Graph3D.cpp muimathx-src-svn46.aros/Graph3D.cpp
+--- muimathx-src-svn46/Graph3D.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Graph3D.cpp	2021-01-20 09:00:12.340000000 +0000
+@@ -350,7 +350,7 @@
+ 	Edit
+ ****************************************************************************************/
+ 
+-static ULONG _Edit(struct IClass* cl, Object* obj, 
++static IPTR _Edit(struct IClass* cl, Object* obj, 
+ 												 struct MUIP_Graph3D_Edit* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(cl, obj);
+@@ -363,7 +363,7 @@
+ 	SaveIFF / Print
+ ****************************************************************************************/
+ 
+-static ULONG _SaveIFF(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _SaveIFF(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(cl, obj);
+ 	Object *app = (Object*)xget(obj, MUIA_ApplicationObject),
 @@ -375,7 +375,7 @@
  	if (fname)
  	{
@@ -22,9 +1036,191 @@ diff -Naur muimathx-src-svn46-orig/Graph3D.cpp muimathx-src-svn46/Graph3D.cpp
           width  = ((640) / 16) * 16,
  		  	 height = 512;
  		double w, h;		
-diff -Naur muimathx-src-svn46-orig/GraphSIRDS.cpp muimathx-src-svn46/GraphSIRDS.cpp
---- muimathx-src-svn46-orig/GraphSIRDS.cpp	2013-09-10 23:11:01.493181951 +0200
-+++ muimathx-src-svn46/GraphSIRDS.cpp	2013-09-10 23:23:56.417219462 +0200
+@@ -393,7 +393,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Print(struct IClass* clss, Object* obj, Msg msg)
++static IPTR _Print(struct IClass* clss, Object* obj, Msg msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(clss, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject),
+@@ -423,7 +423,7 @@
+ 	Distance	/  ColorScheme		/	Precision
+ ****************************************************************************************/
+ 
+-static ULONG _Distance(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Distance* msg)
++static IPTR _Distance(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Distance* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(clss, obj);
+ 	data->settings->distance = msg->val * 5;
+@@ -432,7 +432,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Colorscheme(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Colorscheme* msg)
++static IPTR _Colorscheme(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Colorscheme* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(clss, obj);
+ 	data->settings->colorscheme = msg->val;
+@@ -445,7 +445,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Precision(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Precision* msg)
++static IPTR _Precision(struct IClass* clss, Object* obj, struct MUIP_Graph3D_Precision* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(clss, obj);
+ 	data->settings->prec = msg->val;
+@@ -463,7 +463,7 @@
+ 	AskMinMax
+ ****************************************************************************************/
+ 
+-static ULONG _AskMinMax(struct IClass *cl, Object *obj, 
++static IPTR _AskMinMax(struct IClass *cl, Object *obj, 
+ 															 struct MUIP_AskMinMax *msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -481,7 +481,7 @@
+ 	Set-/Cleanup
+ ****************************************************************************************/
+ 
+-static ULONG _Setup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Setup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	if (!DoSuperMethodA(cl, obj, msg)) return(FALSE);
+ 	struct Graph3D_Data *data = (Graph3D_Data*)INST_DATA(cl,obj);
+@@ -494,7 +494,7 @@
+ 	return TRUE;
+ }
+ 
+-static ULONG _Cleanup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Cleanup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph3D_Data *data = (Graph3D_Data*)INST_DATA(cl,obj);
+ 
+@@ -517,7 +517,7 @@
+ 	Draw
+ ****************************************************************************************/
+ 
+-static ULONG _Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
++static IPTR _Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+ 	if (!(msg->flags & (MADF_DRAWUPDATE + MADF_DRAWOBJECT))) return 0;
+@@ -587,7 +587,7 @@
+ 	Set / Get
+ ****************************************************************************************/
+ 
+-static ULONG _Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -613,13 +613,13 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG _Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR _Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Graph3D_Data* data = (Graph3D_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_Graph3D_Settings:
+-			*(msg->opg_Storage) = (ULONG)data->settings;
++			*(msg->opg_Storage) = (IPTR)data->settings;
+ 			return(TRUE);
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -630,7 +630,7 @@
+ 	DragDrop
+ ****************************************************************************************/
+ 
+-static ULONG _DragDrop(struct IClass* cl, Object* obj, 
++static IPTR _DragDrop(struct IClass* cl, Object* obj, 
+ 											 struct MUIP_DragDrop* msg)
+ {
+ 	Ausdruck *term, *drop;
+@@ -660,7 +660,7 @@
+ enum {MEN_SAVEIFF, MEN_PRINT,
+ 			MEN_FUNCTION, MEN_PARAMETER, MEN_COLOR, MEN_WINDOW, MEN_AXES};
+ 
+-static ULONG _MenuChoice(struct IClass* cl, Object* obj, struct MUIP_ContextMenuChoice* msg)
++static IPTR _MenuChoice(struct IClass* cl, Object* obj, struct MUIP_ContextMenuChoice* msg)
+ {
+ 	int p = 4;
+ 	switch (muiUserData(msg->item))
+@@ -680,7 +680,7 @@
+ /****************************************************************************************
+ 	HandleInput
+ ****************************************************************************************/
+-static ULONG _HandleInput(struct IClass* cl, Object* obj, 
++static IPTR _HandleInput(struct IClass* cl, Object* obj, 
+ 			   									struct MUIP_HandleInput* msg)
+ {
+ 	struct Graph3D_Data *data = (Graph3D_Data*)INST_DATA(cl,obj);
+@@ -804,7 +804,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct NewMenu Menu[] =
+ 	{
+@@ -859,10 +859,10 @@
+ 		data->obj					= obj;
+ 		data->penDisplay 	= MUI_NewObject(MUIC_Pendisplay, TAG_DONE);
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG _Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Graph3D_Data *data = (Graph3D_Data*)INST_DATA(cl,obj);
+ 	MUI_DisposeObject(data->penDisplay);
+diff -ruN muimathx-src-svn46/Graph3D.hpp muimathx-src-svn46.aros/Graph3D.hpp
+--- muimathx-src-svn46/Graph3D.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Graph3D.hpp	2021-01-20 08:59:21.880000000 +0000
+@@ -39,10 +39,10 @@
+ #define MUIM_Graph3D_Colorscheme  		(TAGBASE_KAI | 0x212A)
+ #define MUIM_Graph3D_Precision	  		(TAGBASE_KAI | 0x212B)
+ 
+-struct  MUIP_Graph3D_Distance    			{ULONG MethodID; LONG val;	};
+-struct  MUIP_Graph3D_Colorscheme 			{ULONG MethodID; LONG val;	};
+-struct  MUIP_Graph3D_Precision 				{ULONG MethodID; LONG val;	};
+-struct  MUIP_Graph3D_Edit         		{ULONG MethodID; LONG page;	};
++struct  MUIP_Graph3D_Distance    			{STACKED ULONG MethodID; STACKED LONG val;	};
++struct  MUIP_Graph3D_Colorscheme 			{STACKED ULONG MethodID; STACKED LONG val;	};
++struct  MUIP_Graph3D_Precision 				{STACKED ULONG MethodID; STACKED LONG val;	};
++struct  MUIP_Graph3D_Edit         		{STACKED ULONG MethodID; STACKED LONG page;	};
+ 
+ 
+ BOOL Graph3D_Init();
+diff -ruN muimathx-src-svn46/GraphSIRDS.cpp muimathx-src-svn46.aros/GraphSIRDS.cpp
+--- muimathx-src-svn46/GraphSIRDS.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/GraphSIRDS.cpp	2021-01-20 08:58:47.570000000 +0000
+@@ -123,7 +123,7 @@
+ 	Edit
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Edit(struct IClass* cl, Object* obj, 
++static IPTR GraphSIRDS_Edit(struct IClass* cl, Object* obj, 
+ 					 					  struct MUIP_GraphSIRDS_Edit* msg)
+ {
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(cl, obj);
+@@ -136,7 +136,7 @@
+ 	SaveIFF
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_SaveIFF(struct IClass* clss, Object* obj, Msg msg)
++static IPTR GraphSIRDS_SaveIFF(struct IClass* clss, Object* obj, Msg msg)
+ {
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(clss, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject),
 @@ -148,7 +148,7 @@
  	if (fname)
  	{
@@ -34,3 +1230,1835 @@ diff -Naur muimathx-src-svn46-orig/GraphSIRDS.cpp muimathx-src-svn46/GraphSIRDS.
           width  = ((640) / 16) * 16,
  		  	 height = 512;
  		double w, h;		
+@@ -172,7 +172,7 @@
+ 	Print
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Print(struct IClass* clss, Object* obj, Msg msg)
++static IPTR GraphSIRDS_Print(struct IClass* clss, Object* obj, Msg msg)
+ {
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(clss, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject),
+@@ -203,7 +203,7 @@
+ 	AskMinMax
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_AskMinMax(struct IClass *cl, Object *obj, 
++static IPTR GraphSIRDS_AskMinMax(struct IClass *cl, Object *obj, 
+ 																	struct MUIP_AskMinMax *msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -221,7 +221,7 @@
+ 	Set-/Cleanup
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Setup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR GraphSIRDS_Setup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	if (!DoSuperMethodA(cl, obj, msg)) return(FALSE);
+ 	struct GraphSIRDS_Data *data = (GraphSIRDS_Data*)INST_DATA(cl,obj);
+@@ -233,7 +233,7 @@
+ 	return TRUE;
+ }
+ 
+-static ULONG GraphSIRDS_Cleanup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR GraphSIRDS_Cleanup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct GraphSIRDS_Data *data = (GraphSIRDS_Data*)INST_DATA(cl,obj);
+ 
+@@ -252,7 +252,7 @@
+ 	Draw
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
++static IPTR GraphSIRDS_Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(cl,obj);
+@@ -302,7 +302,7 @@
+ 	Set/Get
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR GraphSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -331,13 +331,13 @@
+   return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG GraphSIRDS_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR GraphSIRDS_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct GraphSIRDS_Data* data = (GraphSIRDS_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_GraphSIRDS_Settings:
+-			*(msg->opg_Storage) = (ULONG)data->settings;
++			*(msg->opg_Storage) = (IPTR)data->settings;
+ 			return(TRUE);
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -348,7 +348,7 @@
+ 	DragDrop
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_DragDrop(struct IClass* cl, Object* obj, 
++static IPTR GraphSIRDS_DragDrop(struct IClass* cl, Object* obj, 
+ 													struct MUIP_DragDrop* msg)
+ {
+ 	Ausdruck *term, *drop;
+@@ -378,7 +378,7 @@
+ enum {MEN_SAVEIFF, MEN_PRINT, MEN_CLOSE,
+ 			MEN_RANGE, MEN_FUNCTION, MEN_WINDOW};
+ 
+-static ULONG GraphSIRDS_ContextMenuChoice(struct IClass* cl, Object* obj, 
++static IPTR GraphSIRDS_ContextMenuChoice(struct IClass* cl, Object* obj, 
+ 																				  struct MUIP_ContextMenuChoice* msg)
+ {
+ 	int p = 2;
+@@ -398,7 +398,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR GraphSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct NewMenu Menu[] =
+ 		{
+@@ -439,7 +439,7 @@
+ 		data->newsettings = TRUE;
+ 		data->drawSIRDS   = new Draw_SIRDS();
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+ 
+@@ -447,7 +447,7 @@
+ 	Dispose
+ ****************************************************************************************/
+ 
+-static ULONG GraphSIRDS_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR GraphSIRDS_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct GraphSIRDS_Data *data = (GraphSIRDS_Data*)INST_DATA(cl,obj);
+ 	delete data->settings;
+diff -ruN muimathx-src-svn46/GraphSIRDS.hpp muimathx-src-svn46.aros/GraphSIRDS.hpp
+--- muimathx-src-svn46/GraphSIRDS.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/GraphSIRDS.hpp	2021-01-20 08:58:34.560000000 +0000
+@@ -35,7 +35,7 @@
+ #define MUIM_GraphSIRDS_Print		     	(TAGBASE_KAI | 0x1F25)
+ #define MUIM_GraphSIRDS_Edit		  		(TAGBASE_KAI | 0x1F26)
+ 
+-struct  MUIP_GraphSIRDS_Edit         	{ULONG MethodID; LONG page;	};
++struct  MUIP_GraphSIRDS_Edit         	{STACKED ULONG MethodID; STACKED LONG page;	};
+ 
+ 
+ BOOL GraphSIRDS_Init();
+diff -ruN muimathx-src-svn46/Integration.cpp muimathx-src-svn46.aros/Integration.cpp
+--- muimathx-src-svn46/Integration.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Integration.cpp	2021-01-20 08:57:05.180000000 +0000
+@@ -42,7 +42,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG _Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Integration_Data* data = (Integration_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -55,7 +55,7 @@
+ 	Calculate
+ ****************************************************************************************/
+ 
+-static ULONG _Calculate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Calculate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Integration_Data* data = (Integration_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -102,7 +102,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Integration_Data 	tmp;
+ 	Object 						*BT_Ok, *BT_Calculate;
+@@ -172,7 +172,7 @@
+ 
+ 		struct Integration_Data* data = (Integration_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return(0);
+ }
+@@ -182,7 +182,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG _Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Integration_Data* data = (Integration_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/LineShow.cpp muimathx-src-svn46.aros/LineShow.cpp
+--- muimathx-src-svn46/LineShow.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/LineShow.cpp	2021-01-20 08:57:51.960000000 +0000
+@@ -47,7 +47,7 @@
+ 	Pattern
+ ****************************************************************************************/
+ 
+-static ULONG EditLineStyle_Pattern(struct IClass* cl, Object* obj, 
++static IPTR EditLineStyle_Pattern(struct IClass* cl, Object* obj, 
+ 																	struct MUIP_EditLineStyle_Pattern* msg)
+ {
+ 	struct EditLineStyle_Data* data = (EditLineStyle_Data*)INST_DATA(cl, obj);
+@@ -76,7 +76,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG EditLineStyle_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR EditLineStyle_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *BT_Use, *BT_Cancel, *BT_PatternFull, *BT_PatternHalf, 
+          *BT_PatternMedium, *BT_PatternEmpty;
+@@ -151,7 +151,7 @@
+ 		DoMethod(BT_PatternHalf  , MUIM_Notify, MUIA_Pressed, FALSE, obj, 2, MUIM_EditLineStyle_Pattern, 1);
+ 		DoMethod(BT_PatternMedium, MUIM_Notify, MUIA_Pressed, FALSE, obj, 2, MUIM_EditLineStyle_Pattern, 2);
+ 		DoMethod(BT_PatternEmpty , MUIM_Notify, MUIA_Pressed, FALSE, obj, 2, MUIM_EditLineStyle_Pattern, 3);
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -161,7 +161,7 @@
+ 	Set / Get
+ ****************************************************************************************/
+ 
+-static ULONG EditLineStyle_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR EditLineStyle_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct EditLineStyle_Data* data = (EditLineStyle_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -184,7 +184,7 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG EditLineStyle_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR EditLineStyle_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct EditLineStyle_Data* data = (EditLineStyle_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -198,7 +198,7 @@
+ 			for (i = 0; i <= 15; i++)
+ 				if (xget(data->CH_Pattern[i], MUIA_Selected))
+ 					data->linestyle.pattern += 1<<i;
+-			*(msg->opg_Storage) = (ULONG)&(data->linestyle);
++			*(msg->opg_Storage) = (IPTR)&(data->linestyle);
+ 			return(TRUE);
+ 		}
+ 		case MUIA_EditLineStyle_Ok: {
+@@ -255,7 +255,7 @@
+ 	AskMinMax
+ ****************************************************************************************/
+ 
+-static ULONG LineShow_AskMinMax(struct IClass *cl, Object *obj, struct MUIP_AskMinMax *msg)
++static IPTR LineShow_AskMinMax(struct IClass *cl, Object *obj, struct MUIP_AskMinMax *msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+ 	msg->MinMaxInfo->MinWidth  += 20;
+@@ -272,7 +272,7 @@
+ 	Draw
+ ******************************************************************************/
+ 
+-static ULONG LineShow_Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
++static IPTR LineShow_Draw(struct IClass* cl, Object* obj, struct MUIP_Draw* msg)
+ {
+ 	struct LineShow_Data* data = (LineShow_Data*)INST_DATA(cl,obj);
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -316,7 +316,7 @@
+ 	Set / Get
+ ******************************************************************************/
+ 
+-static ULONG LineShow_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR LineShow_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct LineShow_Data* data = (LineShow_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -330,13 +330,13 @@
+   return(DoSuperMethodA(cl, obj, (Msg)msg));
+ }
+ 
+-static ULONG LineShow_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR LineShow_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct LineShow_Data* data = (LineShow_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_LineShow_LineStyle:
+-			*(msg->opg_Storage) = (ULONG)&(data->linestyle);
++			*(msg->opg_Storage) = (IPTR)&(data->linestyle);
+ 			return(TRUE);
+ 	}
+   return(DoSuperMethodA(cl, obj, (Msg)msg));
+@@ -348,7 +348,7 @@
+ ******************************************************************************/
+ 
+ /*
+-static ULONG LineShow_Cleanup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR LineShow_Cleanup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct LineShow_Data *data = (LineShow_Data*)INST_DATA(cl,obj);
+  	if (data->pen != -1) MUI_ReleasePen(muiRenderInfo(obj), data->pen);
+@@ -361,7 +361,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG LineShow_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR LineShow_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	obj = (Object*)DoSuperNew(cl, obj,
+ 														TextFrame,
+@@ -380,7 +380,7 @@
+  			data->linestyle.thickness = 1;
+ 		}
+ 	}
+-	return((ULONG)obj);
++	return((IPTR)obj);
+ }
+ 
+ 
+@@ -480,7 +480,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG PopLineStyle_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR PopLineStyle_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	PopLineStyle_Data tmp;
+   Object *win;
+@@ -503,7 +503,7 @@
+ 		struct PopLineStyle_Data* data = (PopLineStyle_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+    	DoMethod(win, MUIM_Notify, MUIA_EditLineStyle_Ok, MUIV_EveryTime, obj, 2, MUIM_Popstring_Close, MUIV_TriggerValue);
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -514,7 +514,7 @@
+ 	Set / Get
+ ****************************************************************************************/
+ 
+-static ULONG PopLineStyle_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR PopLineStyle_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct PopLineStyle_Data* data = (PopLineStyle_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -524,7 +524,7 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG PopLineStyle_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR PopLineStyle_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct PopLineStyle_Data* data = (PopLineStyle_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -537,7 +537,7 @@
+ 
+ 		case MUIA_PopLineStyle_LineShow:
+ 		{
+-			*(msg->opg_Storage) = (ULONG)data->LineShow;
++			*(msg->opg_Storage) = (IPTR)data->LineShow;
+ 			return(TRUE);
+ 		}
+ 	}
+diff -ruN muimathx-src-svn46/LineShow.hpp muimathx-src-svn46.aros/LineShow.hpp
+--- muimathx-src-svn46/LineShow.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/LineShow.hpp	2021-01-20 08:57:22.980000000 +0000
+@@ -41,7 +41,7 @@
+ 
+ #define MUIA_PopLineStyle_LineShow		(TAGBASE_KAI | 0x1305)
+ 
+-struct  MUIP_EditLineStyle_Pattern  	{ULONG MethodID; LONG type;};
++struct  MUIP_EditLineStyle_Pattern  	{STACKED ULONG MethodID; STACKED LONG type;};
+ 
+ 
+ 
+diff -ruN muimathx-src-svn46/MUITools.cpp muimathx-src-svn46.aros/MUITools.cpp
+--- muimathx-src-svn46/MUITools.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/MUITools.cpp	2021-01-20 08:54:54.420000000 +0000
+@@ -50,7 +50,7 @@
+ 	MUI-Hilfstools
+ ****************************************************************************************/
+ 
+-IPTR xget(Object* obj, ULONG attribute)
++IPTR xget(Object* obj, IPTR attribute)
+ {	
+ 	IPTR x;
+ 	getatt(obj, attribute, &x);
+@@ -65,7 +65,7 @@
+ }
+ 
+ #ifndef __MORPHOS__
+-ULONG DoSuperNew(struct IClass* cl, Object* obj, ULONG tag1,...)
++IPTR DoSuperNew(struct IClass* cl, Object* obj, IPTR tag1,...)
+ {
+ 	return DoSuperMethod(cl, obj, OM_NEW, &tag1, NULL);
+ }
+diff -ruN muimathx-src-svn46/MUITools.hpp muimathx-src-svn46.aros/MUITools.hpp
+--- muimathx-src-svn46/MUITools.hpp	2010-01-18 22:15:47.000000000 +0000
++++ muimathx-src-svn46.aros/MUITools.hpp	2021-01-20 08:54:42.490000000 +0000
+@@ -55,11 +55,11 @@
+ #endif
+ #define setatt(obj,attr,value) SetAttrs(obj,attr,value,TAG_DONE)
+ 
+-IPTR xget(Object* obj, ULONG attribute);
++IPTR xget(Object* obj, IPTR attribute);
+ 
+ char* StringContents(Object* obj);
+ #ifndef __MORPHOS__
+-ULONG DoSuperNew(struct IClass* cl, Object* obj, ULONG tag1,...);
++IPTR DoSuperNew(struct IClass* cl, Object* obj, IPTR tag1,...);
+ #endif
+ void ErrorReq(char* text, char* title = NULL, Object* app = NULL, Object* win = NULL);
+ 
+diff -ruN muimathx-src-svn46/MatrixWin.cpp muimathx-src-svn46.aros/MatrixWin.cpp
+--- muimathx-src-svn46/MatrixWin.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/MatrixWin.cpp	2021-01-20 09:15:42.830000000 +0000
+@@ -59,7 +59,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG MatrixWin_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR MatrixWin_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct MatrixWin_Data* data = (MatrixWin_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -72,7 +72,7 @@
+ 	Calc
+ ****************************************************************************************/
+ 
+-static ULONG MatrixWin_Calc(struct IClass* cl, Object* obj, MUIP_MatrixWin_Calc* msg)
++static IPTR MatrixWin_Calc(struct IClass* cl, Object* obj, MUIP_MatrixWin_Calc* msg)
+ {
+ 	struct MatrixWin_Data* data = (MatrixWin_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -170,7 +170,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG MatrixWin_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR MatrixWin_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 
+ 	MatrixWin_Data tmp;
+@@ -256,7 +256,7 @@
+ 		struct MatrixWin_Data* data = (MatrixWin_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+ 
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 
+ 	return 0;
+@@ -342,7 +342,7 @@
+ 	Resize
+ ****************************************************************************************/
+ 
+-static ULONG MatrixEditor_Resize(struct IClass* cl, Object* obj, MUIP_MatrixEditor_Resize* msg)
++static IPTR MatrixEditor_Resize(struct IClass* cl, Object* obj, MUIP_MatrixEditor_Resize* msg)
+ {
+ 	struct MatrixEditor_Data* data = (MatrixEditor_Data*)INST_DATA(cl, obj);
+ 
+@@ -382,7 +382,7 @@
+ 	Get
+ ****************************************************************************************/
+ 
+-static ULONG MatrixEditor_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR MatrixEditor_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct MatrixEditor_Data* data = (MatrixEditor_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -400,7 +400,7 @@
+ 			Ausdruck *t = new Ausdruck(data->x, data->y, elems);
+ 			delete[] elems;
+ 
+-			*(msg->opg_Storage) = (ULONG)t;
++			*(msg->opg_Storage) = (IPTR)t;
+ 			return TRUE;
+ 		}
+ 	}
+@@ -412,7 +412,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG MatrixEditor_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR MatrixEditor_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	MatrixEditor_Data tmp;
+ 
+@@ -476,7 +476,7 @@
+ 		struct MatrixEditor_Data* data = (MatrixEditor_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+ 
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return 0;
+ }
+diff -ruN muimathx-src-svn46/MatrixWin.hpp muimathx-src-svn46.aros/MatrixWin.hpp
+--- muimathx-src-svn46/MatrixWin.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/MatrixWin.hpp	2021-01-20 09:15:26.240000000 +0000
+@@ -39,7 +39,7 @@
+ #define MUIM_MatrixWin_Quit				(TAGBASE_KAI | 0x1D01)
+ #define MUIM_MatrixWin_Calc				(TAGBASE_KAI | 0x1D03)
+ 
+-struct  MUIP_MatrixWin_Calc 	{ULONG MethodID; LONG val;		  };
++struct  MUIP_MatrixWin_Calc 	{STACKED ULONG MethodID; STACKED LONG val;		  };
+ 
+ BOOL MatrixWin_Init();
+ void MatrixWin_Exit();
+@@ -54,7 +54,7 @@
+ #define MUIA_MatrixEditor_Matrix	(TAGBASE_KAI | 0x1D21)		// [..G]
+ #define MUIM_MatrixEditor_Resize	(TAGBASE_KAI | 0x1D25)
+ 
+-struct  MUIP_MatrixEditor_Resize {ULONG MethodID; LONG x; LONG y;};
++struct  MUIP_MatrixEditor_Resize {STACKED ULONG MethodID; STACKED LONG x; STACKED LONG y;};
+ 
+ BOOL MatrixEditor_Init();
+ void MatrixEditor_Exit();
+diff -ruN muimathx-src-svn46/PageList.cpp muimathx-src-svn46.aros/PageList.cpp
+--- muimathx-src-svn46/PageList.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/PageList.cpp	2021-01-20 08:53:20.800000000 +0000
+@@ -42,7 +42,7 @@
+ 	DragQuery / DragDrop
+ ******************************************************************************/
+ 
+-static ULONG PageList_DragQuery(struct IClass* cl, Object* obj, 
++static IPTR PageList_DragQuery(struct IClass* cl, Object* obj, 
+        				                  struct MUIP_DragDrop* msg)
+ {
+  	// struct PageList_Data* data = (PageList_Data*)INST_DATA(cl, obj);
+@@ -55,7 +55,7 @@
+ 	return MUIV_DragQuery_Refuse;
+ }
+ 
+-static ULONG PageList_DragDrop(struct IClass* cl, Object* obj, 
++static IPTR PageList_DragDrop(struct IClass* cl, Object* obj, 
+        				                 struct MUIP_DragDrop* msg)
+ {
+ 	if (msg->obj == obj) return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -101,7 +101,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG PageList_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR PageList_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct PageList_Data tmp;
+ 
+@@ -125,7 +125,7 @@
+ 		setatt(obj, MUIA_List_DestructHook, &data->destructhook);
+ */
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+ 
+diff -ruN muimathx-src-svn46/Settings.cpp muimathx-src-svn46.aros/Settings.cpp
+--- muimathx-src-svn46/Settings.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Settings.cpp	2021-01-20 08:51:28.850000000 +0000
+@@ -52,7 +52,7 @@
+ 	Close
+ ****************************************************************************************/
+ 
+-static ULONG _Close(struct IClass* cl, Object* obj, 
++static IPTR _Close(struct IClass* cl, Object* obj, 
+ 														struct MUIP_Settings_Close* msg)
+ {
+ 	// struct Settings_Data* data = (Settings_Data*)INST_DATA(cl, obj);
+@@ -90,7 +90,7 @@
+ 	s->buttons = (BOOL)xget(CH_Buttons, MUIA_Selected);
+ }
+ 
+-static ULONG _Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR _Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Settings_Data* data = (Settings_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+@@ -98,7 +98,7 @@
+ 		case MUIA_Settings_Settings:
+ 			data->readSettings();
+ 			Settings* s = &data->settings;
+-			*(msg->opg_Storage) = (ULONG)s;
++			*(msg->opg_Storage) = (IPTR)s;
+ 			return TRUE;
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -109,7 +109,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Object *BT_Save, *BT_Use, *BT_Cancel, *ST_BFont, *ST_SFont;//, *ST_TBPath;
+ 	Settings_Data tmp;
+@@ -226,7 +226,7 @@
+ 
+ 		struct Settings_Data* data = (Settings_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+diff -ruN muimathx-src-svn46/Settings.hpp muimathx-src-svn46.aros/Settings.hpp
+--- muimathx-src-svn46/Settings.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Settings.hpp	2021-01-20 08:51:12.250000000 +0000
+@@ -32,7 +32,7 @@
+ #define MUIM_Settings_Close         	(TAGBASE_KAI | 0x1501)
+ #define MUIA_Settings_Settings      	(TAGBASE_KAI | 0x1502)
+ 
+-struct  MUIP_Settings_Close         	{ULONG MethodID; LONG typ;};
++struct  MUIP_Settings_Close         	{STACKED ULONG MethodID; STACKED LONG typ;};
+ 
+ 
+ struct Settings
+diff -ruN muimathx-src-svn46/StatusWin.cpp muimathx-src-svn46.aros/StatusWin.cpp
+--- muimathx-src-svn46/StatusWin.cpp	2012-07-28 10:32:17.000000000 +0000
++++ muimathx-src-svn46.aros/StatusWin.cpp	2021-01-20 08:50:57.280000000 +0000
+@@ -41,7 +41,7 @@
+ 	Break
+ ****************************************************************************************/
+ 
+-static ULONG StatusWin_Break(struct IClass* cl, Object* obj, Msg msg)
++static IPTR StatusWin_Break(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct StatusWin_Data* data = (StatusWin_Data*)INST_DATA(cl, obj);
+ 	data->running = FALSE;
+@@ -53,7 +53,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG StatusWin_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR StatusWin_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	StatusWin_Data 	tmp;
+ 	Object* BT_Stop;
+@@ -130,7 +130,7 @@
+ 
+ 		data->running = TRUE;
+ 
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 
+ 	return 0;
+diff -ruN muimathx-src-svn46/TabData.cpp muimathx-src-svn46.aros/TabData.cpp
+--- muimathx-src-svn46/TabData.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/TabData.cpp	2021-01-20 08:50:02.930000000 +0000
+@@ -172,7 +172,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG _Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -185,7 +185,7 @@
+ 	Calc
+ ****************************************************************************************/
+ 
+-static ULONG _Calc(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Calc(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	LONG y = xget(data->list, MUIA_List_Entries) - 1,
+@@ -229,7 +229,7 @@
+ 	Rem / Insert
+ ****************************************************************************************/
+ 
+-static ULONG _Rem(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Rem(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	LONG a = xget(data->list, MUIA_List_Active);
+@@ -241,7 +241,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Insert(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Insert(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	LONG active = xget(data->list, MUIA_List_Active);
+@@ -308,7 +308,7 @@
+ 	return FALSE;
+ }
+ 
+-static ULONG _Load(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Load(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	Object* app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -367,7 +367,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG _Save(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Save(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 
+@@ -426,7 +426,7 @@
+ 	Enter
+ ****************************************************************************************/
+ 
+-static ULONG _Enter(struct IClass* cl, Object* obj, MUIP_TabData_Enter* msg)
++static IPTR _Enter(struct IClass* cl, Object* obj, MUIP_TabData_Enter* msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 
+@@ -471,7 +471,7 @@
+ 	Resize
+ ****************************************************************************************/
+ 
+-static ULONG _Resize(struct IClass* cl, Object* obj, MUIP_TabData_Resize* msg)
++static IPTR _Resize(struct IClass* cl, Object* obj, MUIP_TabData_Resize* msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 	data->resize( msg->size );
+@@ -484,7 +484,7 @@
+ 	Activate
+ ****************************************************************************************/
+ 
+-static ULONG _Activate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Activate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 
+@@ -593,7 +593,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	TabData_Data tmp;
+ 	Object 	 *BT_Ok, *BT_Rem, *BT_Insert, *BT_Calc, *BT_Load, *BT_Save;
+@@ -719,13 +719,13 @@
+ 		DoMethod(data->list, MUIM_List_InsertSingle, a, MUIV_List_Insert_Bottom);
+ 		setatt(data->list, MUIA_List_Active, MUIV_List_Active_Bottom);
+ 
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-static ULONG _Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TabData_Data* data = (TabData_Data*)INST_DATA(cl, obj);
+ 
+diff -ruN muimathx-src-svn46/TabData.hpp muimathx-src-svn46.aros/TabData.hpp
+--- muimathx-src-svn46/TabData.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/TabData.hpp	2021-01-20 08:49:49.120000000 +0000
+@@ -39,8 +39,8 @@
+ #define MUIM_TabData_Load				(TAGBASE_KAI | 0x1D20)
+ #define MUIM_TabData_Save				(TAGBASE_KAI | 0x1D21)
+ 
+-struct  MUIP_TabData_Enter 	{ ULONG MethodID; LONG nr; 	 };
+-struct  MUIP_TabData_Resize	{ ULONG MethodID; LONG size; };
++struct  MUIP_TabData_Enter 	{ STACKED ULONG MethodID; STACKED LONG nr; 	 };
++struct  MUIP_TabData_Resize	{ STACKED ULONG MethodID; STACKED LONG size; };
+ 
+ BOOL TabData_Init();
+ void TabData_Exit();
+diff -ruN muimathx-src-svn46/Tangente.cpp muimathx-src-svn46.aros/Tangente.cpp
+--- muimathx-src-svn46/Tangente.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Tangente.cpp	2021-01-20 08:47:14.390000000 +0000
+@@ -41,7 +41,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Tangente_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Tangente_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Tangente_Data* data = (Tangente_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -54,7 +54,7 @@
+ 	Calculate
+ ****************************************************************************************/
+ 
+-static ULONG Tangente_Calculate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Tangente_Calculate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Tangente_Data* data = (Tangente_Data*)INST_DATA(cl, obj);
+ 
+@@ -84,7 +84,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Tangente_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Tangente_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Tangente_Data 	  tmp;
+ 	Object 						*BT_Ok, *BT_Calculate;
+@@ -142,7 +142,7 @@
+ 
+ 		struct Tangente_Data* data = (Tangente_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -152,7 +152,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Tangente_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Tangente_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Tangente_Data* data = (Tangente_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/Taylor.cpp muimathx-src-svn46.aros/Taylor.cpp
+--- muimathx-src-svn46/Taylor.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Taylor.cpp	2021-01-20 08:49:23.930000000 +0000
+@@ -41,7 +41,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Taylor_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Taylor_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Taylor_Data* data = (Taylor_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -54,7 +54,7 @@
+ 	Calculate
+ ****************************************************************************************/
+ 
+-static ULONG Taylor_Calculate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Taylor_Calculate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Taylor_Data* data = (Taylor_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -98,7 +98,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Taylor_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Taylor_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Taylor_Data 	  tmp;
+ 	Object 					*BT_Ok, *BT_Calculate;
+@@ -151,7 +151,7 @@
+ 
+ 		struct Taylor_Data* data = (Taylor_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return(0);
+ }
+@@ -161,7 +161,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Taylor_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Taylor_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Taylor_Data* data = (Taylor_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/TermPanel.cpp muimathx-src-svn46.aros/TermPanel.cpp
+--- muimathx-src-svn46/TermPanel.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/TermPanel.cpp	2021-01-20 09:19:48.810000000 +0000
+@@ -56,7 +56,7 @@
+ 	New / Dispose
+ ******************************************************************************/
+ 
+-static ULONG TermView_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermView_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermView_Data tmp;
+ 	obj = (Object*)DoSuperNew(cl, obj,
+@@ -71,10 +71,10 @@
+ 		*data = tmp;
+ 		data->term = NULL;
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG TermView_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermView_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermView_Data* data = (TermView_Data*)INST_DATA(cl, obj);
+ 	if (data->term) delete data->term;
+@@ -86,7 +86,7 @@
+ 	Set / Get
+ ******************************************************************************/
+ 
+-static ULONG TermView_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermView_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermView_Data* data = (TermView_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -108,13 +108,13 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG TermView_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR TermView_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct TermView_Data* data = (TermView_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_TermView_Term:
+-			*(msg->opg_Storage) = (ULONG)data->term;
++			*(msg->opg_Storage) = (IPTR)data->term;
+ 			return TRUE;
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -195,7 +195,7 @@
+ 	Acknowledge
+ ******************************************************************************/
+ 
+-static ULONG TermString_Acknowledge(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermString_Acknowledge(struct IClass* cl, Object* obj, Msg msg)
+ {
+  	struct TermString_Data* data = (TermString_Data*)INST_DATA(cl, obj);
+ 	char* str = (char*)xget(obj, MUIA_String_Contents);
+@@ -271,7 +271,7 @@
+ 	DragQuery / DragDrop
+ ******************************************************************************/
+ 
+-static ULONG TermString_DragQuery(struct IClass* cl, Object* obj, 
++static IPTR TermString_DragQuery(struct IClass* cl, Object* obj, 
+                            struct MUIP_DragDrop* msg)
+ {
+  	struct TermString_Data* data = (TermString_Data*)INST_DATA(cl, obj);
+@@ -284,7 +284,7 @@
+ 	return MUIV_DragQuery_Refuse;
+ }
+ 
+-static ULONG TermString_DragDrop(struct IClass* cl, Object* obj, 
++static IPTR TermString_DragDrop(struct IClass* cl, Object* obj, 
+                           struct MUIP_DragDrop* msg)
+ {
+ 	if (msg->obj == obj) return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -329,7 +329,7 @@
+ 	New / Dispose
+ ******************************************************************************/
+ 
+-static ULONG TermString_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermString_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermString_Data tmp;
+ 	tmp.list = (Object*)GetTagData(MUIA_String_AttachedList, 0, msg->ops_AttrList);
+@@ -362,10 +362,10 @@
+ 		data->term = NULL;
+ 		DoMethod(obj, MUIM_Notify, MUIA_String_Acknowledge, MUIV_EveryTime, obj, 1, MUIM_TermString_Acknowledge);
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG TermString_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermString_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermString_Data* data = (TermString_Data*)INST_DATA(cl, obj);
+ 	if (data->term && !data->list) delete data->term;
+@@ -377,7 +377,7 @@
+ 	Set / Get
+ ******************************************************************************/
+ 
+-static ULONG TermString_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermString_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermString_Data* data = (TermString_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -425,23 +425,23 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG TermString_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR TermString_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct TermString_Data* data = (TermString_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_TermString_Term:
+     {
+-			*(msg->opg_Storage) = (ULONG)data->term;
++			*(msg->opg_Storage) = (IPTR)data->term;
+ 			return TRUE;
+     }
+ 
+ 		case MUIA_TermString_TermCpy:
+     {
+ 			if (data->term)
+-				*(msg->opg_Storage) = (ULONG)new Ausdruck(data->term);
++				*(msg->opg_Storage) = (IPTR)new Ausdruck(data->term);
+ 			else
+-				*(msg->opg_Storage) = NULL;
++				*(msg->opg_Storage) = 0;
+ 			return TRUE;
+     }
+ 	}
+@@ -519,7 +519,7 @@
+ 	DragQuery / DragDrop
+ ******************************************************************************/
+ 
+-static ULONG TermList_DragQuery(struct IClass* cl, Object* obj, 
++static IPTR TermList_DragQuery(struct IClass* cl, Object* obj, 
+        				                  struct MUIP_DragDrop* msg)
+ {
+  	// struct TermList_Data* data = (TermList_Data*)INST_DATA(cl, obj);
+@@ -532,7 +532,7 @@
+ 	return MUIV_DragQuery_Refuse;
+ }
+ 
+-static ULONG TermList_DragDrop(struct IClass* cl, Object* obj, 
++static IPTR TermList_DragDrop(struct IClass* cl, Object* obj, 
+        				                 struct MUIP_DragDrop* msg)
+ {
+ 	if (msg->obj == obj) return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -592,7 +592,7 @@
+ 	New
+ ******************************************************************************/
+ 
+-static ULONG TermList_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermList_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermList_Data tmp;
+ 
+@@ -616,7 +616,7 @@
+ //		setatt(obj, MUIA_List_DisplayHook, &TermList_DisplayHook);
+ //		setatt(obj, MUIA_List_DestructHook, &TermList_DestructHook);
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+ 
+@@ -684,7 +684,7 @@
+ 	SaveTerms / LoadTerms
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_SaveTerms(struct IClass* cl, 
++static IPTR TermPanel_SaveTerms(struct IClass* cl, 
+ 																 Object* obj, 
+                            			 MUIP_TermPanel_SaveTerms* msg)
+ {
+@@ -730,7 +730,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG TermPanel_LoadTerms(struct IClass* cl, 
++static IPTR TermPanel_LoadTerms(struct IClass* cl, 
+ 																 Object* obj, 
+                            			 MUIP_TermPanel_LoadTerms* msg)
+ {
+@@ -788,7 +788,7 @@
+ 	Clear
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_Clear(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_Clear(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	DoMethod(data->LV_Terms, MUIM_List_Clear);
+@@ -800,7 +800,7 @@
+ 	NewTerm / Cut / Paste
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_NewTerm(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_NewTerm(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	Ausdruck* expr = new Ausdruck("0");
+@@ -810,7 +810,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG TermPanel_Cut(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_Cut(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	Ausdruck* entry;
+@@ -822,7 +822,7 @@
+ 	return 0;
+ }
+ 
+-static ULONG TermPanel_Paste(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_Paste(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	Object* list = data->LV_Terms;
+@@ -838,7 +838,7 @@
+ 	Activate
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_Activate(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_Activate(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	Ausdruck* entry;
+@@ -861,7 +861,7 @@
+ 	New / Dispose
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR TermPanel_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct TermPanel_Data tmp;
+ 	Object* list;
+@@ -903,10 +903,10 @@
+ 		struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG TermPanel_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR TermPanel_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	if (data->buffer) delete data->buffer;
+@@ -918,26 +918,26 @@
+ 	Get
+ ******************************************************************************/
+ 
+-static ULONG TermPanel_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR TermPanel_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct TermPanel_Data* data = (TermPanel_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_TermPanel_CutButton:
+ 		{
+-			*(msg->opg_Storage) = (ULONG)data->BT_Cut;
++			*(msg->opg_Storage) = (IPTR)data->BT_Cut;
+ 			return TRUE;
+ 		}
+ 
+ 		case MUIA_TermPanel_PasteButton:
+ 		{
+-			*(msg->opg_Storage) = (ULONG)data->BT_Paste;
++			*(msg->opg_Storage) = (IPTR)data->BT_Paste;
+ 			return TRUE;
+ 		}
+ 
+ 		case MUIA_TermPanel_String:
+ 		{
+-			*(msg->opg_Storage) = (ULONG)data->ST_Term;
++			*(msg->opg_Storage) = (IPTR)data->ST_Term;
+ 			return TRUE;
+ 		}
+ 
+diff -ruN muimathx-src-svn46/TermPanel.hpp muimathx-src-svn46.aros/TermPanel.hpp
+--- muimathx-src-svn46/TermPanel.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/TermPanel.hpp	2021-01-20 08:46:25.650000000 +0000
+@@ -87,8 +87,8 @@
+ #define MUIM_TermPanel_SaveTerms 			(TAGBASE_KAI | 0x1213)
+ #define MUIM_TermPanel_LoadTerms 			(TAGBASE_KAI | 0x1215)
+ 
+-struct  MUIP_TermPanel_SaveTerms      {ULONG MethodID; char* filename;};
+-struct  MUIP_TermPanel_LoadTerms      {ULONG MethodID; char* filename; long append;};
++struct  MUIP_TermPanel_SaveTerms      {STACKED ULONG MethodID; STACKED char* filename;};
++struct  MUIP_TermPanel_LoadTerms      {STACKED ULONG MethodID; STACKED char* filename; STACKED long append;};
+ 
+ BOOL TermPanel_Init();
+ void TermPanel_Exit();
+diff -ruN muimathx-src-svn46/Termscript.cpp muimathx-src-svn46.aros/Termscript.cpp
+--- muimathx-src-svn46/Termscript.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Termscript.cpp	2021-01-20 08:44:22.710000000 +0000
+@@ -66,7 +66,7 @@
+ 	Save
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_Save(struct IClass* cl, Object* obj,
++static IPTR Termscript_Save(struct IClass* cl, Object* obj,
+ 														 Msg msg)
+ {
+ 	Object *app = (Object*)xget(obj, MUIA_ApplicationObject),
+@@ -109,7 +109,7 @@
+ 	AskMinMax
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_AskMinMax(struct IClass *cl, Object *obj,
++static IPTR Termscript_AskMinMax(struct IClass *cl, Object *obj,
+ 																	struct MUIP_AskMinMax *msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -129,7 +129,7 @@
+ 	Setup / Cleanup
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_Setup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Termscript_Setup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	if (!DoSuperMethodA(cl, obj, msg)) return FALSE;
+ 	struct Termscript_Data *data = (Termscript_Data*)INST_DATA(cl,obj);
+@@ -172,7 +172,7 @@
+ 	return TRUE;
+ }
+ 
+-static ULONG Termscript_Cleanup(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Termscript_Cleanup(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Termscript_Data *data = (Termscript_Data*)INST_DATA(cl,obj);
+ 	if (data->dprop.bigfont) delete data->dprop.bigfont; 
+@@ -189,7 +189,7 @@
+ 	Draw
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_Draw(struct IClass* cl, Object* obj, 
++static IPTR Termscript_Draw(struct IClass* cl, Object* obj, 
+                              struct MUIP_Draw* msg)
+ {
+ 	DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -215,7 +215,7 @@
+ 	Set/Get
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Termscript_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Termscript_Data* data = (Termscript_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -240,13 +240,13 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG Termscript_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR Termscript_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Termscript_Data* data = (Termscript_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_Termscript_Term:
+-			*(msg->opg_Storage) = (ULONG)data->term;
++			*(msg->opg_Storage) = (IPTR)data->term;
+ 			return TRUE;
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+@@ -257,7 +257,7 @@
+ 	Universelle DragQuery-Funktion für Term-Felder
+ ****************************************************************************************/
+ 
+-ULONG Term_DragQuery(struct IClass* cl, Object* obj, 
++IPTR Term_DragQuery(struct IClass* cl, Object* obj, 
+                      struct MUIP_DragDrop* msg)
+ {
+ 	Ausdruck* dummy;
+@@ -274,7 +274,7 @@
+ 	DragDrop
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_DragDrop(struct IClass* cl, Object* obj, 
++static IPTR Termscript_DragDrop(struct IClass* cl, Object* obj, 
+                           struct MUIP_DragDrop* msg)
+ {
+ 	Ausdruck *drop;
+@@ -295,7 +295,7 @@
+ enum {MEN_SAVEIFF = 1};
+ 
+ /*
+-static ULONG TermScript_ContextMenuChoice(struct IClass* cl, Object* obj, 
++static IPTR TermScript_ContextMenuChoice(struct IClass* cl, Object* obj, 
+ 																					 struct MUIP_ContextMenuChoice* msg)
+ {
+ 	switch (muiUserData(msg->item))
+@@ -311,7 +311,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG Termscript_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Termscript_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ /*
+ 	static struct NewMenu Menu[] =		// static seit 16.3.98
+@@ -338,10 +338,10 @@
+ 		data->dprop.bigfont		= NULL;
+ 		data->dprop.smallfont	= NULL;
+ 	}
+-	return (ULONG)obj;
++	return (IPTR)obj;
+ }
+ 
+-static ULONG Termscript_Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Termscript_Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Termscript_Data *data = (Termscript_Data*)INST_DATA(cl,obj);
+ 	if (data->term) delete data->term;
+@@ -425,7 +425,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Termwin_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Termwin_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Termwin_Data* data = (Termwin_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -438,7 +438,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Termwin_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Termwin_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Termwin_Data 	tmp;
+ 
+@@ -479,7 +479,7 @@
+ 
+ 		struct Termwin_Data* data = (Termwin_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -489,7 +489,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Termwin_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Termwin_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Termwin_Data* data = (Termwin_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/Termscript.hpp muimathx-src-svn46.aros/Termscript.hpp
+--- muimathx-src-svn46/Termscript.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Termscript.hpp	2021-01-20 08:45:56.640000000 +0000
+@@ -41,7 +41,7 @@
+ #define MUIM_Termscript_Save 					(TAGBASE_KAI | 0x2003)
+ 
+ 
+-ULONG Term_DragQuery(struct IClass* cl, Object* obj, 
++IPTR Term_DragQuery(struct IClass* cl, Object* obj, 
+                      struct MUIP_DragDrop* msg);
+ 
+ 
+diff -ruN muimathx-src-svn46/Textlist.cpp muimathx-src-svn46.aros/Textlist.cpp
+--- muimathx-src-svn46/Textlist.cpp	2012-07-28 10:32:17.000000000 +0000
++++ muimathx-src-svn46.aros/Textlist.cpp	2021-01-20 08:49:03.990000000 +0000
+@@ -37,7 +37,7 @@
+ 	AppendText
+ ****************************************************************************************/
+ 
+-static ULONG Textlist_AppendText(struct IClass* cl, Object* obj, 
++static IPTR Textlist_AppendText(struct IClass* cl, Object* obj, 
+ 																struct MUIP_Textlist_AppendText* msg)
+ {
+ 	struct Textlist_Data* data = (Textlist_Data*)INST_DATA(cl, obj);
+@@ -63,7 +63,7 @@
+ 	Print
+ ****************************************************************************************/
+ 
+-static ULONG Textlist_Print(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Textlist_Print(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Textlist_Data* data = (Textlist_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -80,7 +80,7 @@
+ 	Save
+ ****************************************************************************************/
+ 
+-static ULONG Textlist_Save(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Textlist_Save(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Textlist_Data* data = (Textlist_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -116,7 +116,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Textlist_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Textlist_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Textlist_Data tmp;
+ 	Object *BT_Save, *BT_Print;
+@@ -146,7 +146,7 @@
+ 		DoMethod(BT_Print, MUIM_Notify, MUIA_Pressed, FALSE, obj, 1, MUIM_Textlist_Print);
+ 
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+diff -ruN muimathx-src-svn46/Textlist.hpp muimathx-src-svn46.aros/Textlist.hpp
+--- muimathx-src-svn46/Textlist.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/Textlist.hpp	2021-01-20 08:48:51.990000000 +0000
+@@ -32,7 +32,7 @@
+ #define MUIM_Textlist_Save   					(TAGBASE_KAI | 0x1C02)
+ #define MUIM_Textlist_Print  					(TAGBASE_KAI | 0x1C03)
+ 
+-struct  MUIP_Textlist_AppendText  		{ULONG MethodID; char* text;};
++struct  MUIP_Textlist_AppendText  		{STACKED ULONG MethodID; STACKED char* text;};
+ 
+ 
+ struct Textlist_Data
+diff -ruN muimathx-src-svn46/Window2D.cpp muimathx-src-svn46.aros/Window2D.cpp
+--- muimathx-src-svn46/Window2D.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Window2D.cpp	2021-01-20 09:19:10.110000000 +0000
+@@ -55,7 +55,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Window2D_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Window2D_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Window2D_Data* data = (Window2D_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -68,7 +68,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG Window2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Window2D_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Window2D_Data tmp;
+ 	Object *strip;
+@@ -100,16 +100,16 @@
+ 
+ 	struct MUIP_Toolbar_Description TB_Description[] =
+ 	{
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_EDIT),				NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_EDIT),				0},
+ 		Toolbar_Space,
+ 		{TDT_BUTTON, 0, TDF_RADIOTOGGLE|TDF_SELECTED, NULL, GetStr(MSG_WINDOW2D_SCROLL_HELP),	1<<TB_ZOOMIN|1<<TB_ZOOMOUT|1<<TB_COORDS},
+ 		{TDT_BUTTON, 0, TDF_RADIOTOGGLE, NULL, GetStr(MSG_HELP_GRAPH2D_ZOOMIN),		1<<TB_SCROLL|1<<TB_ZOOMOUT|1<<TB_COORDS},
+ 		{TDT_BUTTON, 0, TDF_RADIOTOGGLE, NULL, GetStr(MSG_HELP_GRAPH2D_ZOOMOUT),	1<<TB_ZOOMIN|1<<TB_SCROLL|1<<TB_COORDS},
+ 		{TDT_BUTTON, 0, TDF_RADIOTOGGLE, NULL, GetStr(MSG_WINDOW2D_COORDS_HELP),	1<<TB_ZOOMIN|1<<TB_ZOOMOUT|1<<TB_SCROLL},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_CLEARTERMS),	NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_SAVEIFF),		NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_PRINT),			NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_CLEARTERMS),	0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_SAVEIFF),		0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_HELP_GRAPH_PRINT),			0},
+ 		Toolbar_End,
+ 	};
+ 
+@@ -124,9 +124,9 @@
+ 				Child, HGroup,
+ 					Child, tmp.Toolbar  = ToolbarObject,
+ 						MUIA_Toolbar_ImageType, MUIV_Toolbar_ImageType_File,
+-						MUIA_Toolbar_Path, GetTagData(MUIA_Window2D_ToolbarPath, (LONG)"PROGDIR:Images/std/", msg->ops_AttrList),
+-						MUIA_Toolbar_ImageNormal, "2D.toolbar",
+-						MUIA_Toolbar_ImageSelect, "2D_S.toolbar",
++						MUIA_Toolbar_Path, GetTagData(MUIA_Window2D_ToolbarPath, (IPTR)"PROGDIR:Images/std/", msg->ops_AttrList),
++						MUIA_Toolbar_ImageNormal, (IPTR)"2D.toolbar",
++						MUIA_Toolbar_ImageSelect, (IPTR)"2D_S.toolbar",
+ 						MUIA_Toolbar_Description, TB_Description,
+ 						MUIA_Toolbar_Horizontal, TRUE,
+ 						MUIA_Font, MUIV_Font_Tiny,
+@@ -182,7 +182,7 @@
+ 		Settings2D* sett = (Settings2D*)xget(data->CO_Graph, MUIA_Graph2D_Settings);
+ 		setatt(data->GR_Buttons, MUIA_ShowMe, sett->buttons);
+ 		
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -192,7 +192,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Window2D_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Window2D_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Window2D_Data* data = (Window2D_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+@@ -210,7 +210,7 @@
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG Window2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR Window2D_Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct Window2D_Data* data = (Window2D_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+diff -ruN muimathx-src-svn46/Window3D.cpp muimathx-src-svn46.aros/Window3D.cpp
+--- muimathx-src-svn46/Window3D.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/Window3D.cpp	2021-01-20 09:18:36.100000000 +0000
+@@ -46,7 +46,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG Window3D_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Window3D_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct Window3D_Data* data = (Window3D_Data*)INST_DATA(cl, obj);
+ 	Object* app =	(Object*)xget(obj, MUIA_ApplicationObject);
+@@ -59,7 +59,7 @@
+ 	Copy
+ ****************************************************************************************/
+ 
+-static ULONG Window3D_Copy(struct IClass* cl, Object* obj, Msg msg)
++static IPTR Window3D_Copy(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct Window3D_Data* data = (Window3D_Data*)INST_DATA(cl, obj);
+ 	Object*	app = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -73,7 +73,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG Window3D_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Window3D_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	Window3D_Data tmp;
+ 	Object *strip, *Toolbar;
+@@ -121,12 +121,12 @@
+ 
+ 	struct MUIP_Toolbar_Description TB_Description[] =
+ 	{
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_EDIT_HELP),				NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_EDIT_HELP),				0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_COPY_HELP),				NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_COPY_HELP),				0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_SAVEIFF_HELP),		NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_PRINT_HELP),			NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_SAVEIFF_HELP),		0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WIN3D_PRINT_HELP),			0},
+ 		Toolbar_End,
+ 	};
+ 
+@@ -142,9 +142,9 @@
+ 			Child, tmp.GR_Buttons = HGroup,
+ 				Child, Toolbar  = ToolbarObject,
+ 					MUIA_Toolbar_ImageType, MUIV_Toolbar_ImageType_File,
+-					MUIA_Toolbar_Path, GetTagData(MUIA_Window3D_ToolbarPath, (LONG)"PROGDIR:Images/std/", msg->ops_AttrList),
+-					MUIA_Toolbar_ImageNormal, "3D.toolbar",
+-					MUIA_Toolbar_ImageSelect, "3D_S.toolbar",
++					MUIA_Toolbar_Path, GetTagData(MUIA_Window3D_ToolbarPath, (IPTR)"PROGDIR:Images/std/", msg->ops_AttrList),
++					MUIA_Toolbar_ImageNormal, (IPTR)"3D.toolbar",
++					MUIA_Toolbar_ImageSelect, (IPTR)"3D_S.toolbar",
+ 					MUIA_Toolbar_Description, TB_Description,
+ 					MUIA_Toolbar_Horizontal, TRUE,
+ 					MUIA_Font, MUIV_Font_Tiny,
+@@ -214,7 +214,7 @@
+ 
+ 		struct Window3D_Data* data = (Window3D_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+@@ -224,7 +224,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG Window3D_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR Window3D_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct Window3D_Data* data = (Window3D_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/WindowSIRDS.cpp muimathx-src-svn46.aros/WindowSIRDS.cpp
+--- muimathx-src-svn46/WindowSIRDS.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/WindowSIRDS.cpp	2021-01-20 09:17:13.550000000 +0000
+@@ -50,7 +50,7 @@
+ 	Quit
+ ****************************************************************************************/
+ 
+-static ULONG WindowSIRDS_Quit(struct IClass* cl, Object* obj, Msg msg)
++static IPTR WindowSIRDS_Quit(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct WindowSIRDS_Data* data = (WindowSIRDS_Data*)INST_DATA(cl, obj);
+ 	DoMethod(_app(obj), MUIM_Application_PushMethod, _app(obj), 2, MUIM_MathX_DisposeWindow, obj);
+@@ -62,7 +62,7 @@
+ 	Copy
+ ****************************************************************************************/
+ 
+-static ULONG WindowSIRDS_Copy(struct IClass* cl, Object* obj, Msg msg)
++static IPTR WindowSIRDS_Copy(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct WindowSIRDS_Data* data  = (WindowSIRDS_Data*)INST_DATA(cl, obj);
+ 	Object* 							    app  = (Object*)xget(obj, MUIA_ApplicationObject);
+@@ -76,7 +76,7 @@
+ 	New
+ ****************************************************************************************/
+ 
+-static ULONG WindowSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR WindowSIRDS_New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	WindowSIRDS_Data tmp;
+ 	Object *strip, *Toolbar;
+@@ -104,28 +104,28 @@
+ 
+ 	struct MUIP_Toolbar_Description TB_Description[] =
+ 	{
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_EDIT_HELP),				NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_EDIT_HELP),				0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_COPY_HELP),				NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_COPY_HELP),				0},
+ 		Toolbar_Space,
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_SAVEIFF_HELP),		NULL},
+-		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_PRINT_HELP),			NULL},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_SAVEIFF_HELP),		0},
++		{TDT_BUTTON, 0, 0, NULL, GetStr(MSG_WINSIRDS_PRINT_HELP),			0},
+ 		Toolbar_End,
+ 	};
+ 
+ 	obj = (Object*)DoSuperNew(cl, obj,
+ 		MUIA_Window_ID   	   , MAKE_ID('M','X','S','D'),
+-		MUIA_Window_Title		 , "dummy",
++		MUIA_Window_Title		 , (IPTR)"dummy",
+ 		MUIA_Window_Menustrip, strip = MUI_MakeObject(MUIO_MenustripNM, Menu, MUIO_MenustripNM_CommandKeyCheck),
+-		MUIA_HelpNode        , "GRAPHSIRDS",
++		MUIA_HelpNode        , (IPTR)"GRAPHSIRDS",
+ 		WindowContents, tmp.GR_Window = VGroup,
+ 
+ 			Child, tmp.GR_Buttons = HGroup,
+ 				Child, Toolbar  = ToolbarObject,
+ 					MUIA_Toolbar_ImageType, MUIV_Toolbar_ImageType_File,
+-					MUIA_Toolbar_Path, GetTagData(MUIA_WindowSIRDS_ToolbarPath, (LONG)"PROGDIR:Images/std/", msg->ops_AttrList),
+-					MUIA_Toolbar_ImageNormal, "3D.toolbar",
+-					MUIA_Toolbar_ImageSelect, "3D_S.toolbar",
++					MUIA_Toolbar_Path, GetTagData(MUIA_WindowSIRDS_ToolbarPath, (IPTR)"PROGDIR:Images/std/", msg->ops_AttrList),
++					MUIA_Toolbar_ImageNormal, (IPTR)"3D.toolbar",
++					MUIA_Toolbar_ImageSelect, (IPTR)"3D_S.toolbar",
+ 					MUIA_Toolbar_Description, TB_Description,
+ 					MUIA_Toolbar_Horizontal, TRUE,
+ 					MUIA_Font, MUIV_Font_Tiny,
+@@ -167,7 +167,7 @@
+ 
+ 		struct WindowSIRDS_Data* data = (WindowSIRDS_Data*)INST_DATA(cl, obj);
+ 		*data = tmp;
+-		return((ULONG)obj);
++		return((IPTR)obj);
+ 	}
+ 	return(0);
+ }
+@@ -177,7 +177,7 @@
+ 	Set
+ ****************************************************************************************/
+ 
+-static ULONG WindowSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR WindowSIRDS_Set(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	struct WindowSIRDS_Data* data = (WindowSIRDS_Data*)INST_DATA(cl, obj);
+ 	struct TagItem *tag;
+diff -ruN muimathx-src-svn46/extrasrc/ilbmw.c muimathx-src-svn46.aros/extrasrc/ilbmw.c
+--- muimathx-src-svn46/extrasrc/ilbmw.c	2005-05-07 09:20:53.000000000 +0000
++++ muimathx-src-svn46.aros/extrasrc/ilbmw.c	2021-01-20 09:10:58.940000000 +0000
+@@ -92,7 +92,7 @@
+    if((!iff)||(!colortable))	return(CLIENT_ERROR);
+ 
+    /* size of CMAP is 3 bytes * ncolors */
+-   error = PushChunk(iff, NULL, ID_CMAP, ncolors * sizeofColorRegister);
++   error = PushChunk(iff, 0, ID_CMAP, ncolors * sizeofColorRegister);
+    if (error) return error;
+ 
+    D(bug("Pushed ID_CMAP, error = %ld\n",error));
+@@ -185,7 +185,7 @@
+       planes[dstDepth] = mask;
+ 
+    /* Write out a BODY chunk header */
+-   error = PushChunk(iff, NULL, ID_BODY, IFFSIZE_UNKNOWN);
++   error = PushChunk(iff, 0, ID_BODY, IFFSIZE_UNKNOWN);
+    if (error) return error;
+ 
+    /* Write out the BODY contents */
+diff -ruN muimathx-src-svn46/extrasrc/parse.c muimathx-src-svn46.aros/extrasrc/parse.c
+--- muimathx-src-svn46/extrasrc/parse.c	2010-01-18 22:15:47.000000000 +0000
++++ muimathx-src-svn46.aros/extrasrc/parse.c	2021-01-20 09:12:02.670000000 +0000
+@@ -52,7 +52,7 @@
+ 		*/
+ 
+ 		pi->clipboard = TRUE;
+-		if (!(iff->iff_Stream =	(ULONG)OpenClipboard(unit)))
++		if (!(iff->iff_Stream =	(IPTR)OpenClipboard(unit)))
+ 		{
+ 			return(NOFILE);
+ 		}
+@@ -66,7 +66,7 @@
+ 		/*
+ 		** Set up IFFHandle for buffered stdio I/O.
+ 		*/
+-		if (!(iff->iff_Stream = (ULONG)fopen((const char *)filename, (const char *)omodes[iffopenmode & 1])))
++		if (!(iff->iff_Stream = (IPTR)fopen((const char *)filename, (const char *)omodes[iffopenmode & 1])))
+ 		{
+ 			return(NOFILE);
+ 		}
+@@ -130,9 +130,9 @@
+ 		   fclose ((FILE *)(iff->iff_Stream));
+ 		}
+ 
+-	iff->iff_Stream = NULL;
+-	pi->clipboard = NULL;
+-	pi->opened = NULL;
++	iff->iff_Stream = 0;
++	pi->clipboard = 0;
++	pi->opened = 0;
+ }
+ 
+ 
+diff -ruN muimathx-src-svn46/mathX.cpp muimathx-src-svn46.aros/mathX.cpp
+--- muimathx-src-svn46/mathX.cpp	2012-07-28 16:09:41.000000000 +0000
++++ muimathx-src-svn46.aros/mathX.cpp	2021-01-20 08:56:48.140000000 +0000
+@@ -59,7 +59,7 @@
+ 	NewXXXGraph
+ ****************************************************************************************/
+ 
+-static ULONG _New2DGraph(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _New2DGraph(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 
+@@ -74,7 +74,7 @@
+  	return 0;
+ }
+ 
+-static ULONG _New3DGraph(struct IClass* cl, Object* obj,
++static IPTR _New3DGraph(struct IClass* cl, Object* obj,
+                        struct MUIP_MathX_New3DGraph* msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+@@ -93,7 +93,7 @@
+  	return 0;
+ }
+ 
+-static ULONG _NewSIRDSGraph(struct IClass* cl, Object* obj,
++static IPTR _NewSIRDSGraph(struct IClass* cl, Object* obj,
+                           struct MUIP_MathX_NewSIRDSGraph* msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+@@ -117,7 +117,7 @@
+ 	About
+ ****************************************************************************************/
+ 
+-static ULONG _About(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _About(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 	// Settings* s = data->s;
+@@ -140,7 +140,7 @@
+ 	Error
+ ****************************************************************************************/
+ 
+-static ULONG _Error(struct IClass* cl, Object* obj,
++static IPTR _Error(struct IClass* cl, Object* obj,
+ 										struct MUIP_MathX_Error* msg)
+ {
+ 	ErrorReq(GetStr(msg->msg), "mathX", obj, msg->win);
+@@ -152,7 +152,7 @@
+ 	DisposeWindow
+ ****************************************************************************************/
+ 
+-static ULONG _DisposeWindow(struct IClass* cl, Object* obj,
++static IPTR _DisposeWindow(struct IClass* cl, Object* obj,
+        				                   struct MUIP_MathX_DisposeWindow* msg)
+ {
+ 	setatt(msg->win, MUIA_Window_Open, FALSE);
+@@ -166,7 +166,7 @@
+ 	OpenSettings
+ ****************************************************************************************/
+ 
+-static ULONG _OpenSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _OpenSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 	setatt(data->WI_Settings, MUIA_Window_Open, TRUE);
+@@ -264,7 +264,7 @@
+ 	DeleteMsgPort(rxport);
+ }
+ 
+-static ULONG _ExecuteRexx(struct IClass* cl, Object* obj,
++static IPTR _ExecuteRexx(struct IClass* cl, Object* obj,
+                        	struct MUIP_MathX_ExecuteRexx* msg)
+ {
+ 	if (!rxport) return 0;
+@@ -318,7 +318,7 @@
+ 	New / Dispose
+ ****************************************************************************************/
+ 
+-static ULONG _New(struct IClass* cl, Object* obj, struct opSet* msg)
++static IPTR _New(struct IClass* cl, Object* obj, struct opSet* msg)
+ {
+ 	static struct MUI_Command arexx_list[] =
+ 	{
+@@ -361,12 +361,12 @@
+ 			return 0;
+ 		}
+ 
+-		return (ULONG)obj;
++		return (IPTR)obj;
+ 	}
+ 	return 0;
+ }
+ 
+-static ULONG _Dispose(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _Dispose(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	// struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 	return DoSuperMethodA(cl, obj, msg);
+@@ -377,25 +377,25 @@
+ 	Get
+ ****************************************************************************************/
+ 
+-static ULONG _Get(struct IClass* cl, Object* obj, struct opGet* msg)
++static IPTR _Get(struct IClass* cl, Object* obj, struct opGet* msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 	switch (msg->opg_AttrID)
+ 	{
+ 		case MUIA_MathX_Settings:
+-			*(msg->opg_Storage) = (ULONG)data->s;
++			*(msg->opg_Storage) = (IPTR)data->s;
+ 			return TRUE;
+ 
+ 		case MUIA_MathX_ActiveTerm:
+ 			Ausdruck* term = (Ausdruck*)xget(data->WI_ControlPanel, MUIA_ControlPanel_Term);
+-			*(msg->opg_Storage) = (ULONG)term;
++			*(msg->opg_Storage) = (IPTR)term;
+ 			return TRUE;
+ 
+ 	}
+   return DoSuperMethodA(cl, obj, (Msg)msg);
+ }
+ 
+-static ULONG _NewSettings(struct IClass* cl, Object* obj, Msg msg)
++static IPTR _NewSettings(struct IClass* cl, Object* obj, Msg msg)
+ {
+ 	struct MathX_Data* data = (MathX_Data*)INST_DATA(cl, obj);
+ 	data->s = (Settings*)xget(data->WI_Settings, MUIA_Settings_Settings);
+diff -ruN muimathx-src-svn46/mathX.hpp muimathx-src-svn46.aros/mathX.hpp
+--- muimathx-src-svn46/mathX.hpp	2009-08-11 19:09:36.000000000 +0000
++++ muimathx-src-svn46.aros/mathX.hpp	2021-01-20 08:56:14.590000000 +0000
+@@ -51,11 +51,11 @@
+ class Graph3D_Settings;
+ class GraphSIRDS_Settings;
+ 
+-struct  MUIP_MathX_New3DGraph  				{ULONG MethodID; Graph3D_Settings* sett;};
+-struct  MUIP_MathX_NewSIRDSGraph  		{ULONG MethodID; GraphSIRDS_Settings* sett;};
+-struct  MUIP_MathX_DisposeWindow    	{ULONG MethodID; Object* win;};
+-struct  MUIP_MathX_ExecuteRexx      	{ULONG MethodID; char* name;};
+-struct  MUIP_MathX_Error				     	{ULONG MethodID; int msg; Object* win;};
++struct  MUIP_MathX_New3DGraph  				{STACKED ULONG MethodID; STACKED Graph3D_Settings* sett;};
++struct  MUIP_MathX_NewSIRDSGraph  		{STACKED ULONG MethodID; STACKED GraphSIRDS_Settings* sett;};
++struct  MUIP_MathX_DisposeWindow    	{STACKED ULONG MethodID; STACKED Object* win;};
++struct  MUIP_MathX_ExecuteRexx      	{STACKED ULONG MethodID; STACKED char* name;};
++struct  MUIP_MathX_Error				     	{STACKED ULONG MethodID; STACKED int msg; STACKED Object* win;};
+ 
+ extern MsgPort* rxport;
+ 

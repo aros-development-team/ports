@@ -46,6 +46,7 @@ USER_CXXFLAGS  += -D__MATHX_VERDATE=\"`date +%d.%m.%Y`\" \
                 -D__REXXSYSLIB_STDLIBBASE__ -D__UTILITY_STDLIBBASE__ \
                 -DMUI_OBSOLETE -DDEBUG
 USER_INCLUDES:= -I$(PORTSDIR)/mathx/$(ARCHBASE) -I$(PORTSDIR)/mathx/$(ARCHBASE)/extrasrc
+USER_LDFLAGS := -static-libstdc++
 
 CXX_FILES := \
 	$(PORTSDIR)/mathx/$(ARCHBASE)/About \
@@ -107,6 +108,12 @@ CXX_FILES := \
 %fetch mmake=ports-scientific-mathx-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/mathx \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.bz2" \
     patches_specs=$(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
+
+%create_patch mmake=ports-scientific-mathx-create-patch \
+    archive=$(ARCHBASE) \
+    srcdir=$(ARCHBASE) \
+    suffixes="tar.bz2" \
+    destination=$(PORTSDIR)/mathx
 
 ##### create drawer icon #####
 

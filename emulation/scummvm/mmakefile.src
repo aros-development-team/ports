@@ -12,7 +12,7 @@ VERSION      := 1.8.0
 TARGETDIR    := $(AROS_CONTRIB)/Emu/Scummvm
 REPOSITORIES := https://downloads.scummvm.org/frs/scummvm/1.8.0
 
-SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-freetype2
+SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-freetype2 --datarootdir=$(TARGETDIR)
 NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
                 $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
                 $(NOWARN_FORMAT_OVERFLOW)

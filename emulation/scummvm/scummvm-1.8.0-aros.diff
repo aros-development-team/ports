@@ -1,6 +1,6 @@
 diff -ruN scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
 --- scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2016-02-26 22:20:21.000000000 +0000
-+++ scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-19 10:15:40.400000000 +0000
++++ scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-20 00:15:12.570000000 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -12,7 +12,7 @@ diff -ruN scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-1.8
  #include "backends/fs/amigaos4/amigaos4-fs.h"
 diff -ruN scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp
 --- scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs.cpp	2016-02-26 22:20:21.000000000 +0000
-+++ scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-19 10:15:40.400000000 +0000
++++ scummvm-1.8.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-20 00:15:12.570000000 +0000
 @@ -20,16 +20,29 @@
   *
   */
@@ -686,7 +686,7 @@ diff -ruN scummvm-1.8.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-1.8.0.aros/
  
 diff -ruN scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp
 --- scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos-main.cpp	2016-02-26 22:20:21.000000000 +0000
-+++ scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-19 10:15:40.400000000 +0000
++++ scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-20 00:15:12.570000000 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -698,7 +698,7 @@ diff -ruN scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-1
  #include "backends/plugins/sdl/sdl-provider.h"
 diff -ruN scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos.cpp
 --- scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos.cpp	2016-02-26 22:20:21.000000000 +0000
-+++ scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-19 10:15:40.400000000 +0000
++++ scummvm-1.8.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-20 00:15:12.570000000 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -710,18 +710,21 @@ diff -ruN scummvm-1.8.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-1.8.0.
  #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
 diff -ruN scummvm-1.8.0/configure scummvm-1.8.0.aros/configure
 --- scummvm-1.8.0/configure	2016-02-26 22:20:21.000000000 +0000
-+++ scummvm-1.8.0.aros/configure	2021-01-19 10:15:40.400000000 +0000
-@@ -1415,6 +1415,9 @@
++++ scummvm-1.8.0.aros/configure	2021-01-20 00:15:12.570000000 +0000
+@@ -1415,6 +1415,12 @@
  	_host_cpu=arm
  	_host_alias=arm-angstrom-linux-gnueabi
  	;;
-+aros*)
++*aros)
 +        _host_os=aros
++        datadir='${datarootdir}/data'
++        mandir='${datarootdir}/man'
++        docdir='${datarootdir}/doc/scummvm'
 +        ;;
  ppc-amigaos)
  	_host_os=amigaos
  	_host_cpu=powerpc
-@@ -1831,7 +1834,7 @@
+@@ -1831,7 +1837,7 @@
  			case $_host_os in
  			# newlib-based system include files suppress non-C89 function
  			# declarations under __STRICT_ANSI__
@@ -730,7 +733,7 @@ diff -ruN scummvm-1.8.0/configure scummvm-1.8.0.aros/configure
  				;;
  			*)
  				append_var CXXFLAGS "-ansi"
-@@ -2131,6 +2134,9 @@
+@@ -2131,6 +2137,9 @@
  echo_n "Checking hosttype... "
  echo $_host_os
  case $_host_os in
@@ -740,7 +743,7 @@ diff -ruN scummvm-1.8.0/configure scummvm-1.8.0.aros/configure
  	amigaos*)
  		append_var LDFLAGS "-Wl,--export-dynamic"
  		append_var LDFLAGS "-L/sdk/local/newlib/lib"
-@@ -2877,6 +2883,8 @@
+@@ -2877,6 +2886,8 @@
  			_seq_midi=no
  			_port_mk="backends/platform/openpandora/op-bundle.mk"
  			;;
@@ -749,7 +752,7 @@ diff -ruN scummvm-1.8.0/configure scummvm-1.8.0.aros/configure
  		ppc-amigaos)
  			# PPC Linker requires this to fix relocation errors
  			append_var CXXFLAGS "-mlongcall"
-@@ -3253,7 +3261,7 @@
+@@ -3253,7 +3264,7 @@
  #
  echo_n "Checking if host is POSIX compliant... "
  case $_host_os in
@@ -758,3 +761,29 @@ diff -ruN scummvm-1.8.0/configure scummvm-1.8.0.aros/configure
  		_posix=no
  		;;
  	android | beos* | bsd* | darwin* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | solaris* | sunos* | uclinux* | webos)
+@@ -4372,6 +4383,9 @@
+ test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
+ 
+ case $_host_os in
++        aros*)
++		append_var DEFINES "-DDATA_PATH=\\\"PROGDIR:data\\\""
++		;;
+ 	mingw*)
+ 		# Windows stores all the external data files in executable file.
+ 		;;
+@@ -4395,7 +4409,14 @@
+ 		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"host:plugins\\\""
+ 		;;
+ 	*)
+-		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
++		case $_host_os in
++        		aros*)
++				append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"PROGDIR:data\\\""
++				;;
++			*)
++				append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
++				;;
++		esac
+ 		;;
+ esac
+ 

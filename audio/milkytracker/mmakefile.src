@@ -2,11 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-audio : ports-audio-milkytracker-$(AROS_TARGET_CPU)
-#MM- ports-audio-milkytracker-i386 : ports-audio-milkytracker
-#DISABLED #MM- ports-audio-milkytracker-x86_64 : ports-audio-milkytracker
-#MM- ports-audio-milkytracker-m68k : ports-audio-milkytracker
-#MM- ports-audio-milkytracker-arm : ports-audio-milkytracker
+#MM- ports-audio : ports-audio-milkytracker
 
 #MM- ports-audio-milkytracker : contrib-sdl
 
@@ -15,21 +11,20 @@ VERSION      := 0.90.86
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/MilkyTracker
 REPOSITORIES := https://github.com/milkytracker/milkytracker.github.io/raw/master/files
 
-USER_CXXFLAGS:= -std=c++03 -UHAVE_CONFIG_H $(CFLAGS_PERMISSIVE)
+USER_CPPFLAGS := -UHAVE_CONFIG_H -D_XOPEN_SOURCE
+USER_CXXFLAGS:= -std=c++03 $(CFLAGS_PERMISSIVE)
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -static-libstdc++
 
 %fetch_and_build mmake=ports-audio-milkytracker prefix=$(TARGETDIR) \
        package=$(PACKAGE) version=$(VERSION) suffixes="tar.bz2" \
-       patch=no package_repo=$(REPOSITORIES) nix=no nix_dir_layout=no \
+       patch=yes package_repo=$(REPOSITORIES) nix=no nix_dir_layout=no \
        extracppflags="$(USER_INCLUDES)" extracxxflags="$(USER_CXXFLAGS)" extraoptions="" \
        postinstall=ports-audio-milkytracker-songs
-
 
 %copy_dir_recursive mmake=ports-audio-milkytracker-songs \
        src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/resources/music \
        dst=$(TARGETDIR)/music
-
 
 #MM
 ports-audio-milkytracker-clean :

@@ -1,0 +1,55 @@
+diff -ruN milkytracker-0.90.86/src/tracker/TrackerStartUp.cpp milkytracker-0.90.86.aros/src/tracker/TrackerStartUp.cpp
+--- milkytracker-0.90.86/src/tracker/TrackerStartUp.cpp	2013-11-09 00:12:01.000000000 +0000
++++ milkytracker-0.90.86.aros/src/tracker/TrackerStartUp.cpp	2013-11-09 09:10:27.000000000 +0000
+@@ -28,6 +28,8 @@
+  *
+  */
+ 
++#include <cstdlib>
++
+ #include "Tracker.h"
+ #include "XMFile.h"
+ #include "TrackerSettingsDatabase.h"
+@@ -126,7 +128,7 @@
+ 		screen->paintSplash(LogoBig::rawData, LogoBig::width, LogoBig::height, LogoBig::width*3, 3, (int)shade); 		
+ #endif
+ 		shade+=deltaT * (1.0f/6.25f);
+-		deltaT = abs(::PPGetTickCount() - startTime);
++		deltaT = abs(int(::PPGetTickCount() - startTime));
+ 		if (!deltaT) deltaT++;
+ 	}
+ #if defined(__EXCLUDE_BIGLOGO__) || defined(__LOWRES__)
+@@ -157,7 +159,7 @@
+ 		screen->paintSplash(LogoBig::rawData, LogoBig::width, LogoBig::height, LogoBig::width*3, 3, (int)shade); 		
+ #endif
+ 		shade-=deltaT * (1.0f/6.25f);
+-		deltaT = abs(::PPGetTickCount() - startTime);
++		deltaT = abs(int(::PPGetTickCount() - startTime));
+ 		if (!deltaT) deltaT++;
+ 	}
+ 	screen->clear(); 	
+diff -ruN milkytracker-0.90.86/src/tracker/sdl/SDL_Main.cpp milkytracker-0.90.86.aros/src/tracker/sdl/SDL_Main.cpp
+--- milkytracker-0.90.86/src/tracker/sdl/SDL_Main.cpp	2013-11-09 00:12:02.000000000 +0000
++++ milkytracker-0.90.86.aros/src/tracker/sdl/SDL_Main.cpp	2013-11-09 09:10:27.000000000 +0000
+@@ -305,8 +305,8 @@
+ 		(timerTicker - lButtonDownStartTime) > 25)
+ 	{
+ 		ev.code = SDLUserEventLMouseRepeat;
+-		ev.data1 = (void*)p.x;
+-		ev.data2 = (void*)p.y;
++		ev.data1 = (APTR)(IPTR)p.x;
++		ev.data2 = (APTR)(IPTR)p.y;
+ 		SDL_PushEvent((SDL_Event*)&ev);		
+ 
+ 		//PPEvent myEvent(eLMouseRepeat, &p, sizeof(PPPoint));		
+@@ -317,8 +317,8 @@
+ 		(timerTicker - rButtonDownStartTime) > 25)
+ 	{
+ 		ev.code = SDLUserEventRMouseRepeat;
+-		ev.data1 = (void*)p.x;
+-		ev.data2 = (void*)p.y;
++		ev.data1 = (APTR)(IPTR)p.x;
++		ev.data2 = (APTR)(IPTR)p.y;
+ 		SDL_PushEvent((SDL_Event*)&ev);		
+ 
+ 		//PPEvent myEvent(eRMouseRepeat, &p, sizeof(PPPoint));		

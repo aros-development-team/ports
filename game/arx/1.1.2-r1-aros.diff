@@ -1,6 +1,6 @@
 diff -ruN ArxLibertatis-1.1.2-r1/CMakeLists.txt ArxLibertatis-1.1.2-r1.aros/CMakeLists.txt
 --- ArxLibertatis-1.1.2-r1/CMakeLists.txt	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/CMakeLists.txt	2018-09-15 00:35:05.691554067 +0100
++++ ArxLibertatis-1.1.2-r1.aros/CMakeLists.txt	2018-09-14 23:35:05.691554067 +0000
 @@ -127,7 +127,9 @@
  )
  
@@ -22,7 +22,7 @@ diff -ruN ArxLibertatis-1.1.2-r1/CMakeLists.txt ArxLibertatis-1.1.2-r1.aros/CMak
  # Find required libraries
 diff -ruN ArxLibertatis-1.1.2-r1/src/core/ArxGame.cpp ArxLibertatis-1.1.2-r1.aros/src/core/ArxGame.cpp
 --- ArxLibertatis-1.1.2-r1/src/core/ArxGame.cpp	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/src/core/ArxGame.cpp	2018-09-15 00:35:05.691554067 +0100
++++ ArxLibertatis-1.1.2-r1.aros/src/core/ArxGame.cpp	2018-09-14 23:35:05.691554067 +0000
 @@ -49,6 +49,11 @@
  #include <algorithm>
  #include <sstream>
@@ -37,7 +37,7 @@ diff -ruN ArxLibertatis-1.1.2-r1/src/core/ArxGame.cpp ArxLibertatis-1.1.2-r1.aro
  #include "ai/PathFinderManager.h"
 diff -ruN ArxLibertatis-1.1.2-r1/src/gui/MenuWidgets.cpp ArxLibertatis-1.1.2-r1.aros/src/gui/MenuWidgets.cpp
 --- ArxLibertatis-1.1.2-r1/src/gui/MenuWidgets.cpp	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/src/gui/MenuWidgets.cpp	2018-09-15 00:35:05.691554067 +0100
++++ ArxLibertatis-1.1.2-r1.aros/src/gui/MenuWidgets.cpp	2018-09-14 23:35:05.691554067 +0000
 @@ -87,7 +87,7 @@
  
  #include "window/RenderWindow.h"
@@ -49,7 +49,7 @@ diff -ruN ArxLibertatis-1.1.2-r1/src/gui/MenuWidgets.cpp ArxLibertatis-1.1.2-r1.
  using std::string;
 diff -ruN ArxLibertatis-1.1.2-r1/src/input/Input.cpp ArxLibertatis-1.1.2-r1.aros/src/input/Input.cpp
 --- ArxLibertatis-1.1.2-r1/src/input/Input.cpp	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/src/input/Input.cpp	2018-09-15 00:35:05.691554067 +0100
++++ ArxLibertatis-1.1.2-r1.aros/src/input/Input.cpp	2018-09-14 23:35:05.691554067 +0000
 @@ -46,6 +46,11 @@
  
  #include "input/Input.h"
@@ -64,7 +64,7 @@ diff -ruN ArxLibertatis-1.1.2-r1/src/input/Input.cpp ArxLibertatis-1.1.2-r1.aros
  
 diff -ruN ArxLibertatis-1.1.2-r1/src/io/fs/FilesystemPOSIX.cpp ArxLibertatis-1.1.2-r1.aros/src/io/fs/FilesystemPOSIX.cpp
 --- ArxLibertatis-1.1.2-r1/src/io/fs/FilesystemPOSIX.cpp	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/src/io/fs/FilesystemPOSIX.cpp	2018-09-15 00:35:05.691554067 +0100
++++ ArxLibertatis-1.1.2-r1.aros/src/io/fs/FilesystemPOSIX.cpp	2021-01-20 08:27:34.640000000 +0000
 @@ -254,7 +254,12 @@
  	do {
  		
@@ -78,9 +78,18 @@ diff -ruN ArxLibertatis-1.1.2-r1/src/io/fs/FilesystemPOSIX.cpp ArxLibertatis-1.1
  			std::free(_buf), _buf = NULL;
  			return;
  		}
+@@ -287,6 +292,8 @@
+ 		}
+ #elif defined(ARX_HAVE_NAME_MAX)
+ 		name_max = std::max(NAME_MAX, 255);
++#elif defined(__AROS__)
++                name_max = 255;
+ #else
+ #  error "buffer size for readdir_r cannot be determined"
+ #endif
 diff -ruN ArxLibertatis-1.1.2-r1/src/platform/Lock.cpp ArxLibertatis-1.1.2-r1.aros/src/platform/Lock.cpp
 --- ArxLibertatis-1.1.2-r1/src/platform/Lock.cpp	2016-03-24 21:50:29.000000000 +0000
-+++ ArxLibertatis-1.1.2-r1.aros/src/platform/Lock.cpp	2018-09-15 01:20:15.455282714 +0100
++++ ArxLibertatis-1.1.2-r1.aros/src/platform/Lock.cpp	2018-09-14 23:35:05.691554067 +0000
 @@ -24,10 +24,15 @@
  #if defined(ARX_HAVE_PTHREADS)
  
@@ -97,3 +106,21 @@ diff -ruN ArxLibertatis-1.1.2-r1/src/platform/Lock.cpp ArxLibertatis-1.1.2-r1.ar
  }
  
  Lock::~Lock() {
+diff -ruN ArxLibertatis-1.1.2-r1/src/platform/Platform.h ArxLibertatis-1.1.2-r1.aros/src/platform/Platform.h
+--- ArxLibertatis-1.1.2-r1/src/platform/Platform.h	2016-03-24 21:50:29.000000000 +0000
++++ ArxLibertatis-1.1.2-r1.aros/src/platform/Platform.h	2021-01-20 08:31:39.880000000 +0000
+@@ -36,10 +36,13 @@
+ #define ARX_PLATFORM_WIN32   1
+ #define ARX_PLATFORM_LINUX   2
+ #define ARX_PLATFORM_MACOSX  3
++#define ARX_PLATFORM_AROS  4
+ #define ARX_PLATFORM_BSD     100 // Generic BSD system
+ #define ARX_PLATFORM_UNIX    101 // Generic UNIX system
+ 
+-#if defined(__linux)
++#if defined(__AROS__)
++	#define ARX_PLATFORM ARX_PLATFORM_AROS
++#elif defined(__linux)
+ 	#define ARX_PLATFORM ARX_PLATFORM_LINUX
+ #elif defined(_WIN32)
+ 	#define ARX_PLATFORM ARX_PLATFORM_WIN32

@@ -2,7 +2,7 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-##MM- ports-game : ports-game-arx
+#MM- ports-game : ports-game-arx
 
 #MM- ports-game-arx : \
 #MM     workbench-libs-freetype-linklibs \
@@ -18,7 +18,10 @@ VERSION       := 1.1.2-r1
 TARGETDIR     := $(AROS_CONTRIB)/Games/Adventure/ArxLibertatis
 REPOSITORIES  := https://github.com/arx/ArxLibertatis/archive
 
-NOWARN_FLAGS  := $(NOWARN_ERROR) $(NOWARN_RETURN_TYPE) $(NOWARN_MISLEADING_INDENTATION)
+NOWARN_FLAGS  := $(NOWARN_ERROR) $(NOWARN_RETURN_TYPE) $(NOWARN_UNUSED_VARIABLE) \
+        $(NOWARN_IMPLICIT_FALLTHROUGH) $(NOWARN_FORMAT_OVERFLOW) \
+        $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_CLASS_MEMACCESS) \
+        -Wno-aligned-new -Wno-deprecated-copy
 
 USER_CXXFLAGS := $(NOWARN_FLAGS) -I$(AROS_CONTRIB_INCLUDES)
 

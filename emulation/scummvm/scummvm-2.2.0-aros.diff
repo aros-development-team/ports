@@ -1,0 +1,611 @@
+diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
+--- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-20 02:53:41.240000000 +0000
+@@ -20,7 +20,7 @@
+  *
+  */
+ 
+-#if defined(__amigaos4__)
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
+ #include "backends/fs/amigaos4/amigaos4-fs.h"
+diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp
+--- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-20 03:47:11.360000000 +0000
+@@ -20,7 +20,7 @@
+  *
+  */
+ 
+-#if defined(__amigaos4__)
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/fs/amigaos4/amigaos4-fs.h"
+ #include "backends/fs/stdiostream.h"
+@@ -30,6 +30,12 @@
+ #define ENTER() /* debug(6, "Enter") */
+ #define LEAVE() /* debug(6, "Leave") */
+ 
++#if defined(DEBUG) && (DEBUG > 0)
++#define DOUT(x) x
++#else
++#define DOUT(x)
++#endif
++
+ /**
+  * Returns the last component of a given path.
+  *
+@@ -82,6 +88,7 @@
+ 	_bIsDirectory = false;
+ 	_bIsValid = false;
+ 
++#if defined(__amigaos4__)
+ 	// WORKAROUND:
+ 	// This is a workaround for a bug present in AmigaOS4's
+ 	// newlib.library 53.30 and lower.
+@@ -120,6 +127,26 @@
+ 	// Close dos.library and its IDOS interface again.
+ 	IExec->DropInterface((struct Interface *)IDOS);
+ 	IExec->CloseLibrary(DOSBase);
++#else
++    if ((_pFileLock = Lock(_sPath.c_str(), ACCESS_READ)) != BNULL)
++    {
++        struct FileInfoBlock infoBlock;
++
++        _bIsValid = true;
++        if (Examine(_pFileLock, &infoBlock))
++        {
++            if (infoBlock.fib_DirEntryType > 0)
++            {
++                _bIsDirectory = true;
++                // Add a trailing slash if needed
++                const char c = _sPath.lastChar();
++                if (c != '/' && c != ':')
++                        _sPath += '/';
++            }
++            _nProt = infoBlock.fib_Protection;
++        }
++    }
++#endif
+ 
+ 	LEAVE();
+ }
+@@ -131,14 +158,14 @@
+ 
+ 	while (true) {
+ 		char *n = new char[bufSize];
+-		if (IDOS->NameFromLock(pLock, (STRPTR)n, bufSize) != DOSFALSE) {
++		if (DOSCALL(NameFromLock(pLock, (STRPTR)n, bufSize)) != DOSFALSE) {
+ 			_sPath = n;
+-			_sDisplayName = pDisplayName ? pDisplayName : IDOS->FilePart((STRPTR)n);
++			_sDisplayName = pDisplayName ? pDisplayName : DOSCALL(FilePart((STRPTR)n));
+ 			delete[] n;
+ 			break;
+ 		}
+ 
+-		if (IDOS->IoErr() != ERROR_LINE_TOO_LONG) {
++		if (DOSCALL(IoErr()) != ERROR_LINE_TOO_LONG) {
+ 			_bIsValid = false;
+ 			debug(6, "IDOS->IoErr() failed - ERROR_LINE_TOO_LONG not matched!");
+ 			LEAVE();
+@@ -153,6 +180,7 @@
+ 	_bIsDirectory = false;
+ 	_bIsValid = false;
+ 
++#if defined(__amigaos4__)
+ 	// Check whether the node exists and if it's a directory.
+ 	struct ExamineData * pExd = IDOS->ExamineObjectTags(EX_FileLockInput,pLock,TAG_END);
+ 	if (pExd) {
+@@ -175,6 +203,25 @@
+ 	} else {
+ 		debug(6, "IDOS->ExamineData() failed - ExamineDosObject returned NULL!");
+     }
++#else
++    struct FileInfoBlock infoBlock;
++
++    if (Examine(pLock, &infoBlock))
++    {
++        _bIsValid = true;
++        if (infoBlock.fib_DirEntryType > 0)
++        {
++            _bIsDirectory = true;
++            _pFileLock = DupLock(pLock);
++
++            // Add a trailing slash if needed
++            const char c = _sPath.lastChar();
++            if (c != '/' && c != ':')
++                    _sPath += '/';
++        }
++        _nProt = infoBlock.fib_Protection;
++    }
++#endif
+ 
+ 	LEAVE();
+ }
+@@ -187,7 +234,7 @@
+ 	_bIsValid = node._bIsValid;
+ 	_bIsDirectory = node._bIsDirectory;
+ 	_sPath = node._sPath;
+-	_pFileLock = IDOS->DupLock(node._pFileLock);
++	_pFileLock = DOSCALL(DupLock(node._pFileLock));
+ 	_nProt = node._nProt;
+ 	LEAVE();
+ }
+@@ -195,7 +242,7 @@
+ AmigaOSFilesystemNode::~AmigaOSFilesystemNode() {
+ 	ENTER();
+ 	if (_pFileLock)
+-		IDOS->UnLock(_pFileLock);
++		DOSCALL(UnLock(_pFileLock));
+ 	LEAVE();
+ }
+ 
+@@ -212,29 +259,32 @@
+ 	// lock on it, it means it exists...
+ 	//
+ 	// =============================  Old code
+-	// BPTR pLock = IDOS->Lock((STRPTR)_sPath.c_str(), SHARED_LOCK);
++	// BPTR pLock = Lock((STRPTR)_sPath.c_str(), SHARED_LOCK);
+ 	// if (pLock)
+ 	// {
+-	// 	if (IDOS->Examine(pLock, fib) != DOSFALSE)
++	// 	if (Examine(pLock, fib) != DOSFALSE)
+ 	// 		nodeExists = true;
+-	// 	IDOS->UnLock(pLock);
++	// 	UnLock(pLock);
+ 	// }
+ 	//
+-	// IDOS->FreeDosObject(DOS_FIB, fib);
++	// FreeDosObject(DOS_FIB, fib);
+ 	//
+ 	// =============================  New code
+-	BPTR pLock = IDOS->Lock(_sPath.c_str(), SHARED_LOCK);
++	BPTR pLock = DOSCALL(Lock(_sPath.c_str(), SHARED_LOCK));
+ 	if (pLock) {
+ 		nodeExists = true;
+-		IDOS->UnLock(pLock);
++		DOSCALL(UnLock(pLock));
+ 	}
+ 
+-	LEAVE();
++	LEAVE()
+ 	return nodeExists;
+ }
+ 
+ AbstractFSNode *AmigaOSFilesystemNode::getChild(const Common::String &n) const {
+-	ENTER();
++	ENTER()
++
++        DOUT(warning("%s('%s')\n", __func__, n.c_str());)
++        
+ 	if (!_bIsDirectory) {
+ 		debug(6, "Not a directory!");
+ 		return 0;
+@@ -274,6 +324,7 @@
+ 		return true;
+ 	}
+ 
++#if defined(__amigaos4__)
+ 	APTR context = IDOS->ObtainDirContextTags(  	EX_FileLockInput,	_pFileLock,
+ 							EX_DoCurrentDir,	TRUE,  /* for softlinks */
+ 							EX_DataFields,		(EXF_NAME|EXF_LINK|EXF_TYPE),
+@@ -314,7 +365,48 @@
+ 		debug(6, "IDOS->ObtainDirContext() failed!");
+ 		ret = false;
+ 	}
+-
++#else
++        struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
++        if (fib)
++        {
++            if (Examine(_pFileLock, fib))
++            {
++                AmigaOSFilesystemNode *entry;
++                char *fullpath = new char [256];
++                strcpy(fullpath, _sPath.c_str());
++                ret = true;
++
++                while(ExNext(_pFileLock, fib))
++                {
++                    bool addEntry = false;
++                    fullpath[_sPath.size()] = '\0';
++
++                    if (Common::FSNode::kListAll == mode)
++                        addEntry = true;
++                    else if (( Common::FSNode::kListDirectoriesOnly == mode ) && (fib->fib_DirEntryType == ST_USERDIR))
++                        addEntry = true;
++                    else if (( Common::FSNode::kListFilesOnly == mode ) && (fib->fib_DirEntryType == ST_FILE))
++                        addEntry = true;
++                    if (addEntry)
++                    {
++                        AddPart(fullpath, (CONST_STRPTR)fib->fib_FileName, 256);
++
++                        BPTR pLock = Lock((CONST_STRPTR)fullpath, SHARED_LOCK );
++                        if (pLock) {
++                                entry = new AmigaOSFilesystemNode( pLock, (const char *)fib->fib_FileName );
++                                if (entry) {
++                                        myList.push_back(entry);
++                                }
++
++                                UnLock(pLock);
++                        }
++                    }
++                }
++            }
++
++            FreeDosObject(DOS_FIB, fib);
++        }
++#endif
+ 	LEAVE();
+ 
+ 	return ret;
+@@ -333,21 +425,21 @@
+ 
+ 	if (!_bIsDirectory) {
+ 		assert(!pLock);
+-		pLock = IDOS->Lock((CONST_STRPTR)_sPath.c_str(), SHARED_LOCK);
++		pLock = DOSCALL(Lock((CONST_STRPTR)_sPath.c_str(), SHARED_LOCK));
+ 		assert(pLock);
+ 	}
+ 
+ 	AmigaOSFilesystemNode *node;
+ 
+-	BPTR parentDir = IDOS->ParentDir( pLock );
++	BPTR parentDir = DOSCALL(ParentDir( pLock ));
+ 	if (parentDir) {
+ 		node = new AmigaOSFilesystemNode(parentDir);
+-		IDOS->UnLock(parentDir);
++		DOSCALL(UnLock(parentDir));
+ 	} else
+ 		node = new AmigaOSFilesystemNode();
+ 
+ 	if (!_bIsDirectory) {
+-		IDOS->UnLock(pLock);
++		DOSCALL(UnLock(pLock));
+ 	}
+ 
+ 	LEAVE();
+@@ -359,10 +451,15 @@
+ 	if (!_bIsValid)
+ 		return false;
+ 
++        bool readable;
++#if defined(__amigaos4__)
+ 	// Regular RWED protection flags are low-active or inverted,
+ 	// thus the negation. Moreover, a pseudo root filesystem is
+ 	// readable whatever the protection says.
+-	bool readable = !(_nProt & EXDF_OTR_READ) || isRootNode();
++	readable = !(_nProt & EXDF_OTR_READ) || isRootNode();
++#else
++        readable = (_nProt & FIBF_OTR_READ) || isRootNode();
++#endif
+ 
+ 	return readable;
+ }
+@@ -371,35 +468,55 @@
+ 	if (!_bIsValid)
+ 		return false;
+ 
++	bool writable;
++#if defined(__amigaos4__)
+ 	// Regular RWED protection flags are low-active or inverted,
+ 	// thus the negation. Moreover, a pseudo root filesystem is
+ 	// never writable whatever the protection says.
+ 	// (Because of it's pseudo nature).
+-	bool writable = !(_nProt & EXDF_OTR_WRITE) && !isRootNode();
++	writable = !(_nProt & EXDF_OTR_WRITE) && !isRootNode();
++#else
++	writable = (_nProt & FIBF_OTR_WRITE) && !isRootNode();
++#endif
+ 
+ 	return writable;
+ }
+ 
++#if defined(__AROS__)
++struct sysVolNode
++{
++    struct Node svn_Node;
++    APTR                svn_Task;
++};
++#endif
+ AbstractFSList AmigaOSFilesystemNode::listVolumes() const {
+ 	ENTER();
+ 
+ 	AbstractFSList myList;
+ 
+-	const uint32 kLockFlags = LDF_READ | LDF_VOLUMES;
++	uint32 kLockFlags = LDF_READ | LDF_VOLUMES;
+ 	char buffer[MAXPATHLEN];
+-
+-	struct DosList *dosList = IDOS->LockDosList(kLockFlags);
++#if defined(__AROS__)
++        struct sysVolNode *newVolNode, *tmpNode;
++        struct List sysVolumes;
++        NEWLIST(&sysVolumes);
++#endif
++	struct DosList *dosList = DOSCALL(LockDosList(kLockFlags));
+ 	if (!dosList) {
+-		debug(6, "IDOS->LockDOSList() failed!");
++		debug(6, "Cannot lock the DOS Volume list");
+ 		LEAVE();
+ 		return myList;
+ 	}
+ 
+-	dosList = IDOS->NextDosEntry(dosList, LDF_VOLUMES);
++	dosList = DOSCALL(NextDosEntry(dosList, LDF_VOLUMES));
+ 	while (dosList) {
+ 		if (dosList->dol_Type == DLT_VOLUME &&
+-			dosList->dol_Name &&
+-			dosList->dol_Port) {
++#if defined(__amigaos4__)
++			dosList->dol_Port &&
++#else
++                        dosList->dol_Task &&
++#endif
++                        dosList->dol_Name) {
+ 
+ 			// The original line was
+ 			//
+@@ -413,7 +530,8 @@
+ 			//	1) dol_Task wasn't a task pointer, it was a message port instead.
+ 			//	2) it was redefined to be dol_Port in dos/obsolete.h in aforementioned SDK.
+ 
+-			// Copy name to buffer.
++#if defined(__amigaos4__)
++ 			// Copy name to buffer.
+ 			IDOS->CopyStringBSTRToC(dosList->dol_Name, buffer, MAXPATHLEN);
+ 
+ 			// Volume name + '\0'.
+@@ -444,11 +562,61 @@
+ 			}
+ 
+ 			delete[] volName;
++#else
++                        strncpy(buffer, AROS_BSTR_ADDR(dosList->dol_Name), AROS_BSTR_strlen(dosList->dol_Name));
++                        buffer[AROS_BSTR_strlen(dosList->dol_Name)] = '\0';
++			// Volume name + ':\0'
++			char *volName = new char [strlen(buffer) + 2];
++			strcpy(volName, buffer);
++			strcat(volName, ":");
++
++                        newVolNode = (struct sysVolNode *)AllocVec(sizeof(struct sysVolNode), MEMF_CLEAR);
++                        newVolNode->svn_Node.ln_Name = volName;
++                        newVolNode->svn_Task = dosList->dol_Task;
++                        AddTail(&sysVolumes, &newVolNode->svn_Node);
++#endif
+ 		}
+-		dosList = IDOS->NextDosEntry(dosList, LDF_VOLUMES);
++		dosList = DOSCALL(NextDosEntry(dosList, LDF_VOLUMES));
+ 	}
+-
+-	IDOS->UnLockDosList(kLockFlags);
++	DOSCALL(UnLockDosList(kLockFlags));
++#if defined(__AROS__)
++        kLockFlags = LDF_READ | LDF_DEVICES;
++	dosList = LockDosList(kLockFlags);
++	if (!dosList) {
++		debug(6, "Cannot lock the DOS Device list");
++		LEAVE();
++		return myList;
++ 	}
++ 
++	dosList = NextDosEntry(dosList, LDF_DEVICES);
++	while (dosList) {
++                ForeachNodeSafe(&sysVolumes, newVolNode, tmpNode)
++                {
++                    if (dosList->dol_Task == newVolNode->svn_Task)
++                    {
++                        BPTR volumeLock = Lock(newVolNode->svn_Node.ln_Name, SHARED_LOCK);
++                        Remove(&newVolNode->svn_Node);
++                        if (volumeLock)
++                        {
++                            char *devName = new char [AROS_BSTR_strlen(dosList->dol_Name) + 1];
++                            strncpy(devName, AROS_BSTR_ADDR(dosList->dol_Name), AROS_BSTR_strlen(dosList->dol_Name));
++                            devName[AROS_BSTR_strlen(dosList->dol_Name)] = '\0';
++                            sprintf(buffer, "%s (%s)", newVolNode->svn_Node.ln_Name, devName);
++                            delete[] devName;
++                            AmigaOSFilesystemNode *entry = new AmigaOSFilesystemNode(volumeLock, buffer);
++                            if (entry) {
++                                    myList.push_back(entry);
++                            }
++                            UnLock(volumeLock);
++                        }
++                        delete[] newVolNode->svn_Node.ln_Name;
++                        FreeVec(newVolNode);
++                    }
++                }
++		dosList = NextDosEntry(dosList, LDF_DEVICES);
++	}
++	UnLockDosList(kLockFlags);
++#endif
+ 
+ 	LEAVE();
+ 
+diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h
+--- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h	2021-01-20 02:53:41.240000000 +0000
+@@ -37,6 +37,13 @@
+ 
+ #include "backends/fs/abstract-fs.h"
+ 
++#if defined(__amigaos4__)
++#define DOSCALL(x)      IDOS->x
++#else
++#include <dos/bptr.h>
++#define DOSCALL(x)      x
++#endif
++
+ /**
+  * Implementation of the ScummVM file system API.
+  *
+diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp
+--- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-20 03:44:15.320000000 +0000
+@@ -22,7 +22,7 @@
+ 
+ #include "common/scummsys.h"
+ 
+-#if defined(__amigaos4__)
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/fs/amigaos4/amigaos4-fs.h"
+ #include "backends/platform/sdl/amigaos/amigaos.h"
+@@ -31,6 +31,7 @@
+ 
+ int main(int argc, char *argv[]) {
+ 
++#if defined(__amigaos4__)
+ 	// The following will gather the application name and add the binary path
+ 	// to a variable in AmigaOS4's ENV(ARC) system. It will then be placed in
+ 	// AppPaths, so that ScummVM becomes AmiUpdate aware.
+@@ -63,6 +64,7 @@
+ 
+ 	// Set up a stack cookie to avoid crashes from a stack set too low.
+ 	static const char *stack_cookie __attribute__((used)) = "$STACK: 2048000";
++#endif
+ 
+ 	// Create our OSystem instance.
+ 	g_system = new OSystem_AmigaOS();
+diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp
+--- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-20 02:53:41.240000000 +0000
+@@ -22,7 +22,7 @@
+ 
+ #include "common/scummsys.h"
+ 
+-#ifdef __amigaos4__
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/platform/sdl/amigaos/amigaos.h"
+ #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
+diff -ruN scummvm-2.2.0/common/keyboard.h scummvm-2.2.0.aros/common/keyboard.h
+--- scummvm-2.2.0/common/keyboard.h	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/common/keyboard.h	2021-01-20 03:48:38.640000000 +0000
+@@ -25,7 +25,7 @@
+ 
+ #include "common/scummsys.h"
+ 
+-#if defined(__amigaos4__) || defined(__MORPHOS__)
++#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
+ // KEYCODE_LESS and KEYCODE_GREATER are already defined in AmigaOS, inside
+ // include/include_h/intuition/intuition.h (bug #3121350)
+ #if defined(KEYCODE_LESS) && defined(KEYCODE_GREATER)
+diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
+--- scummvm-2.2.0/configure	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/configure	2021-01-20 03:51:40.950000000 +0000
+@@ -1745,6 +1745,12 @@
+ 	_host_cpu=arm
+ 	_host_alias=arm-angstrom-linux-gnueabi
+ 	;;
++*aros)
++        _host_os=aros
++        datadir='${datarootdir}/data'
++        mandir='${datarootdir}/man'
++        docdir='${datarootdir}/doc/scummvm'
++        ;;
+ ppc-amigaos)
+ 	_host_os=amigaos
+ 	_host_cpu=powerpc
+@@ -2256,7 +2262,7 @@
+ 		case $_host_os in
+ 		# newlib-based system include files suppress non-C89 function
+ 		# declarations under __STRICT_ANSI__, undefine it
+-		3ds | amigaos* | android | androidsdl | dreamcast | ds | gamecube | mingw* | mint* | n64 | psp | ps3 | psp2 | switch | wii )
++		3ds | amigaos* | android | androidsdl | aros* | dreamcast | ds | gamecube | mingw* | mint* | n64 | psp | ps3 | psp2 | switch | wii )
+ 			append_var CXXFLAGS "-U__STRICT_ANSI__"
+ 			;;
+ 		*)
+@@ -2619,6 +2625,9 @@
+ echo_n "Checking hosttype... "
+ echo $_host_os
+ case $_host_os in
++        aros*)
++                add_line_to_config_mk 'AMIGAOS = 1'
++		;;
+ 	3ds)
+ 		_optimization_level=-O2
+ 		append_var DEFINES "-D__3DS__"
+@@ -3481,6 +3490,8 @@
+ 			_seq_midi=no
+ 			_port_mk="backends/platform/openpandora/op-bundle.mk"
+ 			;;
++                *-aros)
++			;;
+ 		ppc-amigaos)
+ 			# PPC Linker requires this to fix relocation errors
+ 			append_var CXXFLAGS "-mlongcall"
+@@ -3914,7 +3925,7 @@
+ #
+ echo_n "Checking if host is POSIX compliant... "
+ case $_host_os in
+-	amigaos* | cygwin* | dreamcast | ds | gamecube | mingw* | morphos | n64 | ps3 | psp2 | psp | riscos | wii)
++	aros* | amigaos* | cygwin* | dreamcast | ds | gamecube | mingw* | morphos | n64 | ps3 | psp2 | psp | riscos | wii)
+ 		_posix=no
+ 		;;
+ 	3ds | android | androidsdl | beos* | bsd* | darwin* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | solaris* | sunos* | switch | uclinux*)
+@@ -5646,6 +5657,9 @@
+ test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
+ 
+ case $_host_os in
++        aros*)
++		append_var DEFINES "-DDATA_PATH=\\\"PROGDIR:data\\\""
++		;;
+ 	mingw*)
+ 		# Windows stores all the external data files in executable file.
+ 		;;
+@@ -5668,7 +5682,14 @@
+ 		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir\\\""
+ 		;;
+ 	*)
+-		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
++		case $_host_os in
++        		aros*)
++				append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"PROGDIR:data\\\""
++				;;
++			*)
++				append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir/scummvm\\\""
++				;;
++		esac
+ 		;;
+ esac
+ 
+diff -ruN scummvm-2.2.0/ports.mk scummvm-2.2.0.aros/ports.mk
+--- scummvm-2.2.0/ports.mk	2020-09-13 21:05:39.000000000 +0000
++++ scummvm-2.2.0.aros/ports.mk	2021-01-20 03:53:10.560000000 +0000
+@@ -18,10 +18,12 @@
+ 	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
+ 	$(INSTALL) -d "$(DESTDIR)$(datadir)"
+ 	$(INSTALL) -c -m 644 $(DIST_FILES_THEMES) $(DIST_FILES_NETWORKING) $(DIST_FILES_VKEYBD) $(DIST_FILES_ENGINEDATA) "$(DESTDIR)$(datadir)/"
++ifdef USE_UNITY
+ 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/applications"
+ 	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.desktop" "$(DESTDIR)$(datarootdir)/applications/scummvm.desktop"
+ 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/metainfo"
+ 	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.appdata.xml" "$(DESTDIR)$(datarootdir)/metainfo/scummvm.appdata.xml"
++endif
+ ifdef DYNAMIC_MODULES
+ 	$(INSTALL) -d "$(DESTDIR)$(libdir)/scummvm/"
+ 	$(INSTALL) -c -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/scummvm/"
+@@ -40,10 +42,12 @@
+ 	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
+ 	$(INSTALL) -d "$(DESTDIR)$(datadir)"
+ 	$(INSTALL) -c -m 644 $(DIST_FILES_THEMES) $(DIST_FILES_NETWORKING) $(DIST_FILES_VKEYBD) $(DIST_FILES_ENGINEDATA) "$(DESTDIR)$(datadir)/"
++ifdef USE_UNITY
+ 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/applications"
+ 	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.desktop" "$(DESTDIR)$(datarootdir)/applications/scummvm.desktop"
+ 	$(INSTALL) -d "$(DESTDIR)$(datarootdir)/metainfo"
+ 	$(INSTALL) -c -m 644 "$(srcdir)/dists/scummvm.appdata.xml" "$(DESTDIR)$(datarootdir)/metainfo/scummvm.appdata.xml"
++endif
+ ifdef DYNAMIC_MODULES
+ 	$(INSTALL) -d "$(DESTDIR)$(libdir)/scummvm/"
+ 	$(INSTALL) -c -s -m 644 $(PLUGINS) "$(DESTDIR)$(libdir)/scummvm/"
+@@ -56,8 +60,10 @@
+ 	rm -f "$(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/scummvm.svg"
+ 	rm -rf "$(DESTDIR)$(docdir)"
+ 	rm -rf "$(DESTDIR)$(datadir)"
++ifdef USE_UNITY
+ 	rm -f "$(DESTDIR)$(datarootdir)/applications/scummvm.desktop"
+ 	rm -f "$(DESTDIR)$(datarootdir)/metainfo/scummvm.appdata.xml"
++endif
+ ifdef DYNAMIC_MODULES
+ 	rm -rf "$(DESTDIR)$(libdir)/scummvm/"
+ endif

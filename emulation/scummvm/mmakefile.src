@@ -5,12 +5,18 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM- ports-emulation : ports-emulation-scummvm
 
 #MM- ports-emulation-scummvm : \
+#MM     aros-scummvm \
+#MM     aros-scummvm-themes-fetch \
+#MM     aros-scummvm-themes-copy
+
+#MM- aros-scummvm : \
 #MM     contrib-sdl
 
+
 PACKAGE      := scummvm
-VERSION      := 1.8.0
+VERSION      := 1.9.0
 TARGETDIR    := $(AROS_CONTRIB)/Emu/Scummvm
-REPOSITORIES := https://downloads.scummvm.org/frs/scummvm/1.8.0
+REPOSITORIES := https://downloads.scummvm.org/frs/scummvm/$(VERSION)
 
 SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-freetype2 --datarootdir=$(TARGETDIR)
 NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
@@ -19,10 +25,18 @@ NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
 USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
 USER_LDFLAGS := -static-libstdc++
 
-%fetch_and_build mmake=ports-emulation-scummvm prefix=$(TARGETDIR) \
-    package=$(PACKAGE) version=$(VERSION) suffixes="tar.xz tar.bz2 tar.gz" \
-    package_repo=$(REPOSITORIES) patch=yes extraoptions="$(SCUMMVM_OPTS)" \
+%fetch_and_build mmake=aros-scummvm prefix="$(TARGETDIR)" \
+    package="$(PACKAGE)" version="$(VERSION)" suffixes="tar.xz tar.bz2 tar.gz" \
+    package_repo="$(REPOSITORIES)" patch=yes extraoptions="$(SCUMMVM_OPTS)" \
     crossbuild=no use_build_env=yes buildflags=no nix=no nix_dir_layout=no gnuflags=no
+
+SCUMMVM_THEME="Modern_ice.zip"
+
+%fetch mmake=aros-scummvm-themes-fetch \
+    archive_origins="http://wiki.scummvm.org/images/c/c7" \
+    archive="$(SCUMMVM_THEME)" suffixes="" location="$(PORTSDIR)/$(PACKAGE)"
+
+%copy_files_q mmake=aros-scummvm-themes-copy files="$(SCUMMVM_THEME)" src="$(PORTSDIR)/$(PACKAGE)" dst="$(TARGETDIR)/data"
 
 #MM
 ports-emulation-scummvm-clean :

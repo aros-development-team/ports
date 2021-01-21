@@ -9,6 +9,7 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM     contrib-sdl \
 #MM     contrib-openal \
 #MM     ports-libs-glew \
+#MM     libglew-includes-copy \
 #MM     ports-libs-boost \
 #MM     ports-game-arx-fetch \
 #MM     ports-game-arx-icon

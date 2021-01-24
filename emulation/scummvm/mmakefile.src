@@ -14,14 +14,15 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 
 PACKAGE      := scummvm
-VERSION      := 1.9.0
+VERSION      := 2.2.0
 TARGETDIR    := $(AROS_CONTRIB)/Emu/Scummvm
 REPOSITORIES := https://downloads.scummvm.org/frs/scummvm/$(VERSION)
 
-SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-freetype2 --datarootdir=$(TARGETDIR)
+SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-release --enable-freetype2 --datarootdir=$(TARGETDIR)
 NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
                 $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
                 $(NOWARN_FORMAT_OVERFLOW)
+USER_CXXFLAGS := -fvisibility=hidden  -fvisibility-inlines-hidden
 USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
 USER_LDFLAGS := -static-libstdc++
 

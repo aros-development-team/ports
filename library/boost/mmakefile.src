@@ -1,19 +1,31 @@
-# Copyright 2018, The AROS Development Team. All rights reserved.
+# Copyright 2018-2021, The AROS Development Team. All rights reserved.
 # $Id: mmakefile.src $
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-REPOSITORIES := https://dl.bintray.com/boostorg/release/1.68.0/source
-ARCHBASE := boost_1_68_0
+REPOSITORIES := https://dl.bintray.com/boostorg/release/1.75.0/source
+ARCHBASE := boost_1_75_0
 
 #MM- ports-libs : ports-libs-boost
 
-#MM- ports-libs-boost : ports-libs-boost-copy-include
+#MM ports-libs-boost : ports-libs-boost-copy-include
 #MM- ports-libs-boost-copy-include : ports-libs-boost-fetch
 
 %fetch mmake=ports-libs-boost-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/boost \
        location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.bz2"
 
 %copy_dir_recursive mmake=ports-libs-boost-copy-include src=$(PORTSDIR)/boost/$(ARCHBASE)/boost dst=$(AROS_INCLUDES)/boost
+%copy_dir_recursive mmake=ports-libs-boost-copy-src src=$(PORTSDIR)/boost/$(ARCHBASE) dst=$(GENDIR)/$(CURDIR)
+
+#MM ports-libs-boost : ports-libs-boost-copy-src
+
+#MM
+ports-libs-boost:
+	cd "$(GENDIR)/$(CURDIR)" && \
+	chmod +x "./bootstrap.sh" && \
+	./bootstrap.sh --prefix=$(AROS_DEVELOPER) --with-libraries=system,filesystem,iostreams && \
+	echo "using gcc : : \"$(AROS_CXX)\" : <compileflags>\"$(CXXFLAGS)\" <linkflags>\"$(LDFLAGS)\" ;\n" > $(GENDIR)/$(CURDIR)/user-config.jam && \
+	./b2 -sBOOST_ROOT="$(GENDIR)/$(CURDIR)" toolset=gcc
+	cp $(GENDIR)/$(CURDIR)/stage/lib/lib*.a $(AROS_DEVELOPER)/lib
 
 %common

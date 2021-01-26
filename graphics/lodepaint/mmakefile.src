@@ -10,10 +10,11 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM    ports-graphics-lodepaint-skins
 
 #MM  ports-graphics-lodepaint-skins : ports-graphics-lodepaint-fetch
-
-REPOSITORIES := http://archives.aros-exec.org/share/graphics/edit
-ARCHBASE     := lodepaint_src_svn146
+REPOSITORIES := https://sourceforge.net/code-snapshots/svn/l/lo/lodepaint/code
+ARCHBASE     := lodepaint-code-r150-trunk
+ARCHSUFFIX  := zip
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/Lodepaint
+LPPATCHSPECS=lodepaint_src_svn150.diff:$(ARCHBASE):-p1
 
 NOWARN_FLAGS := $(NOWARN_WRITE_STRINGS) $(NOWARN_MISLEADING_INDENTATION) \
     $(NOWARN_MAYBE_UNINITIALIZED) $(NOWARN_UNUSED_FUNCTION) $(NOWARN_VOLATILE_REGISTER_VAR) \
@@ -77,7 +78,6 @@ CXXFILES := \
     main_program/src/lpi/lpi_base64 \
     main_program/src/lpi/lpi_bignums \
     main_program/src/lpi/lpi_color \
-    main_program/src/lpi/lpi_crypto \
     main_program/src/lpi/lpi_file \
     main_program/src/lpi/lpi_font \
     main_program/src/lpi/lpi_math \
@@ -145,11 +145,11 @@ CXXFILES := $(addprefix $(PORTSDIR)/lodepaint/$(ARCHBASE)/,$(CXXFILES))
 
 
 %fetch mmake=ports-graphics-lodepaint-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/lodepaint \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.bz2" \
-    patches_specs=lodepaint_src_svn146.diff:$(ARCHBASE):-p1
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="$(ARCHSUFFIX)" \
+    patches_specs=$(LPPATCHSPECS)
 
 %create_patch mmake=ports-graphics-lodepaint-create-patch \
-    archive=$(ARCHBASE) destination=$(PORTSDIR)/lodepaint suffixes="tar.bz2"
+    archive=$(ARCHBASE) destination=$(PORTSDIR)/lodepaint suffixes="$(ARCHSUFFIX)"
 
 %copy_dir_recursive mmake=ports-graphics-lodepaint-skins \
     src=$(PORTSDIR)/lodepaint/$(ARCHBASE)/main_program/Skins dst=$(TARGETDIR)/Skins excludefiles=

@@ -1,0 +1,65 @@
+diff -ruN grafX2-v2.7/src/c64load.c grafX2-v2.7.aros/src/c64load.c
+--- grafX2-v2.7/src/c64load.c	2020-01-30 22:58:51.000000000 +0000
++++ grafX2-v2.7.aros/src/c64load.c	2021-01-26 06:29:04.860000000 +0000
+@@ -36,8 +36,14 @@
+ #include "gfx2mem.h"
+ #include "gfx2log.h"
+ 
++#ifdef CPU_6502_STATIC
++#undef CPU_6502_STATIC
++#endif
+ #define CPU_6502_STATIC
+ #define CPU_6502_DEPENDENCIES_H "6502types.h"
++#ifdef CPU_6502_USE_LOCAL_HEADER
++#undef CPU_6502_USE_LOCAL_HEADER
++#endif
+ #define CPU_6502_USE_LOCAL_HEADER
+ #include "6502.h"
+ 
+diff -ruN grafX2-v2.7/src/filesel.c grafX2-v2.7.aros/src/filesel.c
+--- grafX2-v2.7/src/filesel.c	2020-01-30 22:58:51.000000000 +0000
++++ grafX2-v2.7.aros/src/filesel.c	2021-01-26 06:04:13.460000000 +0000
+@@ -28,6 +28,9 @@
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
+     #include <proto/dos.h>
+     #include <sys/types.h>
++#if defined(__AROS__)
++#define towlower tolower
++#endif
+ #elif defined (__MINT__)
+     #include <mint/sysbind.h>
+ #elif defined(WIN32)
+diff -ruN grafX2-v2.7/src/ifformat.c grafX2-v2.7.aros/src/ifformat.c
+--- grafX2-v2.7/src/ifformat.c	2020-01-30 22:58:51.000000000 +0000
++++ grafX2-v2.7.aros/src/ifformat.c	2021-01-26 06:00:56.090000000 +0000
+@@ -52,6 +52,12 @@
+ #endif
+ #endif
+ 
++#ifdef __AROS__
++#include <exec/types.h>
++#include <aros/macros.h>
++#define be32toh	AROS_BE2LONG
++#endif
++
+ //////////////////////////////////// IFF ////////////////////////////////////
+ /** @defgroup IFF Interchange File Format
+  * @ingroup loadsaveformats
+diff -ruN grafX2-v2.7/src/keycodes.h grafX2-v2.7.aros/src/keycodes.h
+--- grafX2-v2.7/src/keycodes.h	2020-01-30 22:58:51.000000000 +0000
++++ grafX2-v2.7.aros/src/keycodes.h	2021-01-26 05:07:35.900000000 +0000
+@@ -463,6 +463,14 @@
+ // end of KEY definitions for others
+ #endif
+ 
++#if defined(__AROS__)
++#define KEY_A KEY_a
++#define KEY_C KEY_c
++#define KEY_O KEY_o
++#define KEY_S KEY_s
++#define KEY_Z KEY_z
++#endif
++
+ /// Indicates "no keyboard shortcut".
+ #define KEY_NONE            0
+ 

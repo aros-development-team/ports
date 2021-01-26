@@ -6,9 +6,12 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-graphics-grafx2 : includes linklibs contrib-sdl \
 #MM    contrib-sdl-sdl-image contrib-sdl-sdl-ttf contrib-development-lua \
-#MM    ports-graphics-grafx2-fetch ports-graphics-grafx2-version \
+#MM    ports-graphics-grafx2-genfiles \
 #MM    ports-graphics-grafx2-docs \
 #MM    ports-graphics-grafx2-data
+
+#MM    ports-graphics-grafx2-genfiles : ports-graphics-grafx2-fetch ports-graphics-grafx2-3rdparty
+#MM    ports-graphics-grafx2-3rdparty : ports-graphics-grafx2-fetch
 
 #MM  ports-graphics-grafx2-docs : ports-graphics-grafx2-fetch
 
@@ -16,8 +19,9 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM  ports-graphics-grafx2-quick : ports-graphics-grafx2-fetch
 
-REPOSITORIES := https://gitlab.com/GrafX2/grafX2/-/archive/v2.4
-ARCHBASE     := grafX2-v2.4
+GFX2VERS     := 2.7
+REPOSITORIES := https://gitlab.com/GrafX2/grafX2/-/archive/v$(GFX2VERS)
+ARCHBASE     := grafX2-v$(GFX2VERS)
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/GrafX2
 SDL_PREFIX   := $(AROS_DEVELOPER)
 ARCHSUFFIX   := "tgz"
@@ -25,15 +29,18 @@ PATCHSPEC    := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
 
 NOWARN_FLAGS := $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_UNUSED_BUT_SET_VARIABLE) $(NOWARN_CPP) $(NOWARN_FORMAT)
 USER_CFLAGS  := $(COMPILER_COMMON_CFLAGS) $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags)
-USER_CPPFLAGS := -D__ENABLE_LUA__
-USER_INCLUDES:= -I$(AROS_INCLUDES)/lua -I$(AROS_CONTRIB_INCLUDES)
+USER_CPPFLAGS := -D__ENABLE_LUA__ -DUSE_SDL -D__no_tifflib__ -DNORECOIL -DCPU_6502_STATIC -DCPU_6502_USE_LOCAL_HEADER -DCPU_6502_DEPENDENCIES_H=\"6502types.h\"
+USER_INCLUDES:= -I$(AROS_INCLUDES)/lua -I$(AROS_CONTRIB_INCLUDES) -iquote $(GENDIR)/$(CURDIR)/3rdparty/6502/API/emulation/CPU -iquote $(PORTSDIR)/grafx2/$(ARCHBASE)/src
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
+
+APIOBJ = sdlscreen
+PLATFORMOBJ :=
 
 FILES := \
 	main \
 	init \
 	graph \
-	sdlscreen \
+	$(APIOBJ) \
 	misc \
 	special \
 	buttons \
@@ -41,7 +48,6 @@ FILES := \
 	help \
 	operatio \
 	pages \
-	loadsave \
 	readline \
 	engine \
 	filesel \
@@ -60,6 +66,7 @@ FILES := \
 	pxdouble \
 	pxtriple \
 	pxtall2 \
+	pxtall3 \
 	pxwide2 \
 	pxquad \
 	windows \
@@ -71,6 +78,18 @@ FILES := \
 	transform \
 	pversion \
 	factory \
+	$(PLATFORMOBJ) \
+	loadsave \
+	loadsavefuncs \
+	pngformat \
+	motoformats \
+	stformats \
+	c64formats \
+	cpcformats \
+	ifformat \
+	msxformats \
+	packbits \
+	giformat \
 	fileformats \
 	miscfileformats \
 	libraw2crtc \
@@ -79,20 +98,31 @@ FILES := \
 	layers \
 	oldies \
 	tiles \
-	colorred
+	colorred \
+	unicode \
+	gfx2surface \
+	gfx2log \
+	gfx2mem \
+	tifformat \
+	c64load
 
-FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/src/,$(FILES)) $(GENDIR)/$(CURDIR)/version
+FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/src/,$(FILES))
+GENFILES := $(GENDIR)/$(CURDIR)/version $(GENDIR)/$(CURDIR)/6502
 
 %build_prog mmake=ports-graphics-grafx2 progname=GrafX2 \
-    files=$(FILES) targetdir=$(TARGETDIR) \
+    files="$(FILES) $(GENFILES)" targetdir=$(TARGETDIR) \
     uselibs="lua SDL_ttf SDL_image SDL GL jpeg png z freetype2"
 
 # SVN revision number
 $(GENDIR)/$(CURDIR)/version.c : | $(GENDIR)/$(CURDIR)
-	@$(ECHO) "char SVN_revision[]=\"2039\";" > $@
+	@$(ECHO) "char SVN_revision[]=\"c6460cf9\";" > $@
+
+$(GENDIR)/$(CURDIR)/6502.c : | $(GENDIR)/$(CURDIR)
+	mkdir -p $(GENDIR)/$(CURDIR)/doc
+	make -C $(GENDIR)/$(CURDIR)/3rdparty 6502 && $(CP) $(GENDIR)/$(CURDIR)/3rdparty/6502/sources/6502.c $@
 
 #MM
-ports-graphics-grafx2-version : $(GENDIR)/$(CURDIR)/version.c
+ports-graphics-grafx2-genfiles : $(GENDIR)/$(CURDIR)/version.c $(GENDIR)/$(CURDIR)/6502.c 
 
 ############################################################################################################
 
@@ -109,7 +139,10 @@ ports-graphics-grafx2-version : $(GENDIR)/$(CURDIR)/version.c
 %copy_dir_recursive mmake=ports-graphics-grafx2-docs src=$(PORTSDIR)/grafx2/$(ARCHBASE)/doc \
     dst=$(TARGETDIR)/doc
 
-%copy_dir_recursive mmake=ports-graphics-grafx2-data src=$(PORTSDIR)/grafx2/$(ARCHBASE)/share \
-    dst=$(TARGETDIR)/share
+%copy_dir_recursive mmake=ports-graphics-grafx2-data src=$(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2 \
+    dst=$(TARGETDIR)/data
+
+%copy_dir_recursive mmake=ports-graphics-grafx2-3rdparty src=$(PORTSDIR)/grafx2/$(ARCHBASE)/3rdparty \
+    dst=$(GENDIR)/$(CURDIR)/3rdparty
 
 %common

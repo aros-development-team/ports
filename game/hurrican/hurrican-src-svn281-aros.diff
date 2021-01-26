@@ -1,6 +1,6 @@
 diff -ruN hurrican-src-svn281/src/Main.cpp hurrican-src-svn281.aros/src/Main.cpp
---- hurrican-src-svn281/src/Main.cpp	2016-04-01 20:15:33.596920000 +0100
-+++ hurrican-src-svn281.aros/src/Main.cpp	2017-04-14 18:48:24.622908718 +0100
+--- hurrican-src-svn281/src/Main.cpp	2016-04-01 19:15:33.596920000 +0000
++++ hurrican-src-svn281.aros/src/Main.cpp	2017-04-14 17:48:24.622908718 +0000
 @@ -657,7 +657,11 @@
  #else // NON-ANDROID:
  #ifdef USE_HOME_DIR
@@ -13,9 +13,27 @@ diff -ruN hurrican-src-svn281/src/Main.cpp hurrican-src-svn281.aros/src/Main.cpp
          bool success = false;
          if (homedir) {
              const char *subdir = "/.hurrican";
+diff -ruN hurrican-src-svn281/src/Menu.cpp hurrican-src-svn281.aros/src/Menu.cpp
+--- hurrican-src-svn281/src/Menu.cpp	2016-03-31 11:09:38.824308000 +0000
++++ hurrican-src-svn281.aros/src/Menu.cpp	2021-01-25 23:53:35.780000000 +0000
+@@ -3364,11 +3364,10 @@
+             Highscores[i].Skill      = FixEndian(Highscores[i].Skill);
+             Highscores[i].Pruefsumme = FixEndian(Highscores[i].Pruefsumme);
+         }
++        // Und Datei wieder schliessen
++        //
++        fclose(Datei);
+     }
+-
+-    // Und Datei wieder schliessen
+-    //
+-    fclose(Datei);
+ }
+ 
+ // --------------------------------------------------------------------------------------
 diff -ruN hurrican-src-svn281/src/SDLPort/SDL_fmod.cpp hurrican-src-svn281.aros/src/SDLPort/SDL_fmod.cpp
 --- hurrican-src-svn281/src/SDLPort/SDL_fmod.cpp	2015-11-03 12:00:19.242492000 +0000
-+++ hurrican-src-svn281.aros/src/SDLPort/SDL_fmod.cpp	2017-04-14 19:14:46.184108518 +0100
++++ hurrican-src-svn281.aros/src/SDLPort/SDL_fmod.cpp	2017-04-14 18:14:46.184108518 +0000
 @@ -353,8 +353,13 @@
      if ((inputmode & FSOUND_LOADMEMORY) == FSOUND_LOADMEMORY)
      {
@@ -31,8 +49,8 @@ diff -ruN hurrican-src-svn281/src/SDLPort/SDL_fmod.cpp hurrican-src-svn281.aros/
          chunk = Mix_QuickLoad_WAV( (Uint8*)filename );
  #endif
 diff -ruN hurrican-src-svn281/src/SDLPort/SDL_port.h hurrican-src-svn281.aros/src/SDLPort/SDL_port.h
---- hurrican-src-svn281/src/SDLPort/SDL_port.h	2015-10-12 23:20:09.353457000 +0100
-+++ hurrican-src-svn281.aros/src/SDLPort/SDL_port.h	2017-04-14 18:48:24.623908728 +0100
+--- hurrican-src-svn281/src/SDLPort/SDL_port.h	2015-10-12 22:20:09.353457000 +0000
++++ hurrican-src-svn281.aros/src/SDLPort/SDL_port.h	2017-04-14 17:48:24.623908728 +0000
 @@ -42,11 +42,13 @@
  
  #define CONST       const
@@ -49,7 +67,7 @@ diff -ruN hurrican-src-svn281/src/SDLPort/SDL_port.h hurrican-src-svn281.aros/sr
  typedef const char* LPCTSTR;
 diff -ruN hurrican-src-svn281/src/SDLPort/texture.cpp hurrican-src-svn281.aros/src/SDLPort/texture.cpp
 --- hurrican-src-svn281/src/SDLPort/texture.cpp	2015-11-08 23:44:22.180351000 +0000
-+++ hurrican-src-svn281.aros/src/SDLPort/texture.cpp	2017-04-14 19:16:25.869105053 +0100
++++ hurrican-src-svn281.aros/src/SDLPort/texture.cpp	2017-04-14 18:16:25.869105053 +0000
 @@ -364,8 +364,11 @@
          rawSurf = IMG_Load(fullpath.c_str());
      } else              // Load from memory

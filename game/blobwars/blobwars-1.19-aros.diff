@@ -1,6 +1,6 @@
 diff -ruN blobwars-1.19/src/CReplayData.cpp blobwars-1.19.aros/src/CReplayData.cpp
---- blobwars-1.19/src/CReplayData.cpp	2011-04-17 15:56:56.000000000 +0100
-+++ blobwars-1.19.aros/src/CReplayData.cpp	2014-08-01 12:40:12.222154071 +0100
+--- blobwars-1.19/src/CReplayData.cpp	2011-04-17 14:56:56.000000000 +0000
++++ blobwars-1.19.aros/src/CReplayData.cpp	2014-08-01 11:40:12.222154071 +0000
 @@ -38,7 +38,11 @@
  
  void ReplayData::printReplayInformation()
@@ -14,9 +14,9 @@ diff -ruN blobwars-1.19/src/CReplayData.cpp blobwars-1.19.aros/src/CReplayData.c
  	printf("Map         : %s\n", header.map);
  	printf("Score       : %d\n", header.score);
 diff -ruN blobwars-1.19/src/headers.h blobwars-1.19.aros/src/headers.h
---- blobwars-1.19/src/headers.h	2011-04-17 15:56:56.000000000 +0100
-+++ blobwars-1.19.aros/src/headers.h	2014-08-01 12:40:12.222154071 +0100
-@@ -35,6 +35,12 @@
+--- blobwars-1.19/src/headers.h	2011-04-17 14:56:56.000000000 +0000
++++ blobwars-1.19.aros/src/headers.h	2021-01-28 01:17:46.824088300 +0000
+@@ -35,6 +35,13 @@
  #ifndef SDL_GetGamma
  extern DECLSPEC int SDLCALL SDL_GetGamma(float *red, float *green, float *blue);
  #endif
@@ -26,10 +26,11 @@ diff -ruN blobwars-1.19/src/headers.h blobwars-1.19.aros/src/headers.h
 +#include <SDL/SDL_mixer.h>
 +#include <SDL/SDL_ttf.h>
 +#include <SDL/SDL_net.h>
++#undef connect
  #else
  #include "SDL/SDL.h"
  #include "SDL/SDL_image.h"
-@@ -43,7 +49,7 @@
+@@ -43,7 +50,7 @@
  #include "SDL/SDL_net.h"
  #endif
  
@@ -39,8 +40,8 @@ diff -ruN blobwars-1.19/src/headers.h blobwars-1.19.aros/src/headers.h
  #define _(string) gettext(string)
  #else
 diff -ruN blobwars-1.19/src/init.cpp blobwars-1.19.aros/src/init.cpp
---- blobwars-1.19/src/init.cpp	2011-04-17 15:56:56.000000000 +0100
-+++ blobwars-1.19.aros/src/init.cpp	2014-08-01 12:40:12.222154071 +0100
+--- blobwars-1.19/src/init.cpp	2011-04-17 14:56:56.000000000 +0000
++++ blobwars-1.19.aros/src/init.cpp	2014-08-01 11:40:12.222154071 +0000
 @@ -92,6 +92,12 @@
  #if UNIX
  void setupUserHomeDirectory()
@@ -68,8 +69,8 @@ diff -ruN blobwars-1.19/src/init.cpp blobwars-1.19.aros/src/init.cpp
  	snprintf(dir, sizeof dir, "%s/.parallelrealities", userHome);
  	if ((mkdir(dir, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) && (errno != EEXIST))
 diff -ruN blobwars-1.19/src/mapEditor.cpp blobwars-1.19.aros/src/mapEditor.cpp
---- blobwars-1.19/src/mapEditor.cpp	2011-04-17 15:56:56.000000000 +0100
-+++ blobwars-1.19.aros/src/mapEditor.cpp	2014-08-01 12:42:53.566867275 +0100
+--- blobwars-1.19/src/mapEditor.cpp	2011-04-17 14:56:56.000000000 +0000
++++ blobwars-1.19.aros/src/mapEditor.cpp	2014-08-01 11:42:53.566867275 +0000
 @@ -242,7 +242,7 @@
  		fclose(fp);
  	}

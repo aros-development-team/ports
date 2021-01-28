@@ -48,8 +48,11 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 
 ARCHBASE := blobwars
+VERSION := 1.19
 REPOSITORIES := sf://blobwars
 TARGETDIR := $(AROS_CONTRIB)/Games/Platform/Blobwars
+
+PATCHSPECS := $(ARCHBASE)-$(VERSION)-aros.diff:$(ARCHBASE)-$(VERSION):-p1
 
 # PROG := blobwars
 PAKNAME := blobwars.pak
@@ -57,7 +60,7 @@ DOCS := doc/*
 ICONS := icons/
 DATA := data gfx sound music
 
-VERSION := 1.19
+
 RELEASE := 0
 USEPAK := 0
 
@@ -171,18 +174,21 @@ MAPFILES  := $(addprefix $(PORTSDIR)/$(ARCHBASE)/$(ARCHBASE)-$(VERSION)/src/,$(M
 #############################################################################################################
 
 %build_prog mmake=ports-game-blobwars-bin progname=Blobwars \
-    files= cxxfiles=$(GAMEFILES) targetdir=$(TARGETDIR) \
-    uselibs="SDL_mixer SDL_image SDL_ttf SDL_net freetype2 mikmod vorbisfile vorbis ogg png jpeg SDL z stdc++"
+    files= cxxfiles="$(GAMEFILES)" targetdir="$(TARGETDIR)" \
+    uselibs="SDL_mixer SDL_image SDL_ttf SDL_net net freetype2 mikmod vorbisfile vorbis ogg png jpeg SDL z stdc++"
 
 %build_prog mmake=ports-game-blobwars-map progname=Mapeditor \
-    files= cxxfiles=$(MAPFILES) targetdir=$(TARGETDIR) \
-    uselibs="SDL_mixer SDL_image SDL_ttf SDL_net freetype2 mikmod vorbisfile vorbis ogg png jpeg SDL z stdc++"
+    files= cxxfiles="$(MAPFILES)" targetdir="$(TARGETDIR)" \
+    uselibs="SDL_mixer SDL_image SDL_ttf SDL_net net freetype2 mikmod vorbisfile vorbis ogg png jpeg SDL z stdc++"
 
 #############################################################################################################
 
-%fetch mmake=ports-game-blobwars-fetch archive=$(ARCHBASE)-$(VERSION) destination=$(PORTSDIR)/$(ARCHBASE) \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
-    patches_specs=blobwars-1.19-aros.diff:$(ARCHBASE)-$(VERSION):-p1
+%fetch mmake=ports-game-blobwars-fetch archive="$(ARCHBASE)-$(VERSION)" destination="$(PORTSDIR)/$(ARCHBASE)" \
+    location="$(PORTSSOURCEDIR)" archive_origins="$(REPOSITORIES)" suffixes="tar.gz" \
+    patches_specs="$(PATCHSPECS)"
+
+%create_patch mmake=ports-game-blobwars-create-patch archive="$(ARCHBASE)-$(VERSION)" \
+    suffixes="tar.gz" destination="$(PORTSDIR)/$(ARCHBASE)"
 
 #############################################################################################################
 

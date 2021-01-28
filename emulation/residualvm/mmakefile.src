@@ -1,0 +1,58 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-emulation : ports-emulation-residualvm
+
+#MM- ports-emulation-residualvm : \
+#MM     aros-residualvm \
+#MM     aros-residualvm-themes-fetch \
+#MM     aros-residualvm-themes-copy
+
+#MM- aros-residualvm : \
+#MM     contrib-sdl
+
+
+PACKAGE      := residualvm
+VERSION      := 0.3.1
+TARGETDIR    := $(AROS_CONTRIB)/Emu/Residualvm
+REPOSITORIES := https://www.residualvm.org/downloads/release/$(VERSION)
+PATCHSPECS := $(PACKAGE)-$(VERSION)-sources-aros.diff:$(PACKAGE)-$(VERSION):-p1
+
+RESIDUALVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-release --enable-freetype2 --datarootdir=$(TARGETDIR)
+RESIDUALVM_ENV=DESTDIR=$(TARGETDIR)
+NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
+                $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
+                $(NOWARN_FORMAT_OVERFLOW)
+USER_CXXFLAGS := -fvisibility=hidden  -fvisibility-inlines-hidden
+USER_CPPFLAGS := -D__BSDSOCKET_NOLIBBASE__
+USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
+USER_LDFLAGS := -static-libstdc++
+
+%fetch mmake=aros-residualvm-fetch archive="$(PACKAGE)-$(VERSION)-sources" destination="$(PORTSDIR)/$(PACKAGE)" \
+    location="$(PORTSSOURCEDIR)" archive_origins="$(REPOSITORIES)" suffixes="tar.bz2 tar.gz" \
+    patches_specs="$(PATCHSPECS)"
+
+%create_patch mmake=aros-residualvm-create-patch \
+    archive="$(PACKAGE)-$(VERSION)-sources" \
+    srcdir="$(PACKAGE)-$(VERSION)" \
+    suffixes="tar.bz2 tar.gz" \
+    destination="$(PORTSDIR)/$(PACKAGE)"
+
+%build_with_configure mmake=aros-residualvm \
+     srcdir="$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)" \
+     extraoptions="$(RESIDUALVM_OPTS)" \
+     prefix="$(TARGETDIR)" config_env_extra="$(RESIDUALVM_ENV)" \
+     crossbuild=no use_build_env=yes buildflags=no nix=no nix_dir_layout=no gnuflags=no
+
+#%fetch_and_build mmake=aros-residualvm prefix="$(TARGETDIR)" \
+#    package="$(PACKAGE)-$(VERSION)-sources" suffixes="tar.bz2 tar.gz" \
+#    package_repo="$(REPOSITORIES)" patch=no extraoptions="$(RESIDUALVM_OPTS)" \
+#    crossbuild=no use_build_env=yes buildflags=no nix=no nix_dir_layout=no gnuflags=no
+
+#MM
+ports-emulation-residualvm-clean :
+	$(RM) $(TARGETDIR)
+	$(RM) $(GENDIR)/$(CURDIR)
+
+%common

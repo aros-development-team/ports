@@ -11,7 +11,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM- aros-residualvm : \
 #MM     contrib-sdl \
-#MM     ports-libs-libmpeg
+#MM     ports-libs-libmpeg \
+#MM     aros-residualvm-fetch
 
 
 PACKAGE      := residualvm

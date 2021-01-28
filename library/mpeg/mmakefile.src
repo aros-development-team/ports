@@ -1,0 +1,31 @@
+# $Id: mmakefile.src $
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+REPOSITORIES := https://libmpeg2.sourceforge.io/files/
+ARCHBASE := libmpeg2-0.5.1
+#PATCHSPEC := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
+
+NOWARN_FLAGS := $(NOWARN_FORMAT) $(NOWARN_ERROR)
+
+USER_CFLAGS := $(NOWARN_FLAGS)
+USER_INCLUDES := -I$(AROS_CONTRIB_INCLUDES)
+
+LIBMPEG_OPTIONS :=
+
+#MM- ports-libs : ports-libs-libmpeg
+
+#MM ports-libs-libmpeg : includes-copy ports-libs-libmpeg-fetch
+
+%fetch mmake=ports-libs-libmpeg-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/libmpeg2 \
+       location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
+       patches_specs=$(PATCHSPEC)
+
+%create_patch mmake=ports-libs-libmpeg-create-patch \
+       archive=$(ARCHBASE) srcdir=libmpeg-$(ARCHBASE) destination=$(PORTSDIR)/libmpeg2
+
+%build_with_configure mmake=ports-libs-libmpeg \
+       srcdir="$(PORTSDIR)/libmpeg2/$(ARCHBASE)" prefix="$(AROS_DEVELOPER)" \
+       extraoptions="$(LIBMPEG_OPTIONS)"
+
+%common

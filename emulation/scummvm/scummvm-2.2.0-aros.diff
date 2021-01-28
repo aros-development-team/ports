@@ -1,6 +1,6 @@
 diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
 --- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-20 02:53:41.240000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-28 01:03:40.814088300 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -12,7 +12,7 @@ diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-2.2
  #include "backends/fs/amigaos4/amigaos4-fs.h"
 diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp
 --- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-20 03:47:11.360000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-28 01:03:40.814088300 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -423,7 +423,7 @@ diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-2.2.0.aros/
  
 diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h
 --- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h	2021-01-20 02:53:41.240000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h	2021-01-28 01:03:40.814088300 +0000
 @@ -37,6 +37,13 @@
  
  #include "backends/fs/abstract-fs.h"
@@ -438,9 +438,194 @@ diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h scummvm-2.2.0.aros/ba
  /**
   * Implementation of the ScummVM file system API.
   *
+diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.cpp scummvm-2.2.0.aros/backends/networking/sdl_net/client.cpp
+--- scummvm-2.2.0/backends/networking/sdl_net/client.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.cpp	2021-01-28 01:03:40.814088300 +0000
+@@ -26,21 +26,42 @@
+ #include "backends/networking/sdl_net/localwebserver.h"
+ #include "common/memstream.h"
+ #include <SDL_net.h>
++#if defined(__AROS__)
++extern "C" {
++#include <proto/exec.h>
++#undef recv
++#undef send
++}
++#endif
+ 
+ namespace Networking {
+ 
+ Client::Client():
++#if defined(__AROS__)
++	SocketBase(nullptr),
++#endif
+ 	_state(INVALID), _set(nullptr), _socket(nullptr), _handler(nullptr),
+ 	_previousHandler(nullptr), _stream(nullptr), _buffer(new byte[CLIENT_BUFFER_SIZE]) {}
+ 
+ Client::Client(SDLNet_SocketSet set, TCPsocket socket):
++#if defined(__AROS__)
++	SocketBase(nullptr),
++#endif
+ 	_state(INVALID), _set(nullptr), _socket(nullptr), _handler(nullptr),
+ 	_previousHandler(nullptr), _stream(nullptr), _buffer(new byte[CLIENT_BUFFER_SIZE]) {
++#if defined(__AROS__)
++	SocketBase = OpenLibrary("bsdsocket.library", 0);
++	SDLNet_Init();
++#endif
+ 	open(set, socket);
+ }
+ 
+ Client::~Client() {
+ 	close();
++#if defined(__AROS__)
++	SDLNet_Quit();
++	CloseLibrary(SocketBase);
++#endif
+ 	delete[] _buffer;
+ }
+ 
+diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.h scummvm-2.2.0.aros/backends/networking/sdl_net/client.h
+--- scummvm-2.2.0/backends/networking/sdl_net/client.h	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.h	2021-01-28 01:03:40.814088300 +0000
+@@ -23,6 +23,11 @@
+ #ifndef BACKENDS_NETWORKING_SDL_NET_CLIENT_H
+ #define BACKENDS_NETWORKING_SDL_NET_CLIENT_H
+ 
++#if defined(__AROS__)
++extern "C" {
++#include <exec/libraries.h>
++}
++#endif
+ #include "backends/networking/sdl_net/reader.h"
+ #include "common/str.h"
+ 
+@@ -85,6 +90,9 @@
+ 	bool readMoreIfNeeded();
+ 
+ public:
++#if defined(__AROS__)
++	struct Library *SocketBase;
++#endif
+ 	Client();
+ 	Client(SDLNet_SocketSet set, TCPsocket socket);
+ 	virtual ~Client();
+diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.cpp scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.cpp
+--- scummvm-2.2.0/backends/networking/sdl_net/localwebserver.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.cpp	2021-01-28 01:03:40.814088300 +0000
+@@ -31,7 +31,11 @@
+ #include "common/translation.h"
+ #include <SDL_net.h>
+ #include <common/config-manager.h>
+-
++#if defined(__AROS__)
++extern "C" {
++#include <proto/exec.h>
++}
++#endif
+ #ifdef POSIX
+ #include <errno.h>
+ #include <unistd.h>
+@@ -63,6 +67,9 @@
+ namespace Networking {
+ 
+ LocalWebserver::LocalWebserver(): _set(nullptr), _serverSocket(nullptr), _timerStarted(false),
++#if defined(__AROS__)
++	SocketBase(nullptr),
++#endif
+ 	_stopOnIdle(false), _minimalMode(false), _clients(0), _idlingFrames(0), _serverPort(DEFAULT_SERVER_PORT) {
+ 	addPathHandler("/", &_indexPageHandler);
+ 	addPathHandler("/files", &_filesPageHandler);
+@@ -76,6 +83,13 @@
+ 
+ LocalWebserver::~LocalWebserver() {
+ 	stop();
++#if defined(__AROS__)
++	if (SocketBase)
++	{
++		SDLNet_Quit();
++		CloseLibrary(SocketBase);
++	}
++#endif
+ }
+ 
+ void localWebserverTimer(void *ignored) {
+@@ -98,6 +112,16 @@
+ }
+ 
+ void LocalWebserver::start(bool useMinimalMode) {
++#if defined(__AROS__)
++	if (!SocketBase)
++	{
++		SocketBase = OpenLibrary("bsdsocket.library", 0);
++		if (!SocketBase)
++			return;	  
++		serverTask = FindTask(NULL);
++	}
++	SDLNet_Init();
++#endif
+ 	_handleMutex.lock();
+ 	_serverPort = getPort();
+ 	_stopOnIdle = false;
+@@ -189,6 +213,11 @@
+ }
+ 
+ void LocalWebserver::handle() {
++#if defined(__AROS__)
++	struct Library *SocketBase = this->SocketBase;
++	if (FindTask(NULL) != serverTask)
++		SocketBase = OpenLibrary("bsdsocket.library", 0);
++#endif
+ 	_handleMutex.lock();
+ 	int numready = SDLNet_CheckSockets(_set, 0);
+ 	if (numready == -1) {
+@@ -213,10 +242,18 @@
+ 	if (_idlingFrames > FRAMES_PER_SECOND && _stopOnIdle) {
+ 		_handleMutex.unlock();
+ 		stop();
++#if defined(__AROS__)
++		if (FindTask(NULL) != serverTask)
++			CloseLibrary(SocketBase);
++#endif		
+ 		return;
+ 	}
+ 
+ 	_handleMutex.unlock();
++#if defined(__AROS__)
++	if (FindTask(NULL) != serverTask)
++		CloseLibrary(SocketBase);
++#endif		
+ }
+ 
+ void LocalWebserver::handleClient(uint32 i) {
+diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.h scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.h
+--- scummvm-2.2.0/backends/networking/sdl_net/localwebserver.h	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.h	2021-01-28 01:03:40.814088300 +0000
+@@ -23,6 +23,11 @@
+ #ifndef BACKENDS_NETWORKING_SDL_NET_LOCALWEBSERVER_H
+ #define BACKENDS_NETWORKING_SDL_NET_LOCALWEBSERVER_H
+ 
++#if defined(__AROS__)
++extern "C" {
++#include <exec/tasks.h>
++}
++#endif
+ #include "backends/networking/sdl_net/client.h"
+ #include "backends/networking/sdl_net/handlers/basehandler.h"
+ #include "backends/networking/sdl_net/handlers/createdirectoryhandler.h"
+@@ -85,6 +90,10 @@
+ 	void addPathHandler(Common::String path, BaseHandler *handler);
+ 
+ public:
++#if defined(__AROS__)
++	struct Library *SocketBase;
++	struct Task *serverTask;
++#endif
+ 	static const uint32 DEFAULT_SERVER_PORT = 12345;
+ 
+ 	LocalWebserver();
 diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp
 --- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-20 03:44:15.320000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-28 01:03:40.814088300 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -468,7 +653,7 @@ diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-2
  	g_system = new OSystem_AmigaOS();
 diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp
 --- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-20 02:53:41.240000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-28 01:03:40.814088300 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -478,9 +663,45 @@ diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-2.2.0.
  
  #include "backends/platform/sdl/amigaos/amigaos.h"
  #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
+@@ -34,5 +34,4 @@
+ 	// Invoke parent implementation of this method
+ 	OSystem_SDL::init();
+ }
+-
+ #endif
+diff -ruN scummvm-2.2.0/backends/platform/sdl/sdl.cpp scummvm-2.2.0.aros/backends/platform/sdl/sdl.cpp
+--- scummvm-2.2.0/backends/platform/sdl/sdl.cpp	2020-09-13 21:05:39.000000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/sdl.cpp	2021-01-28 01:03:40.814088300 +0000
+@@ -137,7 +137,7 @@
+ 	_presence = 0;
+ #endif
+ 
+-#ifdef USE_SDL_NET
++#if !defined(__AROS__) && defined(USE_SDL_NET)
+ 	if (_initedSDLnet) SDLNet_Quit();
+ #endif
+ 
+@@ -344,7 +344,7 @@
+ 		_initedSDL = true;
+ 	}
+ 
+-#ifdef USE_SDL_NET
++#if !defined(__AROS__) && defined(USE_SDL_NET)
+ 	// Check if SDL_net has not been initialized
+ 	if (!_initedSDLnet) {
+ 		// Initialize SDL_net
+@@ -353,6 +353,8 @@
+ 
+ 		_initedSDLnet = true;
+ 	}
++#elif defined(__AROS__)
++	_initedSDLnet = true;
+ #endif
+ }
+ 
 diff -ruN scummvm-2.2.0/common/keyboard.h scummvm-2.2.0.aros/common/keyboard.h
 --- scummvm-2.2.0/common/keyboard.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/common/keyboard.h	2021-01-20 03:48:38.640000000 +0000
++++ scummvm-2.2.0.aros/common/keyboard.h	2021-01-28 01:03:40.814088300 +0000
 @@ -25,7 +25,7 @@
  
  #include "common/scummsys.h"
@@ -492,7 +713,7 @@ diff -ruN scummvm-2.2.0/common/keyboard.h scummvm-2.2.0.aros/common/keyboard.h
  #if defined(KEYCODE_LESS) && defined(KEYCODE_GREATER)
 diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
 --- scummvm-2.2.0/configure	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/configure	2021-01-20 03:51:40.950000000 +0000
++++ scummvm-2.2.0.aros/configure	2021-01-28 01:03:40.814088300 +0000
 @@ -1745,6 +1745,12 @@
  	_host_cpu=arm
  	_host_alias=arm-angstrom-linux-gnueabi
@@ -534,7 +755,46 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  		ppc-amigaos)
  			# PPC Linker requires this to fix relocation errors
  			append_var CXXFLAGS "-mlongcall"
-@@ -3914,7 +3925,7 @@
+@@ -3808,20 +3819,35 @@
+ 	# Check for SDL_Net
+ 	echocheck "SDL_Net"
+ 	_sdlnet=no
+-	cat > $TMPC << EOF
++	if test "$_host_os" = "aros"; then
++		cat > $TMPC << EOF
+ #include "SDL_net.h"
++struct Library *SocketBase = NULL;
+ int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
+ EOF
+-
++	else
++		cat > $TMPC << EOF
++#include "SDL_net.h"
++int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
++EOF
++	fi
+ 	cc_check $SDL2_NET_LIBS $LIBS $INCLUDES $SDL2_NET_CFLAGS && _sdlnet=yes
+ 	if test "$_sdlnet" = yes ; then
+ 		set_var SDL_NET_LIBS   "$SDL2_NET_LIBS"
+ 		set_var SDL_NET_CFLAGS "$SDL2_NET_CFLAGS"
+ 	else
+-		cat > $TMPC << EOF
++		if test "$_host_os" = "aros"; then
++			cat > $TMPC << EOF
++#include "SDL_net.h"
++struct Library *SocketBase = NULL;
++int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
++EOF
++       else
++			cat > $TMPC << EOF
+ #include "SDL_net.h"
+ int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
+ EOF
++       fi
+ 		cc_check $SDL1_NET_LIBS $LIBS $INCLUDES $SDL1_NET_CFLAGS && _sdlnet=yes
+ 		set_var SDL_NET_LIBS   "$SDL1_NET_LIBS"
+ 		set_var SDL_NET_CFLAGS "$SDL1_NET_CFLAGS"
+@@ -3914,7 +3940,7 @@
  #
  echo_n "Checking if host is POSIX compliant... "
  case $_host_os in
@@ -543,7 +803,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  		_posix=no
  		;;
  	3ds | android | androidsdl | beos* | bsd* | darwin* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | solaris* | sunos* | switch | uclinux*)
-@@ -5646,6 +5657,9 @@
+@@ -5646,6 +5672,9 @@
  test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
  
  case $_host_os in
@@ -553,7 +813,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  	mingw*)
  		# Windows stores all the external data files in executable file.
  		;;
-@@ -5668,7 +5682,14 @@
+@@ -5668,7 +5697,14 @@
  		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir\\\""
  		;;
  	*)
@@ -569,9 +829,49 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  		;;
  esac
  
+diff -ruN scummvm-2.2.0/gui/options.cpp scummvm-2.2.0.aros/gui/options.cpp
+--- scummvm-2.2.0/gui/options.cpp	2020-09-13 21:05:40.000000000 +0000
++++ scummvm-2.2.0.aros/gui/options.cpp	2021-01-28 01:03:40.814088300 +0000
+@@ -62,7 +62,11 @@
+ #include "backends/networking/sdl_net/localwebserver.h"
+ #endif
+ #endif
+-
++#if defined(__AROS__)
++extern "C" {
++#include <proto/exec.h>
++}
++#endif
+ namespace GUI {
+ 
+ enum {
+@@ -2663,7 +2667,23 @@
+ 		if (LocalServer.isRunning())
+ 			LocalServer.stopOnIdle();
+ 		else
++#if defined(__AROS__)
++		{
++			struct Library *SocketBase = OpenLibrary("bsdsocket.library", 0);
++			if (SocketBase)
++			{
++			    CloseLibrary(SocketBase);
++#endif
+ 			LocalServer.start();
++#if defined(__AROS__)
++			}
++			else
++			{
++				MessageDialog dialog(_("ScummVM could not open bsdsocket.library - please launch a network stack!"), _("OK"));
++				dialog.runModal();
++			}
++		}
++#endif
+ 
+ 		break;
+ 	}
 diff -ruN scummvm-2.2.0/ports.mk scummvm-2.2.0.aros/ports.mk
 --- scummvm-2.2.0/ports.mk	2020-09-13 21:05:39.000000000 +0000
-+++ scummvm-2.2.0.aros/ports.mk	2021-01-20 03:53:10.560000000 +0000
++++ scummvm-2.2.0.aros/ports.mk	2021-01-28 01:03:40.814088300 +0000
 @@ -18,10 +18,12 @@
  	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
  	$(INSTALL) -d "$(DESTDIR)$(datadir)"

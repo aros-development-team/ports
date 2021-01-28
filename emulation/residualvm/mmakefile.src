@@ -10,7 +10,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM     aros-residualvm-themes-copy
 
 #MM- aros-residualvm : \
-#MM     contrib-sdl
+#MM     contrib-sdl \
+#MM     ports-libs-libmpeg
 
 
 PACKAGE      := residualvm

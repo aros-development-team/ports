@@ -10,8 +10,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM     aros-scummvm-themes-copy
 
 #MM- aros-scummvm : \
-#MM     contrib-sdl
-
+#MM     contrib-sdl \
+#MM     ports-libs-libmpeg
 
 PACKAGE      := scummvm
 VERSION      := 2.2.0

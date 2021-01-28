@@ -1,0 +1,13 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-emulation-residualvm : ports-emulation-residualvm-icons
+
+ICONS     := Residualvm
+TARGETDIR := $(AROS_CONTRIB)/Emu
+
+%build_icons mmake=ports-emulation-residualvm-icons \
+    icons=$(ICONS) dir=$(TARGETDIR)
+
+%common

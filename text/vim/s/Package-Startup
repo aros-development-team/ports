@@ -1,1 +1,2 @@
-Path "" ADD
+ASSIGN vim: runtime
+PATH C: "" ADD

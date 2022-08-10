@@ -4,7 +4,7 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM- ports-text-vim-icons : ports-text-vim-icons-vim
 
-ICONS     := Vim
+ICONS     := gVim  MUI-Vim.guide
 TARGETDIR := $(AROS_CONTRIB)/Utilities/Text/Vim
 
 %build_icons mmake=ports-text-vim-icons-vim \

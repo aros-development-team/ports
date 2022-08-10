@@ -4,54 +4,208 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM- ports-text : ports-text-vim
 
-#MM ports-text-vim : includes linklibs \
+#MM- ports-text-vim : \
+#MM    ports-text-vim-gvim \
 #MM    ports-text-vim-runtime \
+#MM    ports-text-vim-guide \
 #MM    ports-text-vim-xxd \
 #MM    ports-text-vim-fetch
 
+#MM  ports-text-vim-gvim : includes linklibs ports-text-vim-fetch
+#MM  ports-text-vim-guide : ports-text-vim-fetch
 #MM  ports-text-vim-xxd : includes linklibs ports-text-vim-fetch
 #MM  ports-text-vim-runtime : ports-text-vim-fetch
-#MM  ports-text-vim-quick : ports-text-vim-fetch
+#MM  ports-text-vim-quick : ports-text-vim-gvim-quick ports-text-vim-fetch
 
-#MM  ports-text-vim-clean : ports-text-vim-xxd-clean
+#MM  ports-text-vim-clean : ports-text-vim-gvim ports-text-vim-xxd-clean
 
-REPOSITORIES := ftp://ftp.vim.org/pub/vim/unix
-ARCHBASE     := vim-7.2
+REPOSITORIES := https://github.com/sodero/MUI-Vim/archive/refs/tags
+ARCHBASE     := 8.2.4291
 TARGETDIR    := $(AROS_CONTRIB)/Utilities/Text/Vim
+
+VER:=8.2
+PAT:=4291
+BLD:=$(shell date +%d.%m.%Y || echo Unknown)
 
 NOWARN_FLAGS := $(NOWARN_STRICT_OVERFLOW) $(NOWARN_STRICT_ALIASING) \
     $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_INT_CONVERSION) \
     $(NOWARN_BOOL_COMPARE) $(NOWARN_LOGICAL_NOT_PARENTHESES) \
     $(NOWARN_POINTER_TO_INT_CAST)
-USER_CFLAGS  := $(NOWARN_FLAGS) -I$(PORTSDIR)/vim/vim72/src/proto \
-             -DUSE_TMPNAM -DFEAT_MBYTE -DFEAT_GUI -DFEAT_ASL -DFEAT_BROWSE \
-             -DFEAT_MOUSE -DHAVE_STDARG_H -DFEAT_HUGE \
-	     -DDFLT_RUNTIMEPATH=\"PROGDIR:runtime\" \
-	     -UAMIGA -U_AMIGA -DAROS
 
 ifneq ("","$(strip $(WARN_ERROR))")
 CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
 endif
 
-FILES := \
-    buffer charset diff digraph edit eval ex_cmds ex_cmds2 \
-    ex_docmd ex_eval ex_getln fileio fold getchar hardcopy \
-    hashtab main mark memfile memline menu message misc1 \
-    misc2 move mbyte normal ops option os_aros popupmnu \
-    quickfix regexp screen search spell syntax tag term \
-    ui undo window version gui_aros gui
+VER:=8.2
+PAT:=4291
+BLD:=$(shell date +%d.%m.%Y || echo Unknown)
 
-FILES := $(addprefix $(PORTSDIR)/vim/vim72/src/,$(FILES))
+PATCHLEVEL=$(PAT)
+BUILDDATE=$(BLD)
+BUILD=mui
 
-%build_prog mmake=ports-text-vim \
-    progname=Vim targetdir=$(TARGETDIR) \
+USER_CFLAGS := $(NOWARN_FLAGS)
+
+USER_CFLAGS += \
+    -DUSE_TMPNAM \
+    -Wall \
+    -Wno-pointer-sign \
+    -Wno-int-conversion \
+    -Wno-deprecated-declarations
+
+# Vim 'huge' build with MUI GUI
+ifeq ($(BUILD),mui)
+USER_CFLAGS += \
+    -DFEAT_GUI \
+    -DFEAT_GUI_MUI \
+    -DFEAT_BROWSE \
+    -DFEAT_TOOLBAR \
+    -DFEAT_HUGE
+endif
+
+USER_CFLAGS += -DMODIFIED_BY=\"'Ola Söder et al.'\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DBUILDDATE=\"$(BUILDDATE)\"
+
+ifneq ("","$(strip $(WARN_ERROR))")
+CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
+endif
+
+USER_INCLUDES := -I$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/proto
+USER_LDFLAGS  := -DHAVE_FSYNC
+
+# MUI GUI
+FILES := gui_mui gui
+
+# Common files
+FILES += \
+    alloc \
+    arabic \
+    arglist \
+    autocmd \
+    beval \
+    blob \
+    blowfish \
+    buffer \
+    bufwrite \
+    change \
+    charset \
+    cindent \
+    clientserver \
+    clipboard \
+    cmdhist \
+    cmdexpand \
+    crypt \
+    crypt_zip \
+    debugger \
+    dict \
+    diff \
+    digraph \
+    drawline \
+    drawscreen \
+    edit \
+    eval \
+    evalbuffer \
+    evalfunc \
+    evalvars \
+    evalwindow \
+    ex_cmds \
+    ex_cmds2 \
+    ex_docmd \
+    ex_eval \
+    ex_getln \
+    fileio \
+    filepath \
+    findfile \
+    float \
+    fold \
+    getchar \
+    gui_xim \
+    hardcopy \
+    hashtab \
+    help \
+    highlight \
+    if_cscope \
+    indent \
+    insexpand \
+    json \
+    list \
+    locale \
+    main \
+    mark \
+    map \
+    match \
+    mbyte \
+    memfile \
+    memline \
+    menu \
+    message \
+    misc1 \
+    misc2 \
+    mouse \
+    move \
+    normal \
+    ops \
+    option \
+    optionstr \
+    os_amiga \
+    popupmenu \
+    popupwin \
+    profiler \
+    quickfix \
+    regexp \
+    register \
+    screen \
+    scriptfile \
+    search \
+    session \
+    sha256 \
+    sign \
+    spell \
+    spellfile \
+    spellsuggest \
+    strings \
+    syntax \
+    tag \
+    term \
+    termlib \
+    testing \
+    textformat \
+    textobject \
+    textprop \
+    time \
+    typval \
+    ui \
+    undo \
+    usercmd \
+    userfunc \
+    version \
+    viminfo \
+    vim9cmds \
+    vim9compile \
+    vim9execute \
+    vim9expr \
+    vim9instr \
+    vim9script \
+    vim9type \
+    window \
+    xdiff/xdiffi \
+    xdiff/xemit \
+    xdiff/xhistogram \
+    xdiff/xpatience \
+    xdiff/xprepare \
+    xdiff/xutils
+
+FILES := $(addprefix $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/,$(FILES))
+
+%build_prog mmake=ports-text-vim-gvim \
+    progname=gVim targetdir=$(TARGETDIR) \
     files=$(FILES) uselibs=""
 
 ############################################################################################
 
-USER_CFLAGS := -UAMIGA -U_AMIGA -DAROS
-
-FILES := $(PORTSDIR)/vim/vim72/src/xxd/xxd
+USER_CFLAGS   :=
+USER_INCLUDES :=
+USER_LDFLAGE  :=
+FILES := $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/xxd/xxd
 
 %build_prog mmake=ports-text-vim-xxd \
     progname=xxd targetdir=$(TARGETDIR) \
@@ -60,12 +214,15 @@ FILES := $(PORTSDIR)/vim/vim72/src/xxd/xxd
 ############################################################################################
 
 %fetch mmake=ports-text-vim-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/vim \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.bz2" \
-    patches_specs=vim72-aros.diff:vim72:-p1
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz"
 
 ############################################################################################
 
-%copy_dir_recursive mmake=ports-text-vim-runtime src=$(PORTSDIR)/vim/vim72/runtime \
+%copy_dir_recursive mmake=ports-text-vim-runtime src=$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/runtime \
     dst=$(TARGETDIR)/runtime
+
+############################################################################################
+
+%copy_files_q mmake=ports-text-vim-guide files=MUI-Vim.guide src=$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/dist dst=$(TARGETDIR)
 
 %common

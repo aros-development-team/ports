@@ -1,0 +1,12 @@
+diff -Naur ZuneBrot_v0.2-orig/ZuneBrot/src/ZuneBrot.c ZuneBrot_v0.2/ZuneBrot/src/ZuneBrot.c
+--- ZuneBrot_v0.2-orig/ZuneBrot/src/ZuneBrot.c	2022-08-10 14:49:58.770381021 +0200
++++ ZuneBrot_v0.2/ZuneBrot/src/ZuneBrot.c	2022-08-10 14:47:05.005750079 +0200
+@@ -35,7 +35,7 @@
+ #include <libraries/mui.h>
+ 
+ #include "ZuneBrot.h"
+-#include "mcc_mandel.h"
++#include "mcc_Mandel.h"
+ #include "Picture_IO.h"
+ #include "locale.h"
+ #include "math.h"

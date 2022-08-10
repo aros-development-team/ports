@@ -1,0 +1,59 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-graphics : ports-graphics-$(AROS_TARGET_CPU)
+
+#MM- ports-graphics-i386 : ports-graphics-zunebrot
+#MM- ports-graphics-m68k : ports-graphics-zunebrot
+#MM- ports-graphics-ppc : ports-graphics-zunebrot
+#MM- ports-graphics-arm : ports-graphics-zunebrot
+#MM- ports-graphics-x86_64 : ports-graphics-zunebrot
+
+#MM  ports-graphics-zunebrot : \
+#MM    includes linklibs ports-graphics-zunebrot-fetch \
+#MM    ports-graphics-zunebrot-cpy ports-graphics-zunebrot-catalogs
+
+#MM  ports-graphics-zunebrot-quick : ports-graphics-zunebrot-fetch
+
+REPOSITORIES := sf://zunetools
+ARCHBASE     := ZuneBrot_v0.2
+TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/ZuneBrot
+
+NOWARN_FLAGS :=
+USER_CFLAGS  := $(NOWARN_FLAGS) -DZUNEBROT
+USER_INCLUDES:= -I$(PORTSDIR)/zunebrot/$(ARCHBASE)/zunebrot/src
+
+FILES := \
+    SupportFunctions \
+    Picture_IO \
+    mcc_Mandel \
+    locale \
+    WriteILBM \
+    ZuneBrot \
+    Win_Save \
+    mcc_GradEdit \
+    Win_GradDef
+
+
+FILES := $(addprefix $(PORTSDIR)/zunebrot/$(ARCHBASE)/ZuneBrot/src/,$(FILES))
+
+%build_prog mmake=ports-graphics-zunebrot progname=ZuneBrot \
+    files=$(FILES) targetdir=$(TARGETDIR) \
+    uselibs="jpeg png z mui"
+
+%fetch mmake=ports-graphics-zunebrot-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/zunebrot/$(ARCHBASE) \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="zip" \
+    patches_specs=$(ARCHBASE)-aros.diff::-p1
+
+%create_patch mmake=ports-graphics-zunebrot-create-patch archive=$(ARCHBASE) srcdir=Zunebrot suffixes="zip" destination=$(PORTSDIR)/zunebrot/$(ARCHBASE)
+
+CPFILES := ZuneBrot.info
+
+%copy_files_q mmake=ports-graphics-zunebrot-cpy files=$(CPFILES) src=$(PORTSDIR)/zunebrot/$(ARCHBASE)/ZuneBrot \
+    dst=$(TARGETDIR)
+
+%copy_dir_recursive mmake=ports-graphics-zunebrot-catalogs src=$(PORTSDIR)/zunebrot/$(ARCHBASE)/ZuneBrot/catalogs/french \
+    dst=$(TARGETDIR)/Catalogs/french
+
+%common

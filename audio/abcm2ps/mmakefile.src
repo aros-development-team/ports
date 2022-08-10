@@ -17,7 +17,7 @@ REPOSITORIES := \
     https://github.com/leesavide/abcm2ps/archive \
     http://ftp.dei.uc.pt/pub/linux/gentoo/distfiles/
 
-ARCHBASE     := 8.14.6
+ARCHBASE     := 8.14.13
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/Abcm2ps
 
 NOWARN_FLAGS := $(NOWARN_UNINITIALIZED)
@@ -25,8 +25,8 @@ USER_CFLAGS  := $(NOWARN_FLAGS) \
     -DPOSIXC_NO_VAARGS \
     -DA4_FORMAT=1 \
     -DDEFAULT_FDIR="\"PROGDIR:Formats\"" \
-    -DVERSION="\"8.14.6\"" \
-    -DVDATE="\"2019-11-05\""
+    -DVERSION="\"8.14.13\"" \
+    -DVDATE="\"2022-01-29\""
 
 FILES := \
     abcm2ps \

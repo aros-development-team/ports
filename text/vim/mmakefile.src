@@ -20,12 +20,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM  ports-text-vim-clean : ports-text-vim-gvim ports-text-vim-xxd-clean
 
 REPOSITORIES := https://github.com/sodero/MUI-Vim/archive/refs/tags
-ARCHBASE     := 8.2.4291
+ARCHBASE     := 8.2.4424
 TARGETDIR    := $(AROS_CONTRIB)/Utilities/Text/Vim
-
-VER:=8.2
-PAT:=4291
-BLD:=$(shell date +%d.%m.%Y || echo Unknown)
 
 NOWARN_FLAGS := $(NOWARN_STRICT_OVERFLOW) $(NOWARN_STRICT_ALIASING) \
     $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_INT_CONVERSION) \
@@ -37,7 +33,7 @@ CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
 endif
 
 VER:=8.2
-PAT:=4291
+PAT:=4424
 BLD:=$(shell date +%d.%m.%Y || echo Unknown)
 
 PATCHLEVEL=$(PAT)
@@ -59,8 +55,10 @@ USER_CFLAGS += \
     -DFEAT_GUI \
     -DFEAT_GUI_MUI \
     -DFEAT_BROWSE \
+	-DFEAT_MOUSE \
     -DFEAT_TOOLBAR \
-    -DFEAT_HUGE
+    -DFEAT_HUGE \
+	-DHAVE_FSYNC
 endif
 
 USER_CFLAGS += -DMODIFIED_BY=\"'Ola Söder et al.'\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DBUILDDATE=\"$(BUILDDATE)\"
@@ -70,7 +68,7 @@ CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
 endif
 
 USER_INCLUDES := -I$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/proto
-USER_LDFLAGS  := -DHAVE_FSYNC
+USER_LDFLAGS  := 
 
 # MUI GUI
 FILES := gui_mui gui
@@ -214,7 +212,7 @@ FILES := $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/xxd/xxd
 ############################################################################################
 
 %fetch mmake=ports-text-vim-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/vim \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz"
+    location=$(PORTSSOURCEDIR)/mui-vim archive_origins=$(REPOSITORIES) suffixes="tar.gz"
 
 ############################################################################################
 

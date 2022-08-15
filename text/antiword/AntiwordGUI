@@ -26,8 +26,8 @@ function main()
 
   local ok_btn = mui.SimpleButton("Call antiword")
 
-  local infile_btn = mui.SimpleButton("Infile")
-  local outfile_btn = mui.SimpleButton("Outfile")
+  local infile_btn = mui.SimpleButton("Input File")
+  local outfile_btn = mui.SimpleButton("Output File")
 
   local infile_str = mui.StringObject(mui.MUIA_Frame, mui.MUIV_Frame_String)
   local outfile_str = mui.StringObject(mui.MUIA_Frame, mui.MUIV_Frame_String)

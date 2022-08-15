@@ -50,7 +50,7 @@ FILES := $(addprefix $(PORTSDIR)/abcm2ps/abcm2ps-$(ARCHBASE)/,$(FILES))
 
 
 %fetch mmake=ports-audio-abcm2ps-fetch archive=v$(ARCHBASE) destination=$(PORTSDIR)/abcm2ps \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR)/abcm2ps archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
     patches_specs=abcm2ps-$(ARCHBASE)-aros.diff:abcm2ps-$(ARCHBASE):-p1
 
 

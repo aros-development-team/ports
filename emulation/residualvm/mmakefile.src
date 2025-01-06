@@ -14,11 +14,12 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM     ports-libs-libmpeg \
 #MM     aros-residualvm-fetch
 
+https://github.com/residualvm/residualvm/archive/refs/tags/0.3.1.tar.gz
 
 PACKAGE      := residualvm
 VERSION      := 0.3.1
 TARGETDIR    := $(AROS_CONTRIB)/Emu/Residualvm
-REPOSITORIES := https://www.residualvm.org/downloads/release/$(VERSION)
+REPOSITORIES := https://github.com/residualvm/residualvm/archive/refs/tags/$(VERSION)
 PATCHSPECS := $(PACKAGE)-$(VERSION)-sources-aros.diff:$(PACKAGE)-$(VERSION):-p1
 
 RESIDUALVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++11 --enable-release --enable-freetype2 --datarootdir=$(TARGETDIR)

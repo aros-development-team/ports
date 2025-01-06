@@ -19,7 +19,7 @@ MB_VERSION   := 3
 MB_REVISION  := 3
 MB_VERSTR    := 3.3
 
-REPOSITORIES := sf://muibase
+REPOSITORIES := sf://beebase
 ARCHBASE     := MUIbase-$(MB_VERSTR)
 ARCHPKGBASE     := MUIbaseSource-$(MB_VERSTR)
 TARGETDIR    := $(AROS_CONTRIB)/Office/MUIbase
@@ -250,7 +250,7 @@ $(TARGETDIR)/LiesMich : $(FROMDOC)/liesmich
 	iconv -f utf-8 -t iso-8859-1  $< -o $@
 
 $(TARGETDIR)/LisezMoi : $(FROMDOC)/lisezmoi
-	iconv -f utf-8 -t iso-8859-1  $< -o $@ 
+	iconv -f utf-8 -t iso-8859-1  $< -o $@
 
 
 ##### Create Projects drawer #####

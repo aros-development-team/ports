@@ -2,7 +2,8 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-text : ports-text-antiword
+# antiword is now an github but they didn't make a release
+# #MM- ports-text : ports-text-antiword
 
 #MM  ports-text-antiword : includes linklibs ports-text-antiword-fetch \
 #MM  ports-text-antiword-docs ports-text-antiword-data \

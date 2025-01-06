@@ -2,7 +2,8 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-game: ports-game-$(AROS_TARGET_CPU)
+# source code package is no longer available on archives.aros-exec.org
+# #MM- ports-game: ports-game-$(AROS_TARGET_CPU)
 
 #MM- ports-game-i386 : ports-game-wormwars
 #MM- ports-game-arm : ports-game-wormwars

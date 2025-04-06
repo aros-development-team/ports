@@ -1,0 +1,9 @@
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game-untangle-icons : ports-game-untangle-icons-untangle
+
+ICONS     := Untangle.guide
+TARGETDIR := $(AROS_CONTRIB)/Games/Puzzle/Untangle
+
+%build_icons mmake=ports-game-untangle-icons \
+    icons=$(ICONS) dir=$(TARGETDIR)

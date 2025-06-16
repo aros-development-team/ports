@@ -17,6 +17,7 @@ REPOSITORIES := gnu://gnujump
 
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
+USER_CFLAGS := $(CFLAGS_GNU99)
 
 %fetch_and_build mmake=ports-game-gnujump prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \

@@ -12,7 +12,7 @@ TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/MilkyTracker
 REPOSITORIES := https://github.com/milkytracker/milkytracker.github.io/raw/master/files
 
 USER_CPPFLAGS := -UHAVE_CONFIG_H -D_XOPEN_SOURCE
-USER_CXXFLAGS:= -std=c++03 $(CFLAGS_PERMISSIVE)
+USER_CXXFLAGS:= $(CXXFLAGS_GNU03) $(CFLAGS_PERMISSIVE)
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
 USER_LDFLAGS := -static-libstdc++
 

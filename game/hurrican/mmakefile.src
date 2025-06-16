@@ -23,7 +23,7 @@ TARGETDIR    := $(AROS_CONTRIB)/Games/Platform/Hurrican
 ####################################################################################################
 # fetch source
 
-REPOSITORIES := http://archives.aros-exec.org/share/game/action
+REPOSITORIES := archives://share/game/action
 ARCHBASE     := hurrican-src-svn281
 
 %fetch mmake=ports-game-hurrican-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/hurrican \

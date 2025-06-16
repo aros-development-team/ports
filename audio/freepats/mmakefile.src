@@ -6,16 +6,24 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM    ports-audio-freepats-cfg \
 #MM    ports-audio-freepats-fetch
 
-REPOSITORIES := http://freepats.zenvoid.org
-ARCHBASE     := freepats-20060219
-TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/Timidity
+#REPOSITORIES := http://freepats.zenvoid.org
+#ARCHBASE     := freepats-20060219
+#ARCHSUFFIXES := tar.xz
+#PATSRCDIR    := freepats
+
+REPOSITORIES  := https://gitlab.redox-os.org/redox-os/freepats/-/archive/main
+ARCHBASE      := freepats-main
+ARCHSUFFIXES  := tar.bz2 tar.gz
+ARCHSRCDIR    := $(PORTSDIR)/freepats/$(ARCHBASE)
+PATSRCDIR     := $(ARCHBASE)
+TARGETDIR     := $(AROS_CONTRIB)/MultiMedia/Audio/Timidity
 
 %fetch mmake=ports-audio-freepats-fetch archive=$(ARCHBASE) \
-    destination=$(PORTSDIR)/freepats/$(ARCHBASE) \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.xz"
+    destination=$(ARCHSRCDIR) \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="$(ARCHSUFFIXES)"
 
 %copy_dir_recursive mmake=ports-audio-freepats \
-    src=$(PORTSDIR)/freepats/$(ARCHBASE)/freepats \
+    src=$(ARCHSRCDIR)/$(PATSRCDIR) \
     dst=$(TARGETDIR)/Freepats
 
 %copy_files_q mmake=ports-audio-freepats-cfg files=timidity.cfg \

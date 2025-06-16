@@ -1,6 +1,6 @@
-diff -Naur vice-2.4-orig/configure vice-2.4/configure
---- vice-2.4-orig/configure	2013-09-08 17:09:30.327048804 +0200
-+++ vice-2.4/configure	2013-09-08 17:11:37.183054944 +0200
+diff -ruN vice-2.4/configure vice-2.4.aros/configure
+--- vice-2.4/configure	2012-11-02 21:06:04.000000000 +0000
++++ vice-2.4.aros/configure	2013-09-08 15:11:37.183054944 +0000
 @@ -3308,9 +3308,6 @@
        done
        ;;
@@ -11,9 +11,53 @@ diff -Naur vice-2.4-orig/configure vice-2.4/configure
  done
  
  
-diff -Naur vice-2.4-orig/src/arch/amigaos/console.c vice-2.4/src/arch/amigaos/console.c
---- vice-2.4-orig/src/arch/amigaos/console.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/console.c	2013-09-08 19:00:47.071371936 +0200
+diff -ruN vice-2.4/src/arch/amigaos/c64ui.c vice-2.4.aros/src/arch/amigaos/c64ui.c
+--- vice-2.4/src/arch/amigaos/c64ui.c	2012-09-16 23:12:13.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/c64ui.c	2025-06-16 15:10:14.645851132 +0000
+@@ -59,7 +59,9 @@
+ #include "mui/uiprinter.h"
+ #include "mui/uiramcart.h"
+ #include "mui/uiretroreplay.h"
++#include "mui/uidqbb.h"
+ #include "mui/uireu.h"
++#include "mui/uiisepic.h"
+ #include "mui/uiromc64vic20settings.h"
+ #include "mui/uirs232user.h"
+ #include "mui/uisid.h"
+diff -ruN vice-2.4/src/arch/amigaos/cbm2ui.c vice-2.4.aros/src/arch/amigaos/cbm2ui.c
+--- vice-2.4/src/arch/amigaos/cbm2ui.c	2012-06-19 14:44:49.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/cbm2ui.c	2025-06-16 15:11:16.047112906 +0000
+@@ -38,6 +38,7 @@
+ #include "machine.h"
+ #include "translate.h"
+ 
++#include "mui/mui.h"
+ #include "mui/uiacia.h"
+ #include "mui/uicbm2settings.h"
+ #include "mui/uiciamodel.h"
+diff -ruN vice-2.4/src/arch/amigaos/cbm5x0ui.c vice-2.4.aros/src/arch/amigaos/cbm5x0ui.c
+--- vice-2.4/src/arch/amigaos/cbm5x0ui.c	2012-06-19 14:44:49.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/cbm5x0ui.c	2025-06-16 15:11:52.087569840 +0000
+@@ -38,6 +38,7 @@
+ #include "machine.h"
+ #include "translate.h"
+ 
++#include "mui/mui.h"
+ #include "mui/uiacia.h"
+ #include "mui/uicbm5x0settings.h"
+ #include "mui/uiciamodel.h"
+diff -ruN vice-2.4/src/arch/amigaos/console.c vice-2.4.aros/src/arch/amigaos/console.c
+--- vice-2.4/src/arch/amigaos/console.c	2009-08-19 06:12:59.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/console.c	2025-06-16 15:22:46.953192356 +0000
+@@ -35,7 +35,7 @@
+ 
+ #include <proto/dos.h>
+ 
+-#ifdef AMIGA_MORPHOS
++#if defined(AMIGA_MORPHOS) || defined(AMIGA_AROS)
+ #include <proto/exec.h>
+ #endif
+ 
 @@ -52,7 +52,7 @@
  static BPTR console_handle;
  static int fullscreenwasenabled=0;
@@ -23,7 +67,7 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/console.c vice-2.4/src/arch/amigaos/co
  static APTR fh_putchproc(APTR putchdata, UBYTE ch)
  {
      FPutC((BPTR)putchdata, ch);
-@@ -65,12 +65,8 @@
+@@ -65,14 +65,10 @@
      va_list ap;
  
      va_start(ap, format);
@@ -35,11 +79,200 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/console.c vice-2.4/src/arch/amigaos/co
      VFPrintf(console_handle, format, (CONST APTR)ap);
 -#endif
  #else
-     VNewRawDoFmt(format, fh_putchproc, (STRPTR)console_handle, ap);
+-    VNewRawDoFmt(format, fh_putchproc, (STRPTR)console_handle, ap);
++    VNewRawDoFmt(format, (VOID_FUNC)fh_putchproc, (STRPTR)console_handle, ap);
  #endif
-diff -Naur vice-2.4-orig/src/arch/amigaos/x128ns.c vice-2.4/src/arch/amigaos/x128ns.c
---- vice-2.4-orig/src/arch/amigaos/x128ns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/x128ns.c	2013-09-08 18:35:38.127298911 +0200
+     va_end(ap);
+ 
+diff -ruN vice-2.4/src/arch/amigaos/hardsid.c vice-2.4.aros/src/arch/amigaos/hardsid.c
+--- vice-2.4/src/arch/amigaos/hardsid.c	2012-06-18 15:22:43.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/hardsid.c	2025-06-16 15:14:58.158302085 +0000
+@@ -436,7 +436,9 @@
+ int hardsid_available(void)
+ {
+     if (hs_found == 1) {
++#if defined(HAVE_HARDSID)
+         hardsid_open();
++#endif
+     }
+     return hs_found;
+ }
+diff -ruN vice-2.4/src/arch/amigaos/loadlibs.c vice-2.4.aros/src/arch/amigaos/loadlibs.c
+--- vice-2.4/src/arch/amigaos/loadlibs.c	2012-08-16 18:48:45.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/loadlibs.c	2025-06-16 15:17:41.908709076 +0000
+@@ -164,7 +164,7 @@
+     int lib_version;
+     void **interface_base;
+     int action;
+-    int **var;
++    int *var;
+ } amiga_libs_t;
+ 
+ static amiga_libs_t amiga_libs[] = {
+@@ -187,14 +187,14 @@
+     { "Picasso96API.library", &P96Base, 2, NULL, LIBS_ACTION_ERROR, NULL },
+ #endif
+ #if (defined(AMIGA_M68K) && defined(HAVE_PROTO_CYBERGRAPHICS_H)) || defined(AMIGA_MORPHOS) || defined(AMIGA_AROS)
+-    { CYBERGFXNAME, &CyberGfxBase, 41, NULL, LIBS_ACTION_ERROR, NULL },
++    { CYBERGFXNAME, (void **)&CyberGfxBase, 41, NULL, LIBS_ACTION_ERROR, NULL },
+ #ifdef HAVE_XVIDEO
+     { "cgxvideo.library", &CGXVideoBase, 41, NULL, LIBS_ACTION_WARNING, &xvideo_lib_loaded },
+ #endif
+ #endif
+ #ifndef AMIGA_OS4
+-    { MUIMASTER_NAME, &MUIMasterBase, MUIMASTER_VMIN, NULL, LIBS_ACTION_ERROR, NULL },
+-    { "lowlevel.library", &LowLevelBase, 37, NULL, LIBS_ACTION_WARNING, &lowlevel_lib_loaded },
++    { MUIMASTER_NAME, (void **)&MUIMasterBase, MUIMASTER_VMIN, NULL, LIBS_ACTION_ERROR, NULL },
++    { "lowlevel.library", (void **)&LowLevelBase, 37, NULL, LIBS_ACTION_WARNING, &lowlevel_lib_loaded },
+ #endif
+ #ifdef HAVE_PROTO_OPENPCI_H
+     { "openpci.library", &OpenPciBase, 0, NULL, LIBS_ACTION_WARNING, &pci_lib_loaded },
+diff -ruN vice-2.4/src/arch/amigaos/mui/mui.c vice-2.4.aros/src/arch/amigaos/mui/mui.c
+--- vice-2.4/src/arch/amigaos/mui/mui.c	2012-08-18 19:24:52.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/mui/mui.c	2025-06-16 15:45:43.161022176 +0000
+@@ -39,6 +39,7 @@
+ #include "platform_discovery.h"
+ #include "intl.h"
+ #include "translate.h"
++#include "sid.h"
+ 
+ ui_to_from_t *ui_find_resource(ui_to_from_t *data, char *resource)
+ {
+diff -ruN vice-2.4/src/arch/amigaos/mui/mui.h vice-2.4.aros/src/arch/amigaos/mui/mui.h
+--- vice-2.4/src/arch/amigaos/mui/mui.h	2012-06-05 18:13:41.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/mui/mui.h	2025-06-16 15:44:46.584495681 +0000
+@@ -67,7 +67,7 @@
+ #include <libraries/asl.h>
+ #undef get
+ #undef set
+-#define get(obj, attr, store) GetAttr(attr, obj, (ULONG *)store)
++#define get(obj, attr, store) GetAttr(attr, obj, (IPTR *)store)
+ #define set(obj, attr, value) SetAttrs(obj, attr, value, TAG_DONE)
+ #endif
+ 
+diff -ruN vice-2.4/src/arch/amigaos/mui/uinetwork.c vice-2.4.aros/src/arch/amigaos/mui/uinetwork.c
+--- vice-2.4/src/arch/amigaos/mui/uinetwork.c	2011-01-16 22:32:49.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/mui/uinetwork.c	2025-06-16 15:47:12.945667904 +0000
+@@ -43,7 +43,7 @@
+ #endif
+ #include "mui.h"
+ 
+-static ui_port_range[] = {
++static unsigned int ui_port_range[] = {
+     0,
+     0xffff
+ };
+diff -ruN vice-2.4/src/arch/amigaos/mui/uiv364speech.h vice-2.4.aros/src/arch/amigaos/mui/uiv364speech.h
+--- vice-2.4/src/arch/amigaos/mui/uiv364speech.h	2010-12-22 20:06:57.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/mui/uiv364speech.h	2025-06-16 15:19:18.182123084 +0000
+@@ -27,6 +27,6 @@
+ #ifndef VICE_UIV364SPEECH_H
+ #define VICE_UIV364SPEECH_H
+ 
+-extern void ui_v364speech_settings_dialog(video_canvas_t *canvas);
++extern void ui_v364_speech_settings_dialog(video_canvas_t *canvas);
+ 
+ #endif
+diff -ruN vice-2.4/src/arch/amigaos/ui.h vice-2.4.aros/src/arch/amigaos/ui.h
+--- vice-2.4/src/arch/amigaos/ui.h	2012-06-20 15:52:49.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/ui.h	2025-06-16 15:32:28.012664041 +0000
+@@ -31,6 +31,8 @@
+ #include "uiapi.h"
+ #include "uilib.h"
+ 
++struct Menu;
++
+ typedef struct ui_resources_s {
+     int fullscreenbitdepth;
+     int fullscreenwidth;
+@@ -50,7 +52,8 @@
+ extern int ui_requester(char *title, char *msg, char *buttons, int defval);
+ extern void ui_message(const char *format, ...);
+ extern void ui_event_handle(void);
+-
++extern void ui_dispatch_events(void);
+ extern void (*ui_event_handling)(void);
+ 
++extern void toggle_menu_item(struct Menu *menu, int idm, int checked);
+ #endif
+diff -ruN vice-2.4/src/arch/amigaos/vic20ui.c vice-2.4.aros/src/arch/amigaos/vic20ui.c
+--- vice-2.4/src/arch/amigaos/vic20ui.c	2012-09-15 14:33:14.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/vic20ui.c	2025-06-16 15:20:00.226740884 +0000
+@@ -36,6 +36,7 @@
+ #include "vic20ui.h"
+ #include "vic20uires.h"
+ 
++#include "mui/mui.h"
+ #include "mui/uiacia.h"
+ #include "mui/uidigimax.h"
+ #include "mui/uidrivec64vic20.h"
+diff -ruN vice-2.4/src/arch/amigaos/video.c vice-2.4.aros/src/arch/amigaos/video.c
+--- vice-2.4/src/arch/amigaos/video.c	2012-10-29 18:20:06.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/video.c	2025-06-16 15:27:26.241297134 +0000
+@@ -67,6 +67,9 @@
+ #include <proto/graphics.h>
+ 
+ #ifdef HAVE_PROTO_CYBERGRAPHICS_H
++#ifdef AMIGA_AROS
++#include <clib/arossupport_protos.h>
++#endif
+ #include <proto/cybergraphics.h>
+ #include <cybergraphx/cybergraphics.h>
+ 
+diff -ruN vice-2.4/src/arch/amigaos/vsidui.c vice-2.4.aros/src/arch/amigaos/vsidui.c
+--- vice-2.4/src/arch/amigaos/vsidui.c	2012-08-16 18:48:45.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/vsidui.c	2025-06-16 15:43:31.507700216 +0000
+@@ -50,6 +50,11 @@
+ #include "sound.h"
+ #include "ui.h"
+ #include "vsidui.h"
++#include "pointer.h"
++#include "util.h"
++
++#include "translate.h"
++#include "mui/mui.h"
+ 
+ #define UI_VSID
+ #define UI_MENU_NAME vsid_ui_translation_menu
+@@ -428,7 +433,7 @@
+         case IDM_NEXT_TUNE:
+             if (current_song < songs) {
+                 current_song++;
+-                psid_ui_set_tune(uint_to_void_ptr(current_song), NULL);
++                psid_ui_set_tune(current_song, NULL);
+                 vsid_ui_display_tune_nr(current_song);
+                 vsid_ui_set_default_tune(default_song);
+                 vsid_ui_display_nr_of_tunes(songs);
+@@ -437,7 +442,7 @@
+         case IDM_PREVIOUS_TUNE:
+             if (current_song > 1) {
+                 current_song--;
+-                psid_ui_set_tune(uint_to_void_ptr(current_song), NULL);
++                psid_ui_set_tune(current_song, NULL);
+                 vsid_ui_display_tune_nr(current_song);
+                 vsid_ui_set_default_tune(default_song);
+                 vsid_ui_display_nr_of_tunes(songs);
+@@ -455,7 +460,7 @@
+                     machine_trigger_reset(MACHINE_RESET_MODE_SOFT);
+                     songs = psid_tunes(&default_song);
+                     current_song = default_song;
+-                    psid_ui_set_tune(uint_to_void_ptr(current_song), NULL);
++                    psid_ui_set_tune(current_song, NULL);
+                     vsid_ui_display_tune_nr(current_song);
+                     vsid_ui_set_default_tune(default_song);
+                     vsid_ui_display_nr_of_tunes(songs);
+@@ -578,7 +583,7 @@
+             break;
+         case IDM_AMOUNT_OF_EXTRA_SIDS:
+             i = vsid_requester(translate_text(IDS_AMOUNT_OF_EXTRA_SIDS), translate_text(IDS_AMOUNT_OF_EXTRA_SIDS), "1 | 2 | 0", 0);
+-            resources_get_int("SidStereo", i);
++            resources_get_int("SidStereo", &i);
+             break;
+ #ifdef HAVE_RESID
+         case IDM_SAMPLE_METHOD:
+diff -ruN vice-2.4/src/arch/amigaos/x128ns.c vice-2.4.aros/src/arch/amigaos/x128ns.c
+--- vice-2.4/src/arch/amigaos/x128ns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/x128ns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -47,9 +280,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/x128ns.c vice-2.4/src/arch/amigaos/x12
 -    return system("x128.exe -sounddev dummy");
 +    return system("x128 -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/x64dtvns.c vice-2.4/src/arch/amigaos/x64dtvns.c
---- vice-2.4-orig/src/arch/amigaos/x64dtvns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/x64dtvns.c	2013-09-08 18:35:45.583299274 +0200
+diff -ruN vice-2.4/src/arch/amigaos/x64dtvns.c vice-2.4.aros/src/arch/amigaos/x64dtvns.c
+--- vice-2.4/src/arch/amigaos/x64dtvns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/x64dtvns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -57,9 +290,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/x64dtvns.c vice-2.4/src/arch/amigaos/x
 -    return system("x64dtv.exe -sounddev dummy");
 +    return system("x64dtv -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/x64ns.c vice-2.4/src/arch/amigaos/x64ns.c
---- vice-2.4-orig/src/arch/amigaos/x64ns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/x64ns.c	2013-09-08 18:35:51.887299576 +0200
+diff -ruN vice-2.4/src/arch/amigaos/x64ns.c vice-2.4.aros/src/arch/amigaos/x64ns.c
+--- vice-2.4/src/arch/amigaos/x64ns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/x64ns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -67,9 +300,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/x64ns.c vice-2.4/src/arch/amigaos/x64n
 -    return system("x64.exe -sounddev dummy");
 +    return system("x64 -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/x64scns.c vice-2.4/src/arch/amigaos/x64scns.c
---- vice-2.4-orig/src/arch/amigaos/x64scns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/x64scns.c	2013-09-08 18:35:57.999299873 +0200
+diff -ruN vice-2.4/src/arch/amigaos/x64scns.c vice-2.4.aros/src/arch/amigaos/x64scns.c
+--- vice-2.4/src/arch/amigaos/x64scns.c	2010-06-02 07:52:27.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/x64scns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -77,9 +310,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/x64scns.c vice-2.4/src/arch/amigaos/x6
 -    return system("x64sc.exe -sounddev dummy");
 +    return system("x64sc -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/xcbm2ns.c vice-2.4/src/arch/amigaos/xcbm2ns.c
---- vice-2.4-orig/src/arch/amigaos/xcbm2ns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/xcbm2ns.c	2013-09-08 18:36:03.887300158 +0200
+diff -ruN vice-2.4/src/arch/amigaos/xcbm2ns.c vice-2.4.aros/src/arch/amigaos/xcbm2ns.c
+--- vice-2.4/src/arch/amigaos/xcbm2ns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/xcbm2ns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -87,9 +320,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/xcbm2ns.c vice-2.4/src/arch/amigaos/xc
 -    return system("xcbm2.exe -sounddev dummy");
 +    return system("xcbm2 -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/xcbm5x0ns.c vice-2.4/src/arch/amigaos/xcbm5x0ns.c
---- vice-2.4-orig/src/arch/amigaos/xcbm5x0ns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/xcbm5x0ns.c	2013-09-08 18:36:09.631300437 +0200
+diff -ruN vice-2.4/src/arch/amigaos/xcbm5x0ns.c vice-2.4.aros/src/arch/amigaos/xcbm5x0ns.c
+--- vice-2.4/src/arch/amigaos/xcbm5x0ns.c	2012-06-16 16:46:50.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/xcbm5x0ns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -97,9 +330,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/xcbm5x0ns.c vice-2.4/src/arch/amigaos/
 -    return system("xcbm5x0.exe -sounddev dummy");
 +    return system("xcbm5x0 -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/xpetns.c vice-2.4/src/arch/amigaos/xpetns.c
---- vice-2.4-orig/src/arch/amigaos/xpetns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/xpetns.c	2013-09-08 18:36:15.903300740 +0200
+diff -ruN vice-2.4/src/arch/amigaos/xpetns.c vice-2.4.aros/src/arch/amigaos/xpetns.c
+--- vice-2.4/src/arch/amigaos/xpetns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/xpetns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -107,9 +340,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/xpetns.c vice-2.4/src/arch/amigaos/xpe
 -    return system("xpet.exe -sounddev dummy");
 +    return system("xpet -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/xplus4ns.c vice-2.4/src/arch/amigaos/xplus4ns.c
---- vice-2.4-orig/src/arch/amigaos/xplus4ns.c	2013-09-08 17:09:30.359048806 +0200
-+++ vice-2.4/src/arch/amigaos/xplus4ns.c	2013-09-08 18:36:22.255301047 +0200
+diff -ruN vice-2.4/src/arch/amigaos/xplus4ns.c vice-2.4.aros/src/arch/amigaos/xplus4ns.c
+--- vice-2.4/src/arch/amigaos/xplus4ns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/xplus4ns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -117,9 +350,9 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/xplus4ns.c vice-2.4/src/arch/amigaos/x
 -    return system("xplus4.exe -sounddev dummy");
 +    return system("xplus4 -sounddev dummy");
  }
-diff -Naur vice-2.4-orig/src/arch/amigaos/xvicns.c vice-2.4/src/arch/amigaos/xvicns.c
---- vice-2.4-orig/src/arch/amigaos/xvicns.c	2013-09-08 17:09:30.363048806 +0200
-+++ vice-2.4/src/arch/amigaos/xvicns.c	2013-09-08 18:36:29.551301400 +0200
+diff -ruN vice-2.4/src/arch/amigaos/xvicns.c vice-2.4.aros/src/arch/amigaos/xvicns.c
+--- vice-2.4/src/arch/amigaos/xvicns.c	2009-08-16 07:12:00.000000000 +0000
++++ vice-2.4.aros/src/arch/amigaos/xvicns.c	2013-09-08 15:11:37.183054944 +0000
 @@ -29,5 +29,5 @@
  
  int main(void)
@@ -127,3 +360,48 @@ diff -Naur vice-2.4-orig/src/arch/amigaos/xvicns.c vice-2.4/src/arch/amigaos/xvi
 -    return system("xvic.exe -sounddev dummy");
 +    return system("xvic -sounddev dummy");
  }
+diff -ruN vice-2.4/src/c64/psid.c vice-2.4.aros/src/c64/psid.c
+--- vice-2.4/src/c64/psid.c	2012-07-10 13:14:08.000000000 +0000
++++ vice-2.4.aros/src/c64/psid.c	2025-06-16 15:38:33.140534296 +0000
+@@ -102,8 +102,6 @@
+ #define PSID_V1_DATA_OFFSET 0x76
+ #define PSID_V2_DATA_OFFSET 0x7c
+ 
+-int psid_ui_set_tune(int tune, void *param);
+-
+ static psid_t* psid = NULL;
+ static int psid_tune = 0;
+ static int keepenv = 0;
+diff -ruN vice-2.4/src/c64/psid.h vice-2.4.aros/src/c64/psid.h
+--- vice-2.4/src/c64/psid.h	2009-10-24 04:31:24.000000000 +0000
++++ vice-2.4.aros/src/c64/psid.h	2025-06-16 15:38:40.768615147 +0000
+@@ -39,4 +39,6 @@
+ 
+ extern const char * csidmodel[];
+ 
++extern int psid_ui_set_tune(int tune, void *param);
++
+ #endif
+diff -ruN vice-2.4/src/pet/petmem.c vice-2.4.aros/src/pet/petmem.c
+--- vice-2.4/src/pet/petmem.c	2012-10-26 19:44:17.000000000 +0000
++++ vice-2.4.aros/src/pet/petmem.c	2025-06-16 15:01:16.098756959 +0000
+@@ -36,6 +36,7 @@
+ #include "crtctypes.h"
+ #include "log.h"
+ #include "machine.h"
++#include "maincpu.h"
+ #include "mem.h"
+ #include "monitor.h"
+ #include "pet.h"
+diff -ruN vice-2.4/src/pet/petmodel.c vice-2.4.aros/src/pet/petmodel.c
+--- vice-2.4/src/pet/petmodel.c	2012-10-15 20:36:47.000000000 +0000
++++ vice-2.4.aros/src/pet/petmodel.c	2025-06-16 15:05:05.347474263 +0000
+@@ -35,6 +35,8 @@
+ #include "resources.h"
+ #include "vsync.h"
+ 
++#include "uiapi.h"
++
+ #define PET_CHARGEN_NAME        "chargen"
+ #define SUPERPET_CHARGEN_NAME   "characters.901640-01.bin"
+ 

@@ -11,6 +11,8 @@ VERSION      := 1.16
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/Potrace
 REPOSITORIES := sf://potrace
 
+USER_CFLAGS := $(CFLAGS_GNU11)
+
 %fetch_and_build mmake=ports-graphics-potrace prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \
 	patch=no package_repo=$(REPOSITORIES) \

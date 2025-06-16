@@ -1,6 +1,18 @@
-diff -Naur cflow-1.5-orig/src/rc.c cflow-1.5/src/rc.c
---- cflow-1.5-orig/src/rc.c	2017-08-01 00:22:09.440756945 +0200
-+++ cflow-1.5/src/rc.c	2017-08-01 00:26:02.641823593 +0200
+diff -ruN cflow-1.5/src/cflow.h cflow-1.5.aros/src/cflow.h
+--- cflow-1.5/src/cflow.h	2016-03-23 06:38:49.000000000 +0000
++++ cflow-1.5.aros/src/cflow.h	2025-06-16 14:00:15.309529971 +0000
+@@ -188,7 +188,7 @@
+ void delete_statics(void);
+ void delete_parms(int level);
+ void move_parms(int level);
+-size_t collect_symbols(Symbol ***, int (*sel)(), size_t rescnt);
++size_t collect_symbols(Symbol ***, int (*sel)(Symbol *p), size_t rescnt);
+ size_t collect_functions(Symbol ***return_sym);
+ struct linked_list *linked_list_create(linked_list_free_data_fp fun);
+ void linked_list_destroy(struct linked_list **plist);
+diff -ruN cflow-1.5/src/rc.c cflow-1.5.aros/src/rc.c
+--- cflow-1.5/src/rc.c	2016-03-23 06:38:49.000000000 +0000
++++ cflow-1.5.aros/src/rc.c	2016-05-16 21:02:07.000000000 +0000
 @@ -115,7 +115,11 @@
       if (env) 
  	  parse_rc(&xargc, &xargv, env);

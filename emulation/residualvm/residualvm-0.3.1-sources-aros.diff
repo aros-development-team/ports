@@ -1,6 +1,6 @@
 diff -ruN residualvm-0.3.1/backends/events/sdl/sdl-events.cpp residualvm-0.3.1.aros/backends/events/sdl/sdl-events.cpp
 --- residualvm-0.3.1/backends/events/sdl/sdl-events.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/events/sdl/sdl-events.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/events/sdl/sdl-events.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -31,7 +31,7 @@
  #include "common/textconsole.h"
  
@@ -12,7 +12,7 @@ diff -ruN residualvm-0.3.1/backends/events/sdl/sdl-events.cpp residualvm-0.3.1.a
  #if defined(KEYCODE_LESS) && defined(KEYCODE_GREATER)
 diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.cpp residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.cpp
 --- residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -378,7 +378,7 @@ diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.cpp residualvm-0.3.1
  
 diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs-factory.cpp residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
 --- residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -390,7 +390,7 @@ diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs-factory.cpp residual
  #include "backends/fs/amigaos4/amigaos4-fs.h"
 diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.h residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.h
 --- residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.h	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.h	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/fs/amigaos4/amigaos4-fs.h	2025-06-16 14:37:05.088663380 +0000
 @@ -37,6 +37,13 @@
  
  #include "backends/fs/abstract-fs.h"
@@ -407,7 +407,7 @@ diff -ruN residualvm-0.3.1/backends/fs/amigaos4/amigaos4-fs.h residualvm-0.3.1.a
   *
 diff -ruN residualvm-0.3.1/backends/midi/camd.cpp residualvm-0.3.1.aros/backends/midi/camd.cpp
 --- residualvm-0.3.1/backends/midi/camd.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/midi/camd.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/midi/camd.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -25,7 +25,7 @@
  
  #include "common/scummsys.h"
@@ -558,7 +558,7 @@ diff -ruN residualvm-0.3.1/backends/midi/camd.cpp residualvm-0.3.1.aros/backends
  }
 diff -ruN residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos.cpp residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos.cpp
 --- residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -570,7 +570,7 @@ diff -ruN residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos.cpp residualvm-
  #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
 diff -ruN residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos-main.cpp residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos-main.cpp
 --- residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos-main.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -600,7 +600,7 @@ diff -ruN residualvm-0.3.1/backends/platform/sdl/amigaos/amigaos-main.cpp residu
  	assert(g_system);
 diff -ruN residualvm-0.3.1/base/plugins.cpp residualvm-0.3.1.aros/base/plugins.cpp
 --- residualvm-0.3.1/base/plugins.cpp	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/base/plugins.cpp	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/base/plugins.cpp	2025-06-16 14:37:05.088663380 +0000
 @@ -110,7 +110,7 @@
  		#if defined(IRIX)
  		LINK_PLUGIN(DMEDIA)
@@ -612,7 +612,7 @@ diff -ruN residualvm-0.3.1/base/plugins.cpp residualvm-0.3.1.aros/base/plugins.c
  		#if defined(MACOSX)
 diff -ruN residualvm-0.3.1/common/keyboard.h residualvm-0.3.1.aros/common/keyboard.h
 --- residualvm-0.3.1/common/keyboard.h	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/common/keyboard.h	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/common/keyboard.h	2025-06-16 14:37:05.088663380 +0000
 @@ -25,7 +25,7 @@
  
  #include "common/scummsys.h"
@@ -624,7 +624,7 @@ diff -ruN residualvm-0.3.1/common/keyboard.h residualvm-0.3.1.aros/common/keyboa
  #if defined(KEYCODE_LESS) && defined(KEYCODE_GREATER)
 diff -ruN residualvm-0.3.1/common/streamdebug.h residualvm-0.3.1.aros/common/streamdebug.h
 --- residualvm-0.3.1/common/streamdebug.h	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/common/streamdebug.h	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/common/streamdebug.h	2025-06-16 14:37:05.088663380 +0000
 @@ -23,6 +23,10 @@
  #ifndef COMMON_STREAMDEBUG_H
  #define COMMON_STREAMDEBUG_H
@@ -638,7 +638,7 @@ diff -ruN residualvm-0.3.1/common/streamdebug.h residualvm-0.3.1.aros/common/str
  class String;
 diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
 --- residualvm-0.3.1/configure	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/configure	2025-06-16 14:31:44.019725230 +0000
++++ residualvm-0.3.1.aros/configure	2025-06-16 14:40:19.794154077 +0000
 @@ -1528,6 +1528,12 @@
  	_host_cpu=arm
  	_host_alias=arm-angstrom-linux-gnueabi
@@ -652,25 +652,23 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  ppc-amigaos)
  	_host_os=amigaos
  	_host_cpu=powerpc
-@@ -1993,7 +1999,16 @@
+@@ -1993,7 +1999,14 @@
  #
  echo_n "Building as C++11... "
  if test "$_use_cxx11" = "yes" ; then
 -	append_var CXXFLAGS "-std=c++11"
 +	case $_host_os in
-+	# newlib-based system include files suppress non-C89 function
-+	# declarations under __STRICT_ANSI__
 +	aros*)
-+		append_var CXXFLAGS "-std=c++11"
++		append_var CXXFLAGS "-std=gnu++11"
 +		;;
 +	*)
-+		append_var CXXFLAGS "-std=gnu++11"
++		append_var CXXFLAGS "-std=c++11"
 +		;;
 +	esac
  fi
  echo $_use_cxx11
  
-@@ -2307,6 +2322,10 @@
+@@ -2307,6 +2320,10 @@
  		append_var LDFLAGS "-L$DEVKITPRO/portlibs/3ds/lib"
  		append_var LIBS "-lcitro3d -lctru"
  		;;
@@ -681,7 +679,7 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  	amigaos*)
  		append_var LDFLAGS "-Wl,--export-dynamic"
  		append_var LDFLAGS "-L/sdk/local/newlib/lib"
-@@ -3124,6 +3143,8 @@
+@@ -3124,6 +3141,8 @@
  			_seq_midi=no
  			_port_mk="backends/platform/openpandora/op-bundle.mk"
  			;;
@@ -690,7 +688,7 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  		ppc-amigaos)
  			# PPC Linker requires this to fix relocation errors
  			append_var CXXFLAGS "-mlongcall"
-@@ -3568,7 +3589,7 @@
+@@ -3568,7 +3587,7 @@
  #
  echo_n "Checking if host is POSIX compliant... "
  case $_host_os in
@@ -699,7 +697,7 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  		_posix=no
  		;;
  	3ds | android | androidsdl | beos* | bsd* | darwin* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | solaris* | sunos* | uclinux* | webos)
-@@ -5055,6 +5076,9 @@
+@@ -5055,6 +5074,9 @@
  test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
  
  case $_host_os in
@@ -709,7 +707,7 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  	mingw*)
  		# Windows stores all the external data files in executable file.
  		;;
-@@ -5078,7 +5102,14 @@
+@@ -5078,7 +5100,14 @@
  		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"host:plugins\\\""
  		;;
  	*)
@@ -727,7 +725,7 @@ diff -ruN residualvm-0.3.1/configure residualvm-0.3.1.aros/configure
  
 diff -ruN residualvm-0.3.1/Makefile.common residualvm-0.3.1.aros/Makefile.common
 --- residualvm-0.3.1/Makefile.common	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/Makefile.common	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/Makefile.common	2025-06-16 14:37:05.088663380 +0000
 @@ -167,11 +167,11 @@
  VER_PATCH = $(shell echo $(VERSION) | cut -d. -f 3 | cut -c1)
  VER_EXTRA = $(shell echo $(VERSION) | cut -d. -f 3 | cut -c2-)
@@ -744,7 +742,7 @@ diff -ruN residualvm-0.3.1/Makefile.common residualvm-0.3.1.aros/Makefile.common
  # Get git's working copy information
 diff -ruN residualvm-0.3.1/ports.mk residualvm-0.3.1.aros/ports.mk
 --- residualvm-0.3.1/ports.mk	2018-06-13 20:01:52.000000000 +0000
-+++ residualvm-0.3.1.aros/ports.mk	2025-06-16 14:17:49.148146069 +0000
++++ residualvm-0.3.1.aros/ports.mk	2025-06-16 14:37:05.088663380 +0000
 @@ -18,10 +18,12 @@
  	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
  	$(INSTALL) -d "$(DESTDIR)$(datadir)"

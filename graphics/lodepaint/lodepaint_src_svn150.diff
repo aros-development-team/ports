@@ -9,6 +9,27 @@ diff -ruN lodepaint-code-r150-trunk/main_program/src/imfmt/rgbe.cpp lodepaint-co
  
  /* This file contains code to read and write four byte rgbe file format
   developed by Greg Ward.  It handles the conversions between rgbe and
+diff -ruN lodepaint-code-r150-trunk/main_program/src/lpi/gui/lpi_gui_ex.h lodepaint-code-r150-trunk.aros/main_program/src/lpi/gui/lpi_gui_ex.h
+--- lodepaint-code-r150-trunk/main_program/src/lpi/gui/lpi_gui_ex.h	2011-04-30 18:57:31.000000000 +0000
++++ lodepaint-code-r150-trunk.aros/main_program/src/lpi/gui/lpi_gui_ex.h	2025-06-16 23:28:40.908471302 +0000
+@@ -310,13 +310,15 @@
+       this->x0 = x;
+       this->y0 = y;
+       //for now, only the length of the label + 1 is used
+-      this->setSizex((label.length() + 1) * /*markup.getWidth()*/8); //TODO: use a drawer to determine text size
+-      this->setSizey(/*markup.getHeight()*/8);
++      this->setSizeX((label.length() + 1) * /*markup.getWidth()*/8); //TODO: use a drawer to determine text size
++      this->setSizeY(/*markup.getHeight()*/8);
+       this->v = v;
+       this->label = label;
+       this->font = font;
++#if (0)
+       this->visible = 1;
+       this->active = 1;
++#endif
+     }
+     
+     void setValue(const T& v) { this->v = v; }
 diff -ruN lodepaint-code-r150-trunk/main_program/src/lpi/gui/lpi_gui_file.cpp lodepaint-code-r150-trunk.aros/main_program/src/lpi/gui/lpi_gui_file.cpp
 --- lodepaint-code-r150-trunk/main_program/src/lpi/gui/lpi_gui_file.cpp	2012-03-31 23:07:07.000000000 +0000
 +++ lodepaint-code-r150-trunk.aros/main_program/src/lpi/gui/lpi_gui_file.cpp	2021-01-26 04:27:32.790000000 +0000

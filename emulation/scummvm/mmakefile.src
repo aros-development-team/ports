@@ -22,10 +22,11 @@ SCUMMVM_OPTS=--host=$(AROS_TARGET_CPU)-aros --enable-verbose-build --enable-c++1
 NOWARN_FLAGS := -Wno-expansion-to-defined -Wno-variadic-macros \
                 $(NOWARN_CLASS_MEMACCESS) $(NOWARN_IMPLICIT_FALLTHROUGH) \
                 $(NOWARN_FORMAT_OVERFLOW)
-USER_CXXFLAGS := $(CXXFLAGS_GNU11) -fvisibility=hidden  -fvisibility-inlines-hidden
+USER_CXXFLAGS := -fvisibility=hidden  -fvisibility-inlines-hidden
 USER_CPPFLAGS := -D__BSDSOCKET_NOLIBBASE__
 USER_INCLUDES := -I$(AROS_INCLUDES)/SDL -I$(AROS_CONTRIB_INCLUDES) $(NOWARN_FLAGS)
 USER_LDFLAGS := -static-libstdc++
+OPTIMIZATION_CFLAGS:=
 
 %fetch_and_build mmake=aros-scummvm prefix="$(TARGETDIR)" \
     package="$(PACKAGE)" version="$(VERSION)" suffixes="tar.xz tar.bz2 tar.gz" \

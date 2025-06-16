@@ -1,18 +1,6 @@
-diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
---- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2021-01-28 01:03:40.814088300 +0000
-@@ -20,7 +20,7 @@
-  *
-  */
- 
--#if defined(__amigaos4__)
-+#if defined(__AROS__) || defined(__amigaos4__)
- 
- #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
- #include "backends/fs/amigaos4/amigaos4-fs.h"
 diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp
 --- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -20,7 +20,7 @@
   *
   */
@@ -421,9 +409,21 @@ diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.cpp scummvm-2.2.0.aros/
  
  	LEAVE();
  
+diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp
+--- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs-factory.cpp	2025-06-16 14:18:40.219016212 +0000
+@@ -20,7 +20,7 @@
+  *
+  */
+ 
+-#if defined(__amigaos4__)
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
+ #include "backends/fs/amigaos4/amigaos4-fs.h"
 diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h
 --- scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/fs/amigaos4/amigaos4-fs.h	2025-06-16 14:18:40.219016212 +0000
 @@ -37,6 +37,13 @@
  
  #include "backends/fs/abstract-fs.h"
@@ -440,7 +440,7 @@ diff -ruN scummvm-2.2.0/backends/fs/amigaos4/amigaos4-fs.h scummvm-2.2.0.aros/ba
   *
 diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.cpp scummvm-2.2.0.aros/backends/networking/sdl_net/client.cpp
 --- scummvm-2.2.0/backends/networking/sdl_net/client.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -26,21 +26,42 @@
  #include "backends/networking/sdl_net/localwebserver.h"
  #include "common/memstream.h"
@@ -486,7 +486,7 @@ diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.cpp scummvm-2.2.0.aro
  
 diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.h scummvm-2.2.0.aros/backends/networking/sdl_net/client.h
 --- scummvm-2.2.0/backends/networking/sdl_net/client.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.h	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/client.h	2025-06-16 14:18:40.219016212 +0000
 @@ -23,6 +23,11 @@
  #ifndef BACKENDS_NETWORKING_SDL_NET_CLIENT_H
  #define BACKENDS_NETWORKING_SDL_NET_CLIENT_H
@@ -511,7 +511,7 @@ diff -ruN scummvm-2.2.0/backends/networking/sdl_net/client.h scummvm-2.2.0.aros/
  	virtual ~Client();
 diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.cpp scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.cpp
 --- scummvm-2.2.0/backends/networking/sdl_net/localwebserver.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -31,7 +31,11 @@
  #include "common/translation.h"
  #include <SDL_net.h>
@@ -599,7 +599,7 @@ diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.cpp scummvm-2
  void LocalWebserver::handleClient(uint32 i) {
 diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.h scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.h
 --- scummvm-2.2.0/backends/networking/sdl_net/localwebserver.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.h	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/networking/sdl_net/localwebserver.h	2025-06-16 14:18:40.219016212 +0000
 @@ -23,6 +23,11 @@
  #ifndef BACKENDS_NETWORKING_SDL_NET_LOCALWEBSERVER_H
  #define BACKENDS_NETWORKING_SDL_NET_LOCALWEBSERVER_H
@@ -623,9 +623,27 @@ diff -ruN scummvm-2.2.0/backends/networking/sdl_net/localwebserver.h scummvm-2.2
  	static const uint32 DEFAULT_SERVER_PORT = 12345;
  
  	LocalWebserver();
+diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp
+--- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp	2020-09-13 21:05:37.000000000 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2025-06-16 14:18:40.219016212 +0000
+@@ -22,7 +22,7 @@
+ 
+ #include "common/scummsys.h"
+ 
+-#ifdef __amigaos4__
++#if defined(__AROS__) || defined(__amigaos4__)
+ 
+ #include "backends/platform/sdl/amigaos/amigaos.h"
+ #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
+@@ -34,5 +34,4 @@
+ 	// Invoke parent implementation of this method
+ 	OSystem_SDL::init();
+ }
+-
+ #endif
 diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp
 --- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos-main.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -22,7 +22,7 @@
  
  #include "common/scummsys.h"
@@ -651,27 +669,9 @@ diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos-main.cpp scummvm-2
  
  	// Create our OSystem instance.
  	g_system = new OSystem_AmigaOS();
-diff -ruN scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp
---- scummvm-2.2.0/backends/platform/sdl/amigaos/amigaos.cpp	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/platform/sdl/amigaos/amigaos.cpp	2021-01-28 01:03:40.814088300 +0000
-@@ -22,7 +22,7 @@
- 
- #include "common/scummsys.h"
- 
--#ifdef __amigaos4__
-+#if defined(__AROS__) || defined(__amigaos4__)
- 
- #include "backends/platform/sdl/amigaos/amigaos.h"
- #include "backends/fs/amigaos4/amigaos4-fs-factory.h"
-@@ -34,5 +34,4 @@
- 	// Invoke parent implementation of this method
- 	OSystem_SDL::init();
- }
--
- #endif
 diff -ruN scummvm-2.2.0/backends/platform/sdl/sdl.cpp scummvm-2.2.0.aros/backends/platform/sdl/sdl.cpp
 --- scummvm-2.2.0/backends/platform/sdl/sdl.cpp	2020-09-13 21:05:39.000000000 +0000
-+++ scummvm-2.2.0.aros/backends/platform/sdl/sdl.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/backends/platform/sdl/sdl.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -137,7 +137,7 @@
  	_presence = 0;
  #endif
@@ -701,7 +701,7 @@ diff -ruN scummvm-2.2.0/backends/platform/sdl/sdl.cpp scummvm-2.2.0.aros/backend
  
 diff -ruN scummvm-2.2.0/common/keyboard.h scummvm-2.2.0.aros/common/keyboard.h
 --- scummvm-2.2.0/common/keyboard.h	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/common/keyboard.h	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/common/keyboard.h	2025-06-16 14:18:40.219016212 +0000
 @@ -25,7 +25,7 @@
  
  #include "common/scummsys.h"
@@ -713,7 +713,7 @@ diff -ruN scummvm-2.2.0/common/keyboard.h scummvm-2.2.0.aros/common/keyboard.h
  #if defined(KEYCODE_LESS) && defined(KEYCODE_GREATER)
 diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
 --- scummvm-2.2.0/configure	2020-09-13 21:05:37.000000000 +0000
-+++ scummvm-2.2.0.aros/configure	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/configure	2025-06-16 14:40:42.558811334 +0000
 @@ -1745,6 +1745,12 @@
  	_host_cpu=arm
  	_host_alias=arm-angstrom-linux-gnueabi
@@ -727,16 +727,23 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  ppc-amigaos)
  	_host_os=amigaos
  	_host_cpu=powerpc
-@@ -2256,7 +2262,7 @@
- 		case $_host_os in
- 		# newlib-based system include files suppress non-C89 function
- 		# declarations under __STRICT_ANSI__, undefine it
--		3ds | amigaos* | android | androidsdl | dreamcast | ds | gamecube | mingw* | mint* | n64 | psp | ps3 | psp2 | switch | wii )
-+		3ds | amigaos* | android | androidsdl | aros* | dreamcast | ds | gamecube | mingw* | mint* | n64 | psp | ps3 | psp2 | switch | wii )
- 			append_var CXXFLAGS "-U__STRICT_ANSI__"
- 			;;
- 		*)
-@@ -2619,6 +2625,9 @@
+@@ -2283,7 +2289,14 @@
+ #
+ echo_n "Building as C++11... "
+ if test "$_use_cxx11" = "yes" ; then
+-	append_var CXXFLAGS "-std=c++11"
++	case $_host_os in
++	aros*)
++		append_var CXXFLAGS "-std=gnu++11"
++		;;
++	*)
++		append_var CXXFLAGS "-std=c++11"
++		;;
++	esac
+ fi
+ echo $_use_cxx11
+ 
+@@ -2619,6 +2632,9 @@
  echo_n "Checking hosttype... "
  echo $_host_os
  case $_host_os in
@@ -746,7 +753,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  	3ds)
  		_optimization_level=-O2
  		append_var DEFINES "-D__3DS__"
-@@ -3481,6 +3490,8 @@
+@@ -3481,6 +3497,8 @@
  			_seq_midi=no
  			_port_mk="backends/platform/openpandora/op-bundle.mk"
  			;;
@@ -755,7 +762,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  		ppc-amigaos)
  			# PPC Linker requires this to fix relocation errors
  			append_var CXXFLAGS "-mlongcall"
-@@ -3808,20 +3819,35 @@
+@@ -3808,20 +3826,35 @@
  	# Check for SDL_Net
  	echocheck "SDL_Net"
  	_sdlnet=no
@@ -781,20 +788,20 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
 -		cat > $TMPC << EOF
 +		if test "$_host_os" = "aros"; then
 +			cat > $TMPC << EOF
-+#include "SDL_net.h"
-+struct Library *SocketBase = NULL;
-+int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
-+EOF
-+       else
-+			cat > $TMPC << EOF
  #include "SDL_net.h"
++struct Library *SocketBase = NULL;
  int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
  EOF
++       else
++			cat > $TMPC << EOF
++#include "SDL_net.h"
++int main(int argc, char *argv[]) { SDLNet_Init(); return 0; }
++EOF
 +       fi
  		cc_check $SDL1_NET_LIBS $LIBS $INCLUDES $SDL1_NET_CFLAGS && _sdlnet=yes
  		set_var SDL_NET_LIBS   "$SDL1_NET_LIBS"
  		set_var SDL_NET_CFLAGS "$SDL1_NET_CFLAGS"
-@@ -3914,7 +3940,7 @@
+@@ -3914,7 +3947,7 @@
  #
  echo_n "Checking if host is POSIX compliant... "
  case $_host_os in
@@ -803,7 +810,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  		_posix=no
  		;;
  	3ds | android | androidsdl | beos* | bsd* | darwin* | freebsd* | gnu* | gph-linux | haiku* | hpux* | iphone | ios7 | irix*| k*bsd*-gnu* | linux* | maemo | mint* | netbsd* | openbsd* | solaris* | sunos* | switch | uclinux*)
-@@ -5646,6 +5672,9 @@
+@@ -5646,6 +5679,9 @@
  test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
  
  case $_host_os in
@@ -813,7 +820,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  	mingw*)
  		# Windows stores all the external data files in executable file.
  		;;
-@@ -5668,7 +5697,14 @@
+@@ -5668,7 +5704,14 @@
  		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$libdir\\\""
  		;;
  	*)
@@ -831,7 +838,7 @@ diff -ruN scummvm-2.2.0/configure scummvm-2.2.0.aros/configure
  
 diff -ruN scummvm-2.2.0/gui/options.cpp scummvm-2.2.0.aros/gui/options.cpp
 --- scummvm-2.2.0/gui/options.cpp	2020-09-13 21:05:40.000000000 +0000
-+++ scummvm-2.2.0.aros/gui/options.cpp	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/gui/options.cpp	2025-06-16 14:18:40.219016212 +0000
 @@ -62,7 +62,11 @@
  #include "backends/networking/sdl_net/localwebserver.h"
  #endif
@@ -871,7 +878,7 @@ diff -ruN scummvm-2.2.0/gui/options.cpp scummvm-2.2.0.aros/gui/options.cpp
  	}
 diff -ruN scummvm-2.2.0/ports.mk scummvm-2.2.0.aros/ports.mk
 --- scummvm-2.2.0/ports.mk	2020-09-13 21:05:39.000000000 +0000
-+++ scummvm-2.2.0.aros/ports.mk	2021-01-28 01:03:40.814088300 +0000
++++ scummvm-2.2.0.aros/ports.mk	2025-06-16 14:18:40.219016212 +0000
 @@ -18,10 +18,12 @@
  	$(INSTALL) -c -m 644 $(DIST_FILES_DOCS) "$(DESTDIR)$(docdir)"
  	$(INSTALL) -d "$(DESTDIR)$(datadir)"

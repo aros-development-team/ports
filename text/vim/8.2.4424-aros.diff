@@ -1,0 +1,39 @@
+diff -ruN MUI-Vim-8.2.4424/src/os_amiga.h MUI-Vim-8.2.4424.aros/src/os_amiga.h
+--- MUI-Vim-8.2.4424/src/os_amiga.h	2022-02-20 13:14:10.000000000 +0000
++++ MUI-Vim-8.2.4424.aros/src/os_amiga.h	2025-06-17 00:01:00.942378258 +0000
+@@ -92,6 +92,9 @@
+ #endif
+ 
+ #ifdef __GNUC__
++#if defined(__AROS__)
++# include <sys/time.h>
++#endif
+ # include <sys/stat.h>
+ # include <unistd.h>
+ # include <limits.h>
+diff -ruN MUI-Vim-8.2.4424/src/vim.h MUI-Vim-8.2.4424.aros/src/vim.h
+--- MUI-Vim-8.2.4424/src/vim.h	2022-02-20 13:14:10.000000000 +0000
++++ MUI-Vim-8.2.4424.aros/src/vim.h	2025-06-16 23:56:57.979887888 +0000
+@@ -36,7 +36,7 @@
+ #  error configure did not run properly.  Check auto/config.log.
+ # endif
+ 
+-# if (defined(__linux__) && !defined(__ANDROID__)) || defined(__CYGWIN__)
++# if (defined(__linux__) && !defined(__ANDROID__)) || defined(__CYGWIN__) || defined(__AROS__)
+ // Needed for strptime().  Needs to be done early, since header files can
+ // include other header files and end up including time.h, where these symbols
+ // matter for Vim.
+diff -ruN MUI-Vim-8.2.4424/src/xxd/xxd.c MUI-Vim-8.2.4424.aros/src/xxd/xxd.c
+--- MUI-Vim-8.2.4424/src/xxd/xxd.c	2022-02-20 13:14:10.000000000 +0000
++++ MUI-Vim-8.2.4424.aros/src/xxd/xxd.c	2025-06-17 00:44:02.282920282 +0000
+@@ -133,8 +133,10 @@
+ # endif
+ #endif
+ 
++#if !defined(__AROS__)
+ extern long int strtol();
+ extern long int ftell();
++#endif
+ 
+ char version[] = "xxd 2022-01-14 by Juergen Weigert et al.";
+ #ifdef WIN32

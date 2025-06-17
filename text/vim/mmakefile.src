@@ -20,7 +20,8 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM  ports-text-vim-clean : ports-text-vim-gvim ports-text-vim-xxd-clean
 
 REPOSITORIES := https://github.com/sodero/MUI-Vim/archive/refs/tags
-ARCHBASE     := 8.2.4424
+VIMVERS        := 8.2.4424
+ARCHBASE     := MUI-Vim-$(VIMVERS)
 TARGETDIR    := $(AROS_CONTRIB)/Utilities/Text/Vim
 
 NOWARN_FLAGS := $(NOWARN_STRICT_OVERFLOW) $(NOWARN_STRICT_ALIASING) \
@@ -40,7 +41,7 @@ PATCHLEVEL=$(PAT)
 BUILDDATE=$(BLD)
 BUILD=mui
 
-USER_CFLAGS := $(NOWARN_FLAGS)
+USER_CFLAGS := $(CFLAGS_GNU11) $(NOWARN_FLAGS)
 
 USER_CFLAGS += \
     -DUSE_TMPNAM \
@@ -67,7 +68,7 @@ ifneq ("","$(strip $(WARN_ERROR))")
 CONFIG_CFLAGS := $(subst $(WARN_ERROR),,$(CONFIG_CFLAGS))
 endif
 
-USER_INCLUDES := -I$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/proto
+USER_INCLUDES := -I$(PORTSDIR)/vim/$(ARCHBASE)/src/proto
 USER_LDFLAGS  := 
 
 # MUI GUI
@@ -192,7 +193,7 @@ FILES += \
     xdiff/xprepare \
     xdiff/xutils
 
-FILES := $(addprefix $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/,$(FILES))
+FILES := $(addprefix $(PORTSDIR)/vim/$(ARCHBASE)/src/,$(FILES))
 
 %build_prog mmake=ports-text-vim-gvim \
     progname=gVim targetdir=$(TARGETDIR) \
@@ -203,7 +204,8 @@ FILES := $(addprefix $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/,$(FILES))
 USER_CFLAGS   :=
 USER_INCLUDES :=
 USER_LDFLAGE  :=
-FILES := $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/xxd/xxd
+FILES := $(PORTSDIR)/vim/$(ARCHBASE)/src/xxd/xxd
+VIMPATCHSPEC := $(VIMVERS)-aros.diff:$(ARCHBASE):-f,-p1
 
 %build_prog mmake=ports-text-vim-xxd \
     progname=xxd targetdir=$(TARGETDIR) \
@@ -211,16 +213,21 @@ FILES := $(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/src/xxd/xxd
 
 ############################################################################################
 
-%fetch mmake=ports-text-vim-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/vim \
-    location=$(PORTSSOURCEDIR)/mui-vim archive_origins=$(REPOSITORIES) suffixes="tar.gz"
+%fetch mmake=ports-text-vim-fetch archive=$(VIMVERS) destination=$(PORTSDIR)/vim \
+    location=$(PORTSSOURCEDIR)/mui-vim archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
+    patches_specs=$(VIMPATCHSPEC)
+
+%create_patch mmake=ports-text-vim-create-patch \
+    location=$(PORTSSOURCEDIR)/mui-vim archive=$(VIMVERS) suffixes="tar.gz" \
+    destination=$(PORTSDIR)/vim srcdir="$(ARCHBASE)" 
 
 ############################################################################################
 
-%copy_dir_recursive mmake=ports-text-vim-runtime src=$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/runtime \
+%copy_dir_recursive mmake=ports-text-vim-runtime src=$(PORTSDIR)/vim/$(ARCHBASE)/runtime \
     dst=$(TARGETDIR)/runtime
 
 ############################################################################################
 
-%copy_files_q mmake=ports-text-vim-guide files=MUI-Vim.guide src=$(PORTSDIR)/vim/MUI-Vim-$(ARCHBASE)/dist dst=$(TARGETDIR)
+%copy_files_q mmake=ports-text-vim-guide files=MUI-Vim.guide src=$(PORTSDIR)/vim/$(ARCHBASE)/dist dst=$(TARGETDIR)
 
 %common

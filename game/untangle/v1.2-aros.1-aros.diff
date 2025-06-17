@@ -1,0 +1,51 @@
+diff -ruN untangle-aros-1.2-aros.1/src/locale.h untangle-aros-1.2-aros.1.aros/src/locale.h
+--- untangle-aros-1.2-aros.1/src/locale.h	2025-04-06 07:09:37.000000000 +0000
++++ untangle-aros-1.2-aros.1.aros/src/locale.h	2025-06-17 10:17:51.476319146 +0000
+@@ -8,7 +8,7 @@
+ 
+ static inline STRPTR LS(int lid, STRPTR defstr)
+ {
+-	return (LocaleBase ? GetCatalogStr(Cat, lid, defstr) : defstr);
++	return (LocaleBase ? (STRPTR)GetCatalogStr(Cat, lid, defstr) : defstr);
+ }
+ 
+ #define MSG_STARTUP_NO_IFFPARSE           0
+diff -ruN untangle-aros-1.2-aros.1/src/main.c untangle-aros-1.2-aros.1.aros/src/main.c
+--- untangle-aros-1.2-aros.1/src/main.c	2025-04-06 07:09:37.000000000 +0000
++++ untangle-aros-1.2-aros.1.aros/src/main.c	2025-06-17 10:17:01.756319142 +0000
+@@ -14,6 +14,12 @@
+ #include "loader.h"
+ #include "locale.h"
+ 
++#if defined(__AROS__)
++typedef struct timerequest utTR_t;
++#else
++typedef struct TimeRequest utTR_t;
++#endif
++
+ struct Library
+ 	*GfxBase,
+ 	*LayersBase,
+@@ -451,12 +457,7 @@
+ 
+ 	if (app->TimerPort = CreateMsgPort())
+ 	{
+-		if (app->TimerReq = (struct TimeRequest*)CreateIORequest(app->TimerPort,
+-#ifdef __AROS__
+-		sizeof(struct timerequest)))
+-#else
+-		sizeof(struct TimeRequest)))
+-#endif
++		if (app->TimerReq = (utTR_t *)CreateIORequest(app->TimerPort, sizeof(utTR_t)))
+ 		{
+ 			if (OpenDevice("timer.device", UNIT_WAITUNTIL, &app->TimerReq->tr_node, 0) == 0)
+ 			{
+@@ -491,7 +492,7 @@
+ 			LONG dotsize;
+ 			STRPTR value;
+ 
+-			value = FindToolType((CONST_STRPTR*)dobj->do_ToolTypes, "DOTSIZE");
++			value = FindToolType((const STRPTR *)dobj->do_ToolTypes, "DOTSIZE");
+ 
+ 			if (value)
+ 			{

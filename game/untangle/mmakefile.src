@@ -1,6 +1,6 @@
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-game : ports-game-untangle
+##MM- ports-game : ports-game-untangle
 
 #MM- ports-game-untangle : \
 #MM      ports-game-untangle-fetch \
@@ -10,9 +10,12 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 
 REPOSITORIES := https://github.com/aros-porting-team/untangle-aros/archive/refs/tags
-ARCHBASE     := v1.2-aros.1
+ARCHVERS     := 1.2-aros.1
+ARCHNAME     := v$(ARCHVERS)
 TARGETDIR    := $(AROS_CONTRIB)/Games/Puzzle/Untangle
-FILEDIR      := $(PORTSDIR)/untangle/$(ARCHBASE)/untangle-aros-1.2-aros.1
+ARCHDIR        := untangle-aros-$(ARCHVERS)
+ARCHBASE      := $(PORTSDIR)/untangle/$(ARCHDIR)
+PATCHSPEC := $(ARCHNAME)-aros.diff:$(ARCHDIR):-f,-p1
 
 NOWARN_FLAGS  :=
 USER_CPPFLAGS := -D__LOCALE_STDLIBBASE__  -D__GRAPHICS_STDLIBBASE__ -D__DOS_STDLIBBASE__ -D__TIMER_STDLIBBASE__ -D__INTUITION_STDLIBBASE__
@@ -21,18 +24,18 @@ USER_INCLUDES :=
 USER_LDFLAGS  :=
 
 FILES := \
-	$(FILEDIR)/src/start \
-	$(FILEDIR)/src/main \
-	$(FILEDIR)/src/menu \
-	$(FILEDIR)/src/game \
-	$(FILEDIR)/src/loader \
-	$(FILEDIR)/src/lscm \
-	$(FILEDIR)/src/savelevel \
-	$(FILEDIR)/src/strutils \
-	$(FILEDIR)/src/selector \
-	$(FILEDIR)/src/savestate \
-	$(FILEDIR)/src/loadstate \
-	$(FILEDIR)/src/endgame
+	$(ARCHBASE)/src/start \
+	$(ARCHBASE)/src/main \
+	$(ARCHBASE)/src/menu \
+	$(ARCHBASE)/src/game \
+	$(ARCHBASE)/src/loader \
+	$(ARCHBASE)/src/lscm \
+	$(ARCHBASE)/src/savelevel \
+	$(ARCHBASE)/src/strutils \
+	$(ARCHBASE)/src/selector \
+	$(ARCHBASE)/src/savestate \
+	$(ARCHBASE)/src/loadstate \
+	$(ARCHBASE)/src/endgame
 
 
 #MM ports-game-untangle-bin : includes linklibs
@@ -41,19 +44,24 @@ FILES := \
     files=$(FILES) targetdir=$(TARGETDIR) uselibs=
 
 
-%fetch mmake=ports-game-untangle-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/untangle/$(ARCHBASE) \
-    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.gz"
+%fetch mmake=ports-game-untangle-fetch archive=$(ARCHNAME) destination=$(PORTSDIR)/untangle \
+    location=$(PORTSSOURCEDIR)/untangle archive_origins=$(REPOSITORIES) suffixes="tar.gz" \
+    patches_specs=$(PATCHSPEC)
 
+%create_patch mmake=ports-game-untangle-create-patch \
+    archive=$(ARCHNAME) suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR)/untangle destination=$(PORTSDIR)/untangle \
+    srcdir="$(ARCHDIR)"
 
 CPYFILES := LICENSE Untangle.guide StandardSet.iff untangle.readme
 
-%copy_files_q mmake=ports-game-untangle-cpy files=$(CPYFILES) src=$(FILEDIR) dst=$(TARGETDIR)
+%copy_files_q mmake=ports-game-untangle-cpy files=$(CPYFILES) src=$(ARCHBASE) dst=$(TARGETDIR)
 
 
 #MM
 ports-game-untangle-cpy-icon : $(TARGETDIR)/Untangle.info
 
-$(TARGETDIR)/Untangle.info : $(FILEDIR)/icons/Untangle-GlowIcon-opaque.info
+$(TARGETDIR)/Untangle.info : $(ARCHBASE)/icons/Untangle-GlowIcon-opaque.info
 	$(CP) $< $@
 
 %common

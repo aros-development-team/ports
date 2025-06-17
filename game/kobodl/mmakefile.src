@@ -2,14 +2,15 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-#MM- ports-game : ports-game-kobodl
+# download blocked by cloudflare...
+##MM- ports-game : ports-game-kobodl
 
 #MM- ports-game-kobodl : contrib-sdl
 
 PACKAGE      := KoboDeluxe
 VERSION      := 0.5.1
 TARGETDIR    := $(AROS_CONTRIB)/Games/Action/KoboDeluxe
-REPOSITORIES := http://www.olofson.net/kobodl/download
+REPOSITORIES := https://olofson.net/kobodl/download
 
 USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES) -I$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION) -I$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/graphics -I$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/eel -I$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/data/sfx -I$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/sound
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB) -static-libstdc++

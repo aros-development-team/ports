@@ -12,7 +12,7 @@ include $(SRCDIR)/config/aros-contrib.cfg
 #MM- ports-video-screenrecorder-catalogs : ports-video-screenrecorder-fetch
 
 
-REPOSITORIES := http://archives.aros-exec.org/share/video/record/
+REPOSITORIES := archives://share/video/record
 ARCHBASE     := screenrecorder-src-svn17
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Video/ScreenRecorder
 

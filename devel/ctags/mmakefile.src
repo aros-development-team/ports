@@ -12,7 +12,7 @@ CTAGS_OPTIONS=\
         --enable-shell-globbing=no \
         --disable-external-sort
 # ctags ignores CPPFLAGS, so push them in CFLAGS
-USER_CFLAGS := -D_GNU_SOURCE -DAMIGA
+USER_CFLAGS := $(CFLAGS_GNU99) -D_GNU_SOURCE -DAMIGA -DAROS_SAFE_HEADERINLINE
 
 %fetch_and_build mmake=ports-devel-ctags prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \

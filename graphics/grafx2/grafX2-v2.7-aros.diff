@@ -16,19 +16,6 @@ diff -ruN grafX2-v2.7/src/c64load.c grafX2-v2.7.aros/src/c64load.c
  #define CPU_6502_USE_LOCAL_HEADER
  #include "6502.h"
  
-diff -ruN grafX2-v2.7/src/filesel.c grafX2-v2.7.aros/src/filesel.c
---- grafX2-v2.7/src/filesel.c	2020-01-30 22:58:51.000000000 +0000
-+++ grafX2-v2.7.aros/src/filesel.c	2021-01-26 06:04:13.460000000 +0000
-@@ -28,6 +28,9 @@
- #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
-     #include <proto/dos.h>
-     #include <sys/types.h>
-+#if defined(__AROS__)
-+#define towlower tolower
-+#endif
- #elif defined (__MINT__)
-     #include <mint/sysbind.h>
- #elif defined(WIN32)
 diff -ruN grafX2-v2.7/src/ifformat.c grafX2-v2.7.aros/src/ifformat.c
 --- grafX2-v2.7/src/ifformat.c	2020-01-30 22:58:51.000000000 +0000
 +++ grafX2-v2.7.aros/src/ifformat.c	2021-01-26 06:00:56.090000000 +0000

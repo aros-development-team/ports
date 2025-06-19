@@ -8,13 +8,16 @@ PACKAGE      := ctags
 VERSION      := 5.8
 TARGETDIR    := $(AROS_CONTRIB)/$(AROS_DIR_DEVELOPER)/Ctags
 REPOSITORIES := sf://ctags
-
+CTAGS_OPTIONS=\
+        --enable-shell-globbing=no \
+        --disable-external-sort
+# ctags ignores CPPFLAGS, so push them in CFLAGS
+USER_CFLAGS := -D_GNU_SOURCE -DAMIGA
 
 %fetch_and_build mmake=ports-devel-ctags prefix=$(TARGETDIR) \
 	package=$(PACKAGE) version=$(VERSION) suffixes="tar.gz" \
 	patch=yes package_repo=$(REPOSITORIES) \
-	extraoptions="CPPFLAGS=-DAMIGA --enable-shell-globbing=no --disable-external-sort"
-
+	extraoptions="$(CTAGS_OPTIONS)"
 
 #MM
 ports-devel-ctags-clean :

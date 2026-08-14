@@ -1,0 +1,2852 @@
+diff -ruN MilkyTracker-1.05.01/src/fx/FXFilter.cpp MilkyTracker-1.05.01.aros/src/fx/FXFilter.cpp
+--- MilkyTracker-1.05.01/src/fx/FXFilter.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/FXFilter.cpp	2026-04-26 10:15:30.150472547 +0200
+@@ -0,0 +1,609 @@
++/*
++ *  fx/Filter.cpp
++ *
++ *  Copyright 2009 Peter Barth
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include "BasicTypes.h"
++#include "fpmath.h"
++#include "FXFilter.h"
++
++#define PRGB2Short(r,g,b) ((((r))<<11)+(((g))<<5)+((b))) 
++
++void FXFilter::applyRadialToSector(unsigned short *buffer,
++								 int width, int height,int pitch,
++								 int xCenter,int yCenter,int xBound,int yBound,
++								 int radius, int style) 
++{
++
++    int stx=-1,sty=-1;
++    
++	if (yBound>yCenter)
++        sty=1;
++    if (xBound>xCenter)
++        stx=1;
++
++	int i = yCenter;
++
++	switch (style)
++	{
++		case 0:
++			while (i!=yBound)
++			{
++				int j = xCenter;
++				
++				unsigned short *line = buffer+i*pitch;
++				
++				int vs = (((yCenter-i)*radius))+(i<<16);
++				int v0=(vs>>16)*pitch;
++				int b=(vs>>11)&31;
++				int v1=v0+pitch;
++				
++				while (j!=xBound)
++				{
++					int h0,h1,h2,h3;
++					int at;//,c,col;
++					int u0,u1;
++					int us = (((xCenter-j)*radius))+(j<<16);
++					
++					unsigned int mask=0x07e0f81f;
++					
++					u0=(us>>16);
++					at=(us>>11)&31;
++					u1=u0+1;
++					h0=buffer[(u0+v0)]; h2=buffer[(u0+v1)];
++					h1=buffer[(u1+v0)]; h3=buffer[(u1+v1)];
++					
++					h1 = ((h1<<16) | h1)&mask;
++					h2 = ((h2<<16) | h2)&mask;
++					h3 = ((h3<<16) | h3)&mask;
++					h0 = ((h0<<16) | h0)&mask;
++					
++					int blend_top =((((h1-h0)*(at))>>5)+h0)&mask;
++					
++					int blend_bot =((((h3-h2)*(at))>>5)+h2)&mask;
++					
++					int total = ((((blend_bot - blend_top)*(b))>>5)+blend_top)&mask;
++					
++					int source = line[j];
++					
++					source = ((source<<16) | source)&mask;
++					
++					int mix =((((source-total)*(15))>>5)+total)&mask;
++					line[j]	= (mix | (mix>>16))&0xffff;//( (total & 0xF7DE) >> 1) + ( (source & 0xF7DE) >> 1);
++					
++					j+=stx;
++				}
++				
++				i+=sty;
++				
++			}
++			break;
++
++		case 1:
++			while (i!=yBound)
++			{
++				int j = xCenter;
++				
++				unsigned short *line = buffer+i*pitch;
++				
++				int vs = (((yCenter-i)*radius))+(i<<16);
++				int v0=(vs>>16)*pitch;
++				int b=(vs>>11)&31;
++				int v1=v0+pitch;
++				
++				while (j!=xBound)
++				{
++					int h0,h1,h2,h3;
++					int at;//,c,col;
++					int u0,u1;
++					int us = (((xCenter-j)*radius))+(j<<16);
++					
++					unsigned int mask=0x07e0f81f;
++					
++					u0=(us>>16);
++					at=(us>>11)&31;
++					u1=u0+1;
++					h0=buffer[(u0+v0)]; h2=buffer[(u0+v1)];
++					h1=buffer[(u1+v0)]; h3=buffer[(u1+v1)];
++					
++					h1 = ((h1<<16) | h1)&mask;
++					h2 = ((h2<<16) | h2)&mask;
++					h3 = ((h3<<16) | h3)&mask;
++					h0 = ((h0<<16) | h0)&mask;
++					
++					int blend_top =((((h1-h0)*(at))>>5)+h0)&mask;
++					
++					int blend_bot =((((h3-h2)*(at))>>5)+h2)&mask;
++					
++					int total = ((((blend_bot - blend_top)*(b))>>5)+blend_top)&mask;
++					
++					int source = line[j];
++					
++					total = (total | (total>>16))&0xffff;
++					int r = ((source>>11)+((total>>11))); r-=4; if (r<0) r = 0; if (r>0x1f) r = 0x1f;
++					int g = (((source>>5)&0x3f)+(((total>>5)&0x3f)));  g-=8; if (g<0) g = 0; if (g>0x3f) g = 0x3f;
++					int bc = ((source&0x1f)+((total&0x1f)));  bc-=4; if (bc<0) bc = 0; if (bc>0x1f) bc = 0x1f;
++					
++					line[j] = (r<<11)+(g<<5)+bc;
++					
++					j+=stx;
++				}
++				
++				i+=sty;
++				
++			}
++			break;
++	
++	}
++	
++}
++
++void FXFilter::applyRadial(unsigned short *buffer,
++						 int width, int height,int pitch,
++						 int xCenter,int yCenter,
++						 int radius, int style) 
++{
++	
++	applyRadialToSector(buffer,width, height, pitch, xCenter-1, yCenter-1, 0,     0,      radius, style);
++	applyRadialToSector(buffer,width, height, pitch, xCenter,   yCenter-1, width, 0,      radius, style);
++	applyRadialToSector(buffer,width, height, pitch, xCenter-1, yCenter,   0,     height, radius, style);
++	applyRadialToSector(buffer,width, height, pitch, xCenter,   yCenter,   width, height, radius, style);
++
++}
++
++void FXFilter::applyHorizontal(unsigned short *src, 
++							 unsigned short *dst, 
++							 int width, int height, int pitch, 
++							 int boxw)
++{
++	int x,y;
++
++	if (boxw<0)
++	{
++		memcpy(dst,src,pitch*height*2); // deal with degenerate kernel sizes
++		return;
++	}
++	if (boxw>=width) boxw=width-1;
++	int mul=65536/(boxw*2+1);
++	for (y=0;y<height;y++)
++	{
++		int totr=0;
++		int totg=0;
++		int totb=0;
++		for (x=0;x<boxw;x++) {
++			totr+=src[x]>>11;
++			totg+=(src[x]>>5)&0x3f;
++			totb+=src[x]&0x1f;
++		}
++		
++		for (x=0;x<width;x++)
++		{
++			if (x>boxw) {
++				totr-=src[(-boxw-1)]>>11;
++				totg-=(src[(-boxw-1)]>>5)&0x3f;
++				totb-=src[(-boxw-1)]&0x1f;
++			}
++			
++			if (x+boxw<width) {
++				totr+=src[boxw]>>11;
++				totg+=(src[boxw]>>5)&0x3f;
++				totb+=src[boxw]&0x1f;
++			}
++			int finalr = (totr*mul)>>16;
++			int finalg = (totg*mul)>>16;
++			int finalb = (totb*mul)>>16;
++			*dst = (finalr<<11)+(finalg<<5)+finalb;
++			dst++;
++			src++;
++		}
++	}	
++}
++
++void FXFilter::applyVertical(unsigned short *src, 
++						   unsigned short *dst,
++						   int width, int height, int pitch, 
++						   int boxw)
++{
++	int x,y;
++
++	if (boxw<0)
++	{
++		memcpy(dst,src,pitch*height*2); // deal with degenerate kernel sizes
++		return;
++	}
++	if (boxw>=width) boxw=width-1;
++	int mul=65536/(boxw*2+1);
++	for (x=0;x<width;x++)
++	{
++		int totr=0;
++		int totg=0;
++		int totb=0;
++		
++		unsigned short* srcPtr = src+x;
++
++		for (y=0;y<boxw;y++) {
++			totr+=*srcPtr>>11;
++			totg+=(*srcPtr>>5)&0x3f;
++			totb+=*srcPtr&0x1f;
++			srcPtr+=width;
++		}
++		
++		srcPtr = src+x;
++		unsigned short* dstPtr = dst+x;
++
++		int offsm = (-boxw-1)*pitch;
++		int offsp = boxw*pitch;
++
++		for (y=0;y<height;y++)
++		{
++			if (y>boxw) {
++				totr-=srcPtr[offsm]>>11;
++				totg-=(srcPtr[offsm]>>5)&0x3f;
++				totb-=srcPtr[offsm]&0x1f;
++			}
++			
++			if (y+boxw<height) {
++				totr+=srcPtr[offsp]>>11;
++				totg+=(srcPtr[offsp]>>5)&0x3f;
++				totb+=srcPtr[offsp]&0x1f;
++			}
++			int finalr = (totr*mul)>>16;
++			int finalg = (totg*mul)>>16;
++			int finalb = (totb*mul)>>16;
++			*dstPtr = (finalr<<11)+(finalg<<5)+finalb;
++			dstPtr+=width;
++			srcPtr+=width;
++		}
++	}	
++}
++
++void FXFilter::applyBoxed(unsigned short *srcImage, 
++						unsigned short *dstImage, 
++						int width, int height, int pitch,
++						int boxw)
++{
++	if (boxw<0)
++	{
++		return;
++	}
++
++
++	//int pitch = width;
++	int x,y;
++	int mul = 65536/(boxw*2+1);
++	
++	{
++		unsigned short* src = srcImage;
++		
++		if (boxw>=width) boxw=width-1;
++		for (y=0;y<height;y++)
++		{
++			int totr=0;
++			int totg=0;
++			int totb=0;
++			for (x=0;x<boxw;x++) {
++				totr+=src[x]>>11;
++				totg+=(src[x]>>5)&0x3f;
++				totb+=src[x]&0x1f;
++			}
++			
++			unsigned short* dst = dstImage+y;
++			
++			for (x=0;x<width;x++)
++			{
++				if (x>boxw) {
++					totr-=src[(-boxw-1)]>>11;
++					totg-=(src[(-boxw-1)]>>5)&0x3f;
++					totb-=src[(-boxw-1)]&0x1f;
++				}
++				
++				if (x+boxw<width) {
++					totr+=src[boxw]>>11;
++					totg+=(src[boxw]>>5)&0x3f;
++					totb+=src[boxw]&0x1f;
++				}
++				int finalr = (totr*mul)>>16;
++				int finalg = (totg*mul)>>16;
++				int finalb = (totb*mul)>>16;
++				*dst = (finalr<<11)+(finalg<<5)+finalb;
++			
++				dst+=height;
++				src++;
++			}
++		}	
++		
++	}
++
++	{
++		
++		if (boxw>=height) boxw=height-1;
++
++		unsigned short* src = dstImage;
++		
++		for (x=0;x<width;x++)
++		{
++			int totr=0;
++			int totg=0;
++			int totb=0;
++			for (y=0;y<boxw;y++) {
++				totr+=src[y]>>11;
++				totg+=(src[y]>>5)&0x3f;
++				totb+=src[y]&0x1f;
++			}
++			
++			unsigned short* dst = srcImage+x;
++			
++			for (y=0;y<height;y++)
++			{
++				if (y>boxw) {
++					totr-=src[(-boxw-1)]>>11;
++					totg-=(src[(-boxw-1)]>>5)&0x3f;
++					totb-=src[(-boxw-1)]&0x1f;
++				}
++				
++				if (y+boxw<height) {
++					totr+=src[boxw]>>11;
++					totg+=(src[boxw]>>5)&0x3f;
++					totb+=src[boxw]&0x1f;
++				}
++				int finalr = (totr*mul)>>16;
++				int finalg = (totg*mul)>>16;
++				int finalb = (totb*mul)>>16;
++				*dst = (finalr<<11)+(finalg<<5)+finalb;
++				//*dst = *src;
++
++				src++;
++				dst+=width;
++			}
++		}	
++		
++	}
++
++
++}
++
++void FXFilter::stylize(unsigned short* srcImage, 
++							unsigned short* tmpImage,
++							int width, int height, int srcPitch, int tmpPitch,
++							int minr, int ming, int minb, 
++							int maxr, int maxg, int maxb)
++{
++	int x,y;
++	
++	minb>>=3;
++	ming>>=2; ming<<=5;
++	minr>>=3; minr<<=11;
++
++	maxb>>=3;
++	maxg>>=2; maxg<<=5;
++	maxr>>=3; maxr<<=11;
++
++	unsigned short* dst = srcImage;
++	unsigned short* src = tmpImage;
++
++	unsigned int* dstDW = (unsigned int*)dst;
++	unsigned int* srcDW = (unsigned int*)src;
++
++	for (y = 0; y < height; y++)
++	{
++		for (x = 0; x < width>>1; x++)
++		{
++			*srcDW = *dstDW;
++			srcDW++; dstDW++;
++		}
++		srcDW+=(tmpPitch-width)>>1;
++		dstDW+=(srcPitch-width)>>1;
++	}
++
++	dst = srcImage;
++	src = tmpImage;
++
++	//memcpy(tmpImage, srcImage, pitch*height*2);
++
++	int y2;
++
++	for (y = 0; y < height; y++)
++	{
++		for (x = 0; x < width; x++)
++		{
++		
++			//if (*src > RGB2SHORT(50,50,150) &&
++			//	*src < RGB2SHORT(150,120,200))
++			
++			if ((*src&0x1f) > (minb) &&
++				(*src&0x1f) < (maxb) &&
++				(*src&(0x3f<<5)) > (ming) &&
++				(*src&(0x3f<<5)) < (maxg) &&
++				(*src&(0x1f<<11)) > (minr) &&
++				(*src&(0x1f<<11)) < (maxr))
++			{
++			
++				int b = (*src&0x1f)>>2;
++				int g = ((*src>>5)&0x3f)>>2;
++				int r = ((*src>>11)&0x1f)>>2;
++			
++				int from = y-64;
++				int to = y+64;
++				int adder = 256/64;
++				int shade = 0;
++			
++				if (from < 0)
++				{
++					shade+=-from*adder;
++					from = 0;
++				}
++				if (to>height)
++					to = height;
++			
++				unsigned short* ptr = srcImage+(from*srcPitch+x);
++				for (y2 = from; y2 < to; y2++)
++				{
++					if (y2 == y)
++						adder = -adder;
++					int r2 = ((*ptr>>11)&0x1f) + ((r*shade)>>8);
++					int g2 = ((*ptr>>5)&0x3f) + ((g*shade)>>8);
++					int b2 = (*ptr&0x1f) + ((b*shade)>>8);
++					if (r2 > 0x1f) r2 = 0x1f;
++					if (g2 > 0x3f) g2 = 0x3f;
++					if (b2 > 0x1f) b2 = 0x1f;
++					
++					*ptr = PRGB2SHORT(r2,g2,b2);
++					ptr+=width;
++					shade+=adder;
++				}
++				
++				from = x-64;
++				to = x+64;
++				shade = 0;
++				adder = 256/64;
++				
++				if (from < 0)
++				{
++					shade+=-from*adder;
++					from = 0;
++				}
++				if (to>width)
++					to = width;
++			
++				ptr = srcImage+(y*srcPitch+from);
++				for (y2 = from; y2 < to; y2++)
++				{
++					if (y2 == x)
++						adder = -adder;
++					int r2 = ((*ptr>>11)&0x1f) + ((r*shade)>>8);
++					int g2 = ((*ptr>>5)&0x3f) + ((g*shade)>>8);
++					int b2 = (*ptr&0x1f) + ((b*shade)>>8);
++					if (r2 > 0x1f) r2 = 0x1f;
++					if (g2 > 0x3f) g2 = 0x3f;
++					if (b2 > 0x1f) b2 = 0x1f;
++					
++					*ptr = PRGB2SHORT(r2,g2,b2);
++					ptr++;
++					shade+=adder;
++				}
++			
++			}
++		
++			src++;
++		}
++		
++		src+=tmpPitch-width;
++
++	}
++}
++
++void FXFilter::glow(unsigned short* srcImage,
++				  int width, int height, int pitch, 
++				  unsigned short* glowBuffer1,
++				  unsigned short* glowBuffer2,
++				  unsigned int cellSizeShift,
++				  unsigned int scale, unsigned int boxw)
++{
++
++	if (scale < 512) 
++		scale = 512;
++
++	int gWidth = width>>cellSizeShift;
++	int gHeight = height>>cellSizeShift;
++
++	int x,y,x2,y2;
++
++	unsigned short* ptr = glowBuffer1;
++	for (y = 0; y < gHeight; y++)
++		for (x = 0; x < gWidth; x++)
++			*ptr++ = srcImage[(y<<cellSizeShift)*pitch+(x<<cellSizeShift)];
++
++	applyBoxed(glowBuffer1, glowBuffer2, gWidth, gHeight, gWidth, boxw);	
++
++	//int scale = 65536*5;
++
++	for (y = 0; y < gHeight; y++)
++		for (x = 0; x < gWidth; x++)
++		{
++
++			int offset = y*gWidth+x;
++			int hOffs = 1;
++			int vOffs = gWidth;
++			if (x == gWidth-1)
++				hOffs = 0;
++			if (y == gHeight-1)
++				vOffs = 0;
++
++			unsigned int rgb1, rgb2, rgb3, rgb4;
++
++			rgb1 = glowBuffer1[offset];			
++			rgb2 = glowBuffer1[offset+hOffs];
++			rgb3 = glowBuffer1[offset+vOffs+hOffs];
++			rgb4 = glowBuffer1[offset+vOffs];				
++			
++			int r1 = fpmul((rgb1>>11)<<16,scale), g1 = fpmul((rgb1&0x7E0)<<11,scale), b1 = fpmul((rgb1&31)<<16,scale);
++			int r2 = fpmul((rgb2>>11)<<16,scale), g2 = fpmul((rgb2&0x7E0)<<11,scale), b2 = fpmul((rgb2&31)<<16,scale);
++			int r3 = fpmul((rgb3>>11)<<16,scale), g3 = fpmul((rgb3&0x7E0)<<11,scale), b3 = fpmul((rgb3&31)<<16,scale);
++			int r4 = fpmul((rgb4>>11)<<16,scale), g4 = fpmul((rgb4&0x7E0)<<11,scale), b4 = fpmul((rgb4&31)<<16,scale);
++			
++			int dr1 = (r4-r1)>>cellSizeShift;
++			int dr2 = (r3-r2)>>cellSizeShift;
++			
++			int dg1 = (g4-g1)>>cellSizeShift;
++			int dg2 = (g3-g2)>>cellSizeShift;
++			
++			int db1 = (b4-b1)>>cellSizeShift;
++			int db2 = (b3-b2)>>cellSizeShift;
++			
++			ptr = srcImage+(y<<cellSizeShift)*pitch+(x<<cellSizeShift);
++			
++			for (y2=0;y2<(1<<cellSizeShift);y2++) 
++			{
++				int fr = (r2-r1)>>cellSizeShift;
++				int sr = r1;
++				
++				int fg = (g2-g1)>>cellSizeShift;
++				int sg = g1;
++				
++				int fb = (b2-b1)>>cellSizeShift;
++				int sb = b1;
++				
++				for (x2=0;x2<(1<<cellSizeShift);x2++) 
++				{
++					int r = (sr>>16) + ((*ptr>>11)&31); if (r>31) r = 31;
++					int g = (sg>>16) + ((*ptr>>5)&63); if (g>63) g = 63;
++					int b = (sb>>16) + ((*ptr>>0)&31); if (b>31) b = 31;
++					
++					*ptr++ = PRGB2Short(r,g,b);
++					sr+=fr;
++					sg+=fg;
++					sb+=fb;
++				}
++				
++				ptr+=(pitch-(1<<cellSizeShift));
++				
++				r1+=dr1;
++				r2+=dr2;
++				
++				g1+=dg1;
++				g2+=dg2;
++				
++				b1+=db1;
++				b2+=db2;
++			}
++			
++		}
++
++}
+diff -ruN MilkyTracker-1.05.01/src/fx/FXFilter.h MilkyTracker-1.05.01.aros/src/fx/FXFilter.h
+--- MilkyTracker-1.05.01/src/fx/FXFilter.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/FXFilter.h	2026-04-26 10:15:30.150508304 +0200
+@@ -0,0 +1,70 @@
++/*
++ *  fx/Filter.h
++ *
++ *  Copyright 2009 Peter Barth
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef FILTER_H
++#define FILTER_H
++
++#define PRGB2SHORT(r,g,b) ((((r))<<11)+(((g))<<5)+((b))) 
++#define RGB2SHORT(r,g,b) ((((r>>3))<<11)+(((g>>2))<<5)+((b>>3))) 
++
++class FXFilter 
++{
++private:
++	static void		applyRadialToSector(unsigned short *buffer,int width, int height,int pitch,
++										int xCenter,int yCenter,int xBound,int yBound,
++										int radius, int style = 0);
++public:
++	static	void	applyRadial(unsigned short *buffer,int width, int height,int pitch,
++								int xCenter,int yCenter,
++								int radius, int style = 0);
++
++	static	void	applyHorizontal(unsigned short *src, 
++								    unsigned short *dst, 
++									int width, int height, int pitch, 
++									int boxw);
++
++	static	void	applyVertical(unsigned short *src, 
++								  unsigned short *dst, 
++								  int width, int height, int pitch, 
++								  int boxw);
++
++	static	void	applyBoxed(unsigned short *srcImage, 
++							   unsigned short *dstImage,
++							   int width, int height, int pitch, 
++							   int boxw);
++
++	static  void	stylize(unsigned short* srcImage, 
++							unsigned short* tmpImage,
++							int width, int height, int srcPitch, int tmpPitch,
++							int minr, int ming, int minb, 
++							int maxr, int maxg, int maxb);
++
++	static  void	glow(unsigned short* srcImage,
++						 int width, int height, int pitch, 
++						 unsigned short* glowBuffer1,
++						 unsigned short* glowBuffer2,
++						 unsigned int cellSizeShift,
++						 unsigned int scale = 65536*2, unsigned int boxw = 4);
++
++};
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/fx/ParticleBlobs.cpp MilkyTracker-1.05.01.aros/src/fx/ParticleBlobs.cpp
+--- MilkyTracker-1.05.01/src/fx/ParticleBlobs.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/ParticleBlobs.cpp	2026-04-26 10:15:30.150537979 +0200
+@@ -22,7 +22,7 @@
+ 
+ #include "ParticleBlobs.h"
+ #include "Math3d.h"
+-#include "Filter.h"
++#include "FXFilter.h"
+ #include "Texture.h"
+ 
+ #define GRIDSIZE 8
+@@ -174,8 +174,8 @@
+ 	
+ 	ParticleFX::render(vscreen, pitch);
+ 
+-	Filter::stylize(vscreen, temp, this->width, this->height, pitch, this->width, 100, 70, 60, 255, 192, 100);
++	FXFilter::stylize(vscreen, temp, this->width, this->height, pitch, this->width, 100, 70, 60, 255, 192, 100);
+ 
+-	//Filter::applyRadial(vscreen, this->width, this->height, pitch, this->width>>1, this->height>>1, 8192, 1);
++	//FXFilter::applyRadial(vscreen, this->width, this->height, pitch, this->width>>1, this->height>>1, 8192, 1);
+ 
+ }
+diff -ruN MilkyTracker-1.05.01/src/fx/PictureGlow.h MilkyTracker-1.05.01.aros/src/fx/PictureGlow.h
+--- MilkyTracker-1.05.01/src/fx/PictureGlow.h	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/PictureGlow.h	2026-04-26 10:15:30.149621066 +0200
+@@ -24,7 +24,7 @@
+ #define PICTUREGLOW__H
+ 
+ #include "FXInterface.h"
+-#include "Filter.h"
++#include "FXFilter.h"
+ 
+ class PictureGlow : public FXInterface
+ {
+@@ -74,7 +74,7 @@
+ 			dstDW+=(pitch-width)>>1;
+ 		}
+ 
+-		Filter::glow(vscreen, width, height, pitch, glowBuffer1, glowBuffer2, resShift, scale);
++		FXFilter::glow(vscreen, width, height, pitch, glowBuffer1, glowBuffer2, resShift, scale);
+ 	}
+ 
+ 	virtual void update(float syncFrac) { scale-=(int)(syncFrac*1024.0f); if (scale < 0) scale = 0; }
+diff -ruN MilkyTracker-1.05.01/src/fx/TCBSplineTest.cpp MilkyTracker-1.05.01.aros/src/fx/TCBSplineTest.cpp
+--- MilkyTracker-1.05.01/src/fx/TCBSplineTest.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/TCBSplineTest.cpp	2026-04-26 10:15:30.149919904 +0200
+@@ -24,7 +24,7 @@
+ #include "TCBSplineTest.h"
+ #include "TCBSpline.h"
+ #include "Math3d.h"
+-#include "Filter.h"
++#include "FXFilter.h"
+ 
+ #define RGB2SHORT(r,g,b) ((((r>>3))<<11)+(((g>>2))<<5)+((b>>3))) 
+ 
+@@ -141,7 +141,7 @@
+ 		}
+ 
+ 
+-	//Filter::applyRadial(vscreen, 320, 240, 320, 159, 119, 8192, 1);
++	//FXFilter::applyRadial(vscreen, 320, 240, 320, 159, 119, 8192, 1);
+ 
+ }
+ 
+diff -ruN MilkyTracker-1.05.01/src/fx/TexturedGrid.cpp MilkyTracker-1.05.01.aros/src/fx/TexturedGrid.cpp
+--- MilkyTracker-1.05.01/src/fx/TexturedGrid.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/fx/TexturedGrid.cpp	2026-04-26 10:15:30.150069514 +0200
+@@ -22,7 +22,7 @@
+ 
+ #include "TexturedGrid.h"
+ #include "Math3d.h"
+-#include "Filter.h"
++#include "FXFilter.h"
+ #include "Texture.h"
+ #include <stdint.h>
+ 
+@@ -400,7 +400,7 @@
+ 	/*double phi = GetTickCount()*0.01f;
+ 	int scale = (sin(phi)+1.0f) * 65536.0f * 2.0f;
+ 
+-	Filter::glow(vscreen, width, height, pitch, glowBuffer1, glowBuffer2, 2, scale);*/
++	FXFilter::glow(vscreen, width, height, pitch, glowBuffer1, glowBuffer2, 2, scale);*/
+ 
+ 	double phi = ::PPGetTickCount()*0.001f;
+ 
+@@ -412,9 +412,9 @@
+ 	//int radius = sin(phi)*2048 + 2048;
+ 	int radius = 2048;
+ 
+-	Filter::applyRadial(vscreen, width, height, pitch, cx, cy, radius, 1);
++	FXFilter::applyRadial(vscreen, width, height, pitch, cx, cy, radius, 1);
+ 
+-	//Filter::applyBoxed(vscreen, buffer, width, height, pitch, 2);
++	//FXFilter::applyBoxed(vscreen, buffer, width, height, pitch, 2);
+ 
+ 	//Filter<160,120>::applyBoxed(vscreen, buffer, 4);
+ 
+diff -ruN MilkyTracker-1.05.01/src/milkyplay/AudioDriverBase.cpp MilkyTracker-1.05.01.aros/src/milkyplay/AudioDriverBase.cpp
+--- MilkyTracker-1.05.01/src/milkyplay/AudioDriverBase.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/milkyplay/AudioDriverBase.cpp	2026-04-26 10:15:30.155523877 +0200
+@@ -40,6 +40,8 @@
+ 
+ #if defined(__PSP__)
+ #include <pspkernel.h>
++#elif defined(__AROS__)
++#include <proto/dos.h>
+ #elif !defined(WIN32) && !defined(_WIN32_WCE)
+ #include <unistd.h>
+ #else
+@@ -53,9 +55,11 @@
+ #elif defined(__PSP__)
+ 	sceKernelDelayThreadCB(msecs*1000);
+ #elif defined(__AROS__)
+-	// usleep is not implemented on AROS
+-	if(msecs < 1000) msecs = 1000;
+-	sleep(msecs/1000);
++	// Delay() takes ticks of 1/50 second (20ms granularity).
++	// Round up so a 10ms request sleeps ~20ms, not a full second.
++	ULONG ticks = (msecs * TICKS_PER_SECOND + 999) / 1000;
++	if (ticks < 1) ticks = 1;
++	Delay(ticks);
+ #else
+ 	usleep(msecs*1000);
+ #endif
+diff -ruN MilkyTracker-1.05.01/src/milkyplay/AudioDriverManager.cpp MilkyTracker-1.05.01.aros/src/milkyplay/AudioDriverManager.cpp
+--- MilkyTracker-1.05.01/src/milkyplay/AudioDriverManager.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/milkyplay/AudioDriverManager.cpp	2026-04-26 10:15:30.151354275 +0200
+@@ -188,6 +188,30 @@
+ 	driverList[0] = new AudioDriver_SDL();
+ }
+ 
++#elif defined(DRIVER_AROS)
++//////////////////////////////////////////////////////////////////
++//					 AROS AHI implementation
++//////////////////////////////////////////////////////////////////
++#include "AudioDriver_AHI.h"
++
++extern AudioDriver_AHI *ahiDriver;
++
++AudioDriverManager::AudioDriverManager() :
++	defaultDriverIndex(0)
++{
++	ALLOC_DRIVERLIST(1);
++	// AHI driver is a process-wide singleton: AROS_Main.cpp owns the
++	// global pointer and uses it to dispatch pump() / getSignalMask()
++	// from the main event loop.  Multiple AudioDriverManager instances
++	// can be created (e.g. by transient MasterMixers spawned during
++	// module loading for song-length estimation), so we must not
++	// overwrite the global or hand ownership to driverList — otherwise
++	// the manager's destructor would tear down the live audio device.
++	if (!ahiDriver)
++		ahiDriver = new AudioDriver_AHI();
++	driverList[0] = ahiDriver;
++}
++
+ #elif defined(DRIVER_PSP)
+ //////////////////////////////////////////////////////////////////
+ //					 	PSP implementation
+@@ -223,7 +247,13 @@
+ 
+ AudioDriverManager::~AudioDriverManager()
+ {
++#if defined(DRIVER_AROS)
++	// Don't delete the AHI singleton — it's owned globally and
++	// referenced by AROS_Main's event loop.  Just free the list.
++	delete[] driverList;
++#else
+ 	CLEANUP_DRIVERLIST;
++#endif
+ }
+ 
+ AudioDriverInterface* AudioDriverManager::getAudioDriverByName(const char* name)
+diff -ruN MilkyTracker-1.05.01/src/milkyplay/MilkyPlayCommon.h MilkyTracker-1.05.01.aros/src/milkyplay/MilkyPlayCommon.h
+--- MilkyTracker-1.05.01/src/milkyplay/MilkyPlayCommon.h	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/milkyplay/MilkyPlayCommon.h	2026-04-26 10:15:30.151432221 +0200
+@@ -99,6 +99,8 @@
+ 	#define DRIVER_PSP
+ #elif defined(__HAIKU__) && !defined(__FORCE_SDL_AUDIO__)
+ 	#define DRIVER_HAIKU
++#elif defined(__AROS__)
++	#define DRIVER_AROS
+ #else
+ 	#define DRIVER_SDL
+ #endif
+diff -ruN MilkyTracker-1.05.01/src/ppui/osinterface/PPPathFactory.cpp MilkyTracker-1.05.01.aros/src/ppui/osinterface/PPPathFactory.cpp
+--- MilkyTracker-1.05.01/src/ppui/osinterface/PPPathFactory.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/ppui/osinterface/PPPathFactory.cpp	2026-04-26 10:15:30.160330729 +0200
+@@ -31,7 +31,26 @@
+ #include "PPPathFactory.h"
+ #include "BasicTypes.h"
+ 
+-#if !defined(__PPUI_WINDOWS__)
++#if defined(__AROS__)
++
++#include "../../tracker/aros/PPPath_Amiga.h"
++
++PPPathEntry* PPPathFactory::createPathEntry()
++{
++	return new PPPathEntry_Amiga();
++}
++
++PPPath* PPPathFactory::createPath()
++{
++	return new PPPath_Amiga();
++}
++
++PPPath* PPPathFactory::createPathFromString(const PPSystemString& path)
++{
++	return new PPPath_Amiga(path);
++}
++
++#elif !defined(__PPUI_WINDOWS__)
+ 
+ #include "PPPath_POSIX.h"
+ 
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.cpp	2026-04-26 10:15:30.164569831 +0200
+@@ -0,0 +1,255 @@
++/*
++ *  tracker/aros/AROS_KeyTranslation.cpp
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include "AROS_KeyTranslation.h"
++#include <devices/rawkeycodes.h>
++#include <devices/inputevent.h>
++
++pp_uint16 toVK(pp_uint16 rawkey, pp_uint16 qualifier)
++{
++	switch (rawkey)
++	{
++		/* Letters */
++		case RAWKEY_A:		return 'A';
++		case RAWKEY_B:		return 'B';
++		case RAWKEY_C:		return 'C';
++		case RAWKEY_D:		return 'D';
++		case RAWKEY_E:		return 'E';
++		case RAWKEY_F:		return 'F';
++		case RAWKEY_G:		return 'G';
++		case RAWKEY_H:		return 'H';
++		case RAWKEY_I:		return 'I';
++		case RAWKEY_J:		return 'J';
++		case RAWKEY_K:		return 'K';
++		case RAWKEY_L:		return 'L';
++		case RAWKEY_M:		return 'M';
++		case RAWKEY_N:		return 'N';
++		case RAWKEY_O:		return 'O';
++		case RAWKEY_P:		return 'P';
++		case RAWKEY_Q:		return 'Q';
++		case RAWKEY_R:		return 'R';
++		case RAWKEY_S:		return 'S';
++		case RAWKEY_T:		return 'T';
++		case RAWKEY_U:		return 'U';
++		case RAWKEY_V:		return 'V';
++		case RAWKEY_W:		return 'W';
++		case RAWKEY_X:		return 'X';
++		case RAWKEY_Y:		return 'Y';
++		case RAWKEY_Z:		return 'Z';
++
++		/* Numbers */
++		case RAWKEY_0:		return '0';
++		case RAWKEY_1:		return '1';
++		case RAWKEY_2:		return '2';
++		case RAWKEY_3:		return '3';
++		case RAWKEY_4:		return '4';
++		case RAWKEY_5:		return '5';
++		case RAWKEY_6:		return '6';
++		case RAWKEY_7:		return '7';
++		case RAWKEY_8:		return '8';
++		case RAWKEY_9:		return '9';
++
++		/* Numeric keypad */
++		case RAWKEY_KP_0:		return VK_NUMPAD0;
++		case RAWKEY_KP_1:		return VK_NUMPAD1;
++		case RAWKEY_KP_2:		return VK_NUMPAD2;
++		case RAWKEY_KP_3:		return VK_NUMPAD3;
++		case RAWKEY_KP_4:		return VK_NUMPAD4;
++		case RAWKEY_KP_5:		return VK_NUMPAD5;
++		case RAWKEY_KP_6:		return VK_NUMPAD6;
++		case RAWKEY_KP_7:		return VK_NUMPAD7;
++		case RAWKEY_KP_8:		return VK_NUMPAD8;
++		case RAWKEY_KP_9:		return VK_NUMPAD9;
++		case RAWKEY_KP_DIVIDE:		return VK_DIVIDE;
++		case RAWKEY_KP_MULTIPLY:	return VK_MULTIPLY;
++		case RAWKEY_KP_MINUS:		return VK_SUBTRACT;
++		case RAWKEY_KP_PLUS:		return VK_ADD;
++		case RAWKEY_KP_ENTER:		return VK_SEPARATOR;
++		case RAWKEY_KP_DECIMAL:		return VK_DECIMAL;
++
++		/* Modifier keys */
++		case RAWKEY_LALT:		return VK_ALT;
++		case RAWKEY_RALT:		return VK_RMENU;
++		case RAWKEY_LSHIFT:		return VK_SHIFT;
++		case RAWKEY_RSHIFT:		return VK_SHIFT;
++		case RAWKEY_LCONTROL:	return VK_LCONTROL;
++		case RAWKEY_CAPSLOCK:	return VK_CAPITAL;
++
++		/* Other non-character keys */
++		case RAWKEY_RETURN:		return VK_RETURN;
++		case RAWKEY_TAB:		return VK_TAB;
++		case RAWKEY_SPACE:		return VK_SPACE;
++		case RAWKEY_ESCAPE:		return VK_ESCAPE;
++		case RAWKEY_INSERT:		return VK_INSERT;
++		case RAWKEY_DELETE:		return VK_DELETE;
++		case RAWKEY_BACKSPACE:	return VK_BACK;
++
++		case RAWKEY_LEFT:		return VK_LEFT;
++		case RAWKEY_RIGHT:		return VK_RIGHT;
++		case RAWKEY_DOWN:		return VK_DOWN;
++		case RAWKEY_UP:			return VK_UP;
++
++		case RAWKEY_PAGEUP:		return VK_PRIOR;
++		case RAWKEY_PAGEDOWN:	return VK_NEXT;
++		case RAWKEY_HOME:		return VK_HOME;
++		case RAWKEY_END:		return VK_END;
++
++		/* Function keys */
++		case RAWKEY_F1:		return VK_F1;
++		case RAWKEY_F2:		return VK_F2;
++		case RAWKEY_F3:		return VK_F3;
++		case RAWKEY_F4:		return VK_F4;
++		case RAWKEY_F5:		return VK_F5;
++		case RAWKEY_F6:		return VK_F6;
++		case RAWKEY_F7:		return VK_F7;
++		case RAWKEY_F8:		return VK_F8;
++		case RAWKEY_F9:		return VK_F9;
++		case RAWKEY_F10:	return VK_F10;
++		case RAWKEY_F11:	return VK_F11;
++		case RAWKEY_F12:	return VK_F12;
++
++		/* Special characters */
++		case RAWKEY_TILDE:		return 0xC0;
++		case RAWKEY_MINUS:		return 0xBE;
++		case RAWKEY_EQUAL:		return 0xDD;
++		case RAWKEY_COMMA:		return 0xBC;
++		case RAWKEY_PERIOD:		return 0xBF;
++		case RAWKEY_LESSGREATER:	return 0xE2;
++
++		default:			return 0;
++	}
++}
++
++pp_uint16 toSC(pp_uint16 rawkey)
++{
++	switch (rawkey)
++	{
++		/* Letters */
++		case RAWKEY_A:		return SC_A;
++		case RAWKEY_B:		return SC_B;
++		case RAWKEY_C:		return SC_C;
++		case RAWKEY_D:		return SC_D;
++		case RAWKEY_E:		return SC_E;
++		case RAWKEY_F:		return SC_F;
++		case RAWKEY_G:		return SC_G;
++		case RAWKEY_H:		return SC_H;
++		case RAWKEY_I:		return SC_I;
++		case RAWKEY_J:		return SC_J;
++		case RAWKEY_K:		return SC_K;
++		case RAWKEY_L:		return SC_L;
++		case RAWKEY_M:		return SC_M;
++		case RAWKEY_N:		return SC_N;
++		case RAWKEY_O:		return SC_O;
++		case RAWKEY_P:		return SC_P;
++		case RAWKEY_Q:		return SC_Q;
++		case RAWKEY_R:		return SC_R;
++		case RAWKEY_S:		return SC_S;
++		case RAWKEY_T:		return SC_T;
++		case RAWKEY_U:		return SC_U;
++		case RAWKEY_V:		return SC_V;
++		case RAWKEY_W:		return SC_W;
++		case RAWKEY_X:		return SC_X;
++		case RAWKEY_Y:		return SC_Z; /* MilkyTracker scancodes are based on German layout */
++		case RAWKEY_Z:		return SC_Y; /* so Y <-> Z swap is correct here */
++
++		/* Numbers */
++		case RAWKEY_0:		return SC_0;
++		case RAWKEY_1:		return SC_1;
++		case RAWKEY_2:		return SC_2;
++		case RAWKEY_3:		return SC_3;
++		case RAWKEY_4:		return SC_4;
++		case RAWKEY_5:		return SC_5;
++		case RAWKEY_6:		return SC_6;
++		case RAWKEY_7:		return SC_7;
++		case RAWKEY_8:		return SC_8;
++		case RAWKEY_9:		return SC_9;
++
++		/* Special characters */
++		case RAWKEY_MINUS:			return SC_SS;
++		case RAWKEY_EQUAL:			return SC_TICK;
++		case RAWKEY_LBRACKET:		return SC_UE;
++		case RAWKEY_RBRACKET:		return SC_PLUS;
++
++		case RAWKEY_SEMICOLON:		return SC_OE;
++		case RAWKEY_QUOTE:			return SC_AE;
++		case RAWKEY_BACKSLASH:		return SC_SHARP;
++
++		case RAWKEY_LESSGREATER:	return SC_SMALLERGREATER;
++		case RAWKEY_COMMA:			return SC_COMMA;
++		case RAWKEY_PERIOD:			return SC_PERIOD;
++		case RAWKEY_SLASH:			return SC_MINUS;
++		case RAWKEY_TILDE:			return SC_WTF;
++
++		/* Modifiers */
++		case RAWKEY_CAPSLOCK:		return SC_CAPSLOCK;
++
++		default:					return 0;
++	}
++}
++
++char toChar(pp_uint16 rawkey, pp_uint16 qualifier)
++{
++	/* Map rawkeys to printable ASCII characters */
++	bool shift = (qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) != 0;
++
++	/* Letters */
++	if (rawkey >= RAWKEY_A && rawkey <= RAWKEY_Z)
++	{
++		/* This is tricky because RAWKEY_A..Z aren't contiguous.
++		   Use the toVK mapping to get the letter. */
++		char c = (char)toVK(rawkey, qualifier);
++		if (c >= 'A' && c <= 'Z')
++		{
++			if (!shift)
++				c = c - 'A' + 'a';
++			return c;
++		}
++	}
++
++	/* Numbers and shifted symbols */
++	switch (rawkey)
++	{
++		case RAWKEY_0: return shift ? ')' : '0';
++		case RAWKEY_1: return shift ? '!' : '1';
++		case RAWKEY_2: return shift ? '@' : '2';
++		case RAWKEY_3: return shift ? '#' : '3';
++		case RAWKEY_4: return shift ? '$' : '4';
++		case RAWKEY_5: return shift ? '%' : '5';
++		case RAWKEY_6: return shift ? '^' : '6';
++		case RAWKEY_7: return shift ? '&' : '7';
++		case RAWKEY_8: return shift ? '*' : '8';
++		case RAWKEY_9: return shift ? '(' : '9';
++		case RAWKEY_SPACE:		return ' ';
++		case RAWKEY_MINUS:		return shift ? '_' : '-';
++		case RAWKEY_EQUAL:		return shift ? '+' : '=';
++		case RAWKEY_LBRACKET:	return shift ? '{' : '[';
++		case RAWKEY_RBRACKET:	return shift ? '}' : ']';
++		case RAWKEY_BACKSLASH:	return shift ? '|' : '\\';
++		case RAWKEY_SEMICOLON:	return shift ? ':' : ';';
++		case RAWKEY_QUOTE:		return shift ? '"' : '\'';
++		case RAWKEY_TILDE:		return shift ? '~' : '`';
++		case RAWKEY_COMMA:		return shift ? '<' : ',';
++		case RAWKEY_PERIOD:		return shift ? '>' : '.';
++		case RAWKEY_SLASH:		return shift ? '?' : '/';
++		default: return 0;
++	}
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.h MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.h
+--- MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.h	2026-04-26 10:15:30.164598805 +0200
+@@ -0,0 +1,32 @@
++/*
++ *  tracker/aros/AROS_KeyTranslation.h
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef AROS_KEYTRANSLATION__H
++#define AROS_KEYTRANSLATION__H
++
++#include "BasicTypes.h"
++
++pp_uint16 toVK(pp_uint16 rawkey, pp_uint16 qualifier);
++pp_uint16 toSC(pp_uint16 rawkey);
++char      toChar(pp_uint16 rawkey, pp_uint16 qualifier);
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_Main.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_Main.cpp	2026-04-26 10:15:30.165030552 +0200
+@@ -0,0 +1,366 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <aros/debug.h>
++
++#include <exec/types.h>
++#include <proto/exec.h>
++#include <proto/intuition.h>
++#include <proto/keymap.h>
++#include <proto/timer.h>
++#include <proto/dos.h>
++#include <devices/timer.h>
++#include <devices/inputevent.h>
++#include <intuition/intuition.h>
++
++#include "BasicTypes.h"
++#include "Event.h"
++#include "Screen.h"
++#include "Tracker.h"
++#include "DisplayDevice_AROS.h"
++#include "PPMutex.h"
++#include "PPSystem_AROS.h"
++#include "AROS_KeyTranslation.h"
++#include "AudioDriver_AHI.h"
++
++static BPTR programDirLock = 0;
++
++extern "C" BPTR GetProgramDirLock()
++{
++	if (!programDirLock)
++		programDirLock = GetProgramDir();
++	return programDirLock;
++}
++
++static PPScreen        *myTrackerScreen = NULL;
++static Tracker         *myTracker       = NULL;
++static PPDisplayDevice *myDisplayDevice = NULL;
++PPMutex                *globalMutex     = NULL;
++AudioDriver_AHI *ahiDriver              = NULL;
++static bool             running         = true;
++
++static struct MsgPort      *timerPort = NULL;
++static struct timerequest  *timerReq  = NULL;
++struct Device              *TimerBase = NULL;
++static struct timeval       baseTime;
++
++static pp_int32 lastClickX = 0, lastClickY = 0;
++static pp_uint32 lastClickTime = 0, lastLBtnTime = 0, lastRBtnTime = 0;
++static bool lBtnDown = false, rBtnDown = false;
++static pp_int32 mouseX = 0, mouseY = 0;
++
++#define TIMER_TICK_MS 20
++#define DBLCLICK_MS   500
++#define DBLCLICK_DIST 4
++
++/* Timer */
++static bool openTimer()
++{
++	timerPort = CreateMsgPort();
++	if (!timerPort) return false;
++	timerReq = (struct timerequest *)CreateIORequest(timerPort, sizeof(struct timerequest));
++	if (!timerReq) return false;
++	if (OpenDevice("timer.device", UNIT_MICROHZ, (struct IORequest *)timerReq, 0) != 0) return false;
++	TimerBase = timerReq->tr_node.io_Device;
++	GetSysTime(&baseTime);
++	return true;
++}
++
++static void closeTimer()
++{
++	if (timerReq) {
++		if (TimerBase) CloseDevice((struct IORequest *)timerReq);
++		DeleteIORequest((struct IORequest *)timerReq);
++		timerReq = NULL;
++	}
++	if (timerPort) { DeleteMsgPort(timerPort); timerPort = NULL; }
++	TimerBase = NULL;
++}
++
++pp_uint32 PPGetTickCount()
++{
++	if (!TimerBase) return 0;
++	struct timeval tv;
++	GetSysTime(&tv);
++	// Signed-safe elapsed milliseconds since baseTime.
++	// Naive unsigned subtraction underflows tv_micro on second boundaries
++	// and breaks double-click / mouse-repeat timing.
++	LONG dsec  = (LONG)tv.tv_secs  - (LONG)baseTime.tv_secs;
++	LONG dusec = (LONG)tv.tv_micro - (LONG)baseTime.tv_micro;
++	if (dusec < 0) { dusec += 1000000; dsec -= 1; }
++	if (dsec < 0) return 0;
++	return (pp_uint32)(dsec * 1000 + dusec / 1000);
++}
++
++static void scheduleTimerTick()
++{
++	timerReq->tr_node.io_Command = TR_ADDREQUEST;
++	timerReq->tr_time.tv_secs = 0;
++	timerReq->tr_time.tv_micro = TIMER_TICK_MS * 1000;
++	SendIO((struct IORequest *)timerReq);
++}
++
++static void RaiseEventSerialized(PPEvent &event)
++{
++	if (globalMutex) globalMutex->lock();
++	myTrackerScreen->raiseEvent(&event);
++	if (globalMutex) globalMutex->unlock();
++}
++
++void exitEventLoop() { running = false; }
++
++void QueryKeyModifiers() { /* tracked via updateModifiers on each IDCMP event */ }
++
++static void updateModifiers(UWORD qualifier)
++{
++	if (qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT)) setKeyModifier(KeyModifierSHIFT);
++	else clearKeyModifier(KeyModifierSHIFT);
++	if (qualifier & (IEQUALIFIER_CONTROL | IEQUALIFIER_LCOMMAND | IEQUALIFIER_RCOMMAND))
++		setKeyModifier(KeyModifierCTRL);
++	else clearKeyModifier(KeyModifierCTRL);
++	if (qualifier & (IEQUALIFIER_LALT | IEQUALIFIER_RALT)) setKeyModifier(KeyModifierALT);
++	else clearKeyModifier(KeyModifierALT);
++}
++
++/* Mouse helpers */
++static void handleMouseMove(pp_int32 x, pp_int32 y)
++{
++	mouseX = x; mouseY = y;
++	PPPoint p(x, y);
++	if (lBtnDown)      { PPEvent e(eLMouseDrag, &p, sizeof(p)); RaiseEventSerialized(e); }
++	else if (rBtnDown) { PPEvent e(eRMouseDrag, &p, sizeof(p)); RaiseEventSerialized(e); }
++	else               { PPEvent e(eMouseMoved, &p, sizeof(p)); RaiseEventSerialized(e); }
++}
++
++static void handleMouseDown(int btn, pp_int32 x, pp_int32 y)
++{
++	pp_uint32 now = PPGetTickCount();
++	PPPoint p(x, y);
++	if (btn == 1) {
++		bool dbl = (now - lastClickTime < DBLCLICK_MS) && (abs(x - lastClickX) < DBLCLICK_DIST) && (abs(y - lastClickY) < DBLCLICK_DIST);
++		// Always raise eLMouseDown so the container establishes caughtControl;
++		// then additionally raise eLMouseDoubleClick when applicable.  The
++		// PPUI Container only dispatches double-click events to a caught or
++		// focused control, so skipping the second eLMouseDown drops them on
++		// the floor.
++		{ PPEvent e(eLMouseDown, &p, sizeof(p)); RaiseEventSerialized(e); }
++		if (dbl) { PPEvent e(eLMouseDoubleClick, &p, sizeof(p)); RaiseEventSerialized(e); }
++		lastClickX = x; lastClickY = y; lastClickTime = now; lastLBtnTime = now; lBtnDown = true;
++	} else if (btn == 2) {
++		PPEvent e(eRMouseDown, &p, sizeof(p)); RaiseEventSerialized(e);
++		lastRBtnTime = now; rBtnDown = true;
++	} else {
++		PPEvent e(eMMouseDown, &p, sizeof(p)); RaiseEventSerialized(e);
++	}
++}
++
++static void handleMouseUp(int btn, pp_int32 x, pp_int32 y)
++{
++	PPPoint p(x, y);
++	if (btn == 1) { PPEvent e(eLMouseUp, &p, sizeof(p)); RaiseEventSerialized(e); lBtnDown = false; }
++	else if (btn == 2) { PPEvent e(eRMouseUp, &p, sizeof(p)); RaiseEventSerialized(e); rBtnDown = false; }
++	else { PPEvent e(eMMouseUp, &p, sizeof(p)); RaiseEventSerialized(e); }
++}
++
++static void checkMouseRepeat()
++{
++	pp_uint32 now = PPGetTickCount();
++	PPPoint p(mouseX, mouseY);
++	if (lBtnDown && (now - lastLBtnTime > 25)) { PPEvent e(eLMouseRepeat, &p, sizeof(p)); RaiseEventSerialized(e); }
++	if (rBtnDown && (now - lastRBtnTime > 25)) { PPEvent e(eRMouseRepeat, &p, sizeof(p)); RaiseEventSerialized(e); }
++}
++
++/* Keyboard */
++static void handleKeyDown(UWORD rawkey, UWORD qualifier)
++{
++	updateModifiers(qualifier);
++	pp_uint16 vk = toVK(rawkey, qualifier);
++	pp_uint16 sc = toSC(rawkey);
++	pp_uint16 keyData[3] = { vk, sc, 0 };
++	PPEvent keyEvent(eKeyDown, &keyData, sizeof(keyData));
++	RaiseEventSerialized(keyEvent);
++
++	char ascii = toChar(rawkey, qualifier);
++	if (ascii >= 32 && ascii < 127) {
++		pp_uint8 charData[2] = { (pp_uint8)ascii, 0 };
++		PPEvent charEvent(eKeyChar, &charData, sizeof(charData));
++		RaiseEventSerialized(charEvent);
++	}
++}
++
++static void handleKeyUp(UWORD rawkey, UWORD qualifier)
++{
++	updateModifiers(qualifier);
++	pp_uint16 vk = toVK(rawkey, qualifier);
++	pp_uint16 sc = toSC(rawkey);
++	pp_uint16 keyData[3] = { vk, sc, 0 };
++	PPEvent e(eKeyUp, &keyData, sizeof(keyData));
++	RaiseEventSerialized(e);
++}
++
++/* IDCMP processing */
++static void processIDCMPMessages()
++{
++	struct Window *win = myDisplayDevice->getWindow();
++	if (!win) return;
++	struct IntuiMessage *msg;
++
++	while ((msg = (struct IntuiMessage *)GetMsg(win->UserPort)))
++	{
++		ULONG cls = msg->Class;
++		UWORD code = msg->Code;
++		UWORD qual = msg->Qualifier;
++		WORD mx = msg->MouseX - win->BorderLeft;
++		WORD my = msg->MouseY - win->BorderTop;
++		ReplyMsg((struct Message *)msg);
++
++		pp_int32 sx = mx, sy = my;
++		myDisplayDevice->adjust(sx, sy);
++
++		switch (cls) {
++		case IDCMP_CLOSEWINDOW: {
++			PPEvent e(eAppQuit);
++			RaiseEventSerialized(e);
++			// eAppQuit alone is unhandled in the codebase.  The SDL port
++			// follows up with myTracker->shutDown() which runs the
++			// "save changes?" dialog and returns true if the user confirmed.
++			if (globalMutex) globalMutex->lock();
++			bool ok = myTracker->shutDown();
++			if (globalMutex) globalMutex->unlock();
++			if (ok) running = false;
++			break;
++		}
++		case IDCMP_MOUSEMOVE: if (sx >= 0 && sy >= 0) handleMouseMove(sx, sy); break;
++		case IDCMP_MOUSEBUTTONS:
++			switch (code) {
++			case SELECTDOWN: handleMouseDown(1, sx, sy); break;
++			case SELECTUP:   handleMouseUp(1, sx, sy); break;
++			case MENUDOWN:   handleMouseDown(2, sx, sy); break;
++			case MENUUP:     handleMouseUp(2, sx, sy); break;
++			case MIDDLEDOWN: handleMouseDown(3, sx, sy); break;
++			case MIDDLEUP:   handleMouseUp(3, sx, sy); break;
++			} break;
++		case IDCMP_RAWKEY: {
++			UWORD raw = code & ~IECODE_UP_PREFIX;
++			/* Modifier keys: shift=0x60-0x61, caps=0x62, ctrl=0x63, alt=0x64-0x65, amiga=0x66-0x67 */
++			if (raw >= 0x60 && raw <= 0x67) updateModifiers(qual);
++			else if (code & IECODE_UP_PREFIX) handleKeyUp(raw, qual);
++			else handleKeyDown(raw, qual);
++			break;
++		}
++		case IDCMP_REFRESHWINDOW:
++			BeginRefresh(win); EndRefresh(win, TRUE);
++			myTrackerScreen->paint();
++			break;
++		default: break;
++		}
++	}
++}
++
++/* Modal loop support (called from AROS_ModalLoop) */
++void processIDCMPForModal()
++{
++	struct Window *win = myDisplayDevice->getWindow();
++	if (!win) return;
++	ULONG timerSig = 1L << timerPort->mp_SigBit;
++	ULONG winSig = 1L << win->UserPort->mp_SigBit;
++	ULONG sigs = Wait(timerSig | winSig);
++
++	if (sigs & winSig) {
++		if (globalMutex) globalMutex->lock();
++		processIDCMPMessages();
++		if (globalMutex) globalMutex->unlock();
++	}
++	if (sigs & timerSig) {
++		GetMsg(timerPort);
++		if (globalMutex) globalMutex->lock();
++		PPEvent e(eTimer); RaiseEventSerialized(e);
++		if (globalMutex) globalMutex->unlock();
++		scheduleTimerTick();
++	}
++}
++
++/* Main event loop */
++static void eventLoop()
++{
++	struct Window *win = myDisplayDevice->getWindow();
++	if (!win) return;
++	ULONG timerSig = 1L << timerPort->mp_SigBit;
++	ULONG winSig = 1L << win->UserPort->mp_SigBit;
++	ULONG ahiSig = ahiDriver ? ahiDriver->getSignalMask() : 0;
++
++	scheduleTimerTick();
++	while (running) {
++		ULONG sigs = Wait(timerSig | winSig | ahiSig | SIGBREAKF_CTRL_C);
++		if (sigs & SIGBREAKF_CTRL_C) { running = false; break; }
++		if (sigs & winSig) processIDCMPMessages();
++		if ((sigs & ahiSig) && ahiDriver) ahiDriver->pump();
++		if (sigs & timerSig) {
++			GetMsg(timerPort);
++			PPEvent e(eTimer); RaiseEventSerialized(e);
++			checkMouseRepeat();
++			if (running) scheduleTimerTick();
++		}
++	}
++}
++
++/* Init / shutdown */
++static bool initTracker(int argc, char *argv[])
++{
++	D(bug("[MT] openTimer...\n"));
++	if (!openTimer()) { D(bug("Failed to open timer.device\n")); return false; }
++	D(bug("[MT] creating mutex...\n"));
++	globalMutex = new PPMutex();
++
++	D(bug("[MT] creating Tracker...\n"));
++	myTracker = new Tracker();
++
++	D(bug("[MT] getWindowSizeFromDatabase...\n"));
++	PPSize windowSize = myTracker->getWindowSizeFromDatabase();
++	D(bug("[MT] window size: %dx%d\n", windowSize.width, windowSize.height));
++
++	D(bug("[MT] creating DisplayDevice...\n"));
++	myDisplayDevice = new PPDisplayDevice(windowSize.width, windowSize.height, 1, 32);
++	D(bug("[MT] DisplayDevice created, window=%p\n", (void*)myDisplayDevice->getWindow()));
++	if (!myDisplayDevice->getWindow()) { D(bug("Failed to create window\n")); return false; }
++
++	D(bug("[MT] calling init()...\n"));
++	myDisplayDevice->init();
++
++	D(bug("[MT] creating PPScreen...\n"));
++	myTrackerScreen = new PPScreen(myDisplayDevice, myTracker);
++	D(bug("[MT] setScreen...\n"));
++	myTracker->setScreen(myTrackerScreen);
++	D(bug("[MT] startUp...\n"));
++	myTracker->startUp(true);
++	D(bug("[MT] startUp done\n"));
++
++	if (argc > 1) {
++		PPSystemString fileName(argv[argc - 1]);
++		PPEvent e(eFileDragDropped, &fileName, sizeof(PPSystemString));
++		RaiseEventSerialized(e);
++	}
++	return true;
++}
++
++static void shutdownTracker()
++{
++	delete myTracker; myTracker = NULL;
++	delete myTrackerScreen; myTrackerScreen = NULL;
++	delete myDisplayDevice; myDisplayDevice = NULL;
++	// AHI driver is a process-wide singleton (kept alive across
++	// transient AudioDriverManagers).  Tear it down explicitly here so
++	// the AHI device is closed and its msgport/IORequests/buffers are
++	// freed before the executable is unloaded.
++	if (ahiDriver) { delete ahiDriver; ahiDriver = NULL; }
++	delete globalMutex; globalMutex = NULL;
++	closeTimer();
++}
++
++int main(int argc, char *argv[])
++{
++	if (!initTracker(argc, argv)) { shutdownTracker(); return 1; }
++	eventLoop();
++	shutdownTracker();
++	return 0;
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_ModalLoop.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_ModalLoop.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/AROS_ModalLoop.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_ModalLoop.cpp	2026-04-26 10:15:30.164625165 +0200
+@@ -0,0 +1,37 @@
++#include "AROS_ModalLoop.h"
++#include "Event.h"
++#include "Screen.h"
++#include "DialogBase.h"
++#include "PPMutex.h"
++
++void processIDCMPForModal();
++extern PPMutex* globalMutex;
++
++PPModalDialog::ReturnCodes AROS_runModalLoop(PPScreen* screen, PPDialogBase* dialog)
++{
++	bool exitModalLoop = false;
++
++	pp_uint32 screenEnableStackCount = 0;
++	while (!screen->isDisplayEnabled())
++	{
++		screen->enableDisplay(true);
++		screenEnableStackCount++;
++	}
++
++	ModalLoopResponder modalLoopResponder(exitModalLoop);
++	dialog->setResponder(&modalLoopResponder);
++
++	EventListenerInterface* eventListener = screen->detachEventListener();
++	CustomEventListener customEventListener(eventListener);
++	screen->attachEventListener(&customEventListener);
++	dialog->show();
++
++	if (globalMutex) globalMutex->unlock();
++	while (!exitModalLoop) processIDCMPForModal();
++	if (globalMutex) globalMutex->lock();
++
++	screen->attachEventListener(eventListener);
++	while (screenEnableStackCount > 0) { screen->enableDisplay(false); screenEnableStackCount--; }
++
++	return modalLoopResponder.getReturnCode();
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_ModalLoop.h MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_ModalLoop.h
+--- MilkyTracker-1.05.01/src/tracker/aros/AROS_ModalLoop.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_ModalLoop.h	2026-04-26 10:15:30.164652445 +0200
+@@ -0,0 +1,93 @@
++/*
++ *  tracker/aros/AROS_ModalLoop.h
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef __AROS_MODALLOOP_H__
++#define __AROS_MODALLOOP_H__
++
++#include "BasicTypes.h"
++#include "Event.h"
++#include "PPModalDialog.h"
++
++class CustomEventListener : public EventListenerInterface
++{
++private:
++	EventListenerInterface* oldEventListener;
++
++public:
++	CustomEventListener(EventListenerInterface* oldListener) :
++		oldEventListener(oldListener)
++	{
++	}
++
++	virtual pp_int32 handleEvent(PPObject* sender, PPEvent* event)
++	{
++		if (event->getID() == eTimer)
++		{
++			return oldEventListener->handleEvent(sender, event);
++		}
++		return 0;
++	}
++};
++
++class ModalLoopResponder : public DialogResponder
++{
++private:
++	bool& exitModalLoop;
++	PPModalDialog::ReturnCodes returnCode;
++
++public:
++	ModalLoopResponder(bool& exitModalLoopFlag) :
++		exitModalLoop(exitModalLoopFlag),
++		returnCode(PPModalDialog::ReturnCodeCANCEL)
++	{
++	}
++
++	PPModalDialog::ReturnCodes getReturnCode() { return returnCode; }
++
++	virtual pp_int32 ActionOkay(PPObject* sender)
++	{
++		exitModalLoop = true;
++		returnCode = PPModalDialog::ReturnCodeOK;
++		return 0;
++	}
++
++	virtual pp_int32 ActionCancel(PPObject* sender)
++	{
++		exitModalLoop = true;
++		returnCode = PPModalDialog::ReturnCodeCANCEL;
++		return 0;
++	}
++
++	virtual pp_int32 ActionNo(PPObject* sender)
++	{
++		exitModalLoop = true;
++		returnCode = PPModalDialog::ReturnCodeNO;
++		return 0;
++	}
++};
++
++class PPScreen;
++class PPDialogBase;
++
++PPModalDialog::ReturnCodes AROS_runModalLoop(PPScreen* screen, PPDialogBase* dialog);
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AudioDriver_AHI.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AudioDriver_AHI.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/AudioDriver_AHI.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AudioDriver_AHI.cpp	2026-04-26 10:16:31.665606833 +0200
+@@ -0,0 +1,246 @@
++#include "AudioDriver_AHI.h"
++#include "MasterMixer.h"
++#include <proto/exec.h>
++#include <proto/dos.h>
++#include <proto/ahi.h>
++#include <devices/ahi.h>
++#include <exec/tasks.h>
++#include <dos/dos.h>     /* SIGBREAKF_CTRL_C/D/E */
++#include <dos/dostags.h> /* NP_* */
++#include <dos/dosextens.h> /* struct Process */
++
++/* The audio worker runs as a Process (not a bare task): opening ahi.device
++ * loads driver modules via DOS LoadSeg, which needs a DOS process context.
++ * Single driver instance -> pass 'this' through a file-static. */
++static AudioDriver_AHI *s_instance = NULL;
++
++/* Control signals to the audio task (predefined per-task break signals). */
++#define AUDIOSIG_DIE   SIGBREAKF_CTRL_C
++#define AUDIOSIG_START SIGBREAKF_CTRL_D
++#define AUDIOSIG_STOP  SIGBREAKF_CTRL_E
++
++AudioDriver_AHI::AudioDriver_AHI() :
++	AudioDriver_COMPENSATE(),
++	ahiPort(NULL), ahiDevice(-1), bufferSizeBytes(0),
++	currentBuffer(0), deviceOpen(false),
++	audioTask(NULL), creatorTask(NULL), audioInitOK(false), audioPlaying(false)
++{
++	ahiReq[0] = ahiReq[1] = NULL;
++	sampleBuffer[0] = sampleBuffer[1] = NULL;
++}
++
++AudioDriver_AHI::~AudioDriver_AHI() { closeDevice(); }
++
++/* --- Resources are owned by the audio task (so the AHI reply port's signal
++ *     belongs to the task that waits on it). --- */
++
++bool AudioDriver_AHI::setupAHI()
++{
++	ahiPort = CreateMsgPort();
++	if (!ahiPort) return false;
++
++	ahiReq[0] = (struct AHIRequest *)CreateIORequest(ahiPort, sizeof(struct AHIRequest));
++	if (!ahiReq[0]) return false;
++	ahiReq[0]->ahir_Version = 4;
++	ahiDevice = OpenDevice(AHINAME, AHI_DEFAULT_ID, (struct IORequest *)ahiReq[0], 0);
++	if (ahiDevice != 0) return false;
++
++	ahiReq[1] = (struct AHIRequest *)CreateIORequest(ahiPort, sizeof(struct AHIRequest));
++	if (!ahiReq[1]) return false;
++	CopyMem(ahiReq[0], ahiReq[1], sizeof(struct AHIRequest));
++
++	sampleBuffer[0] = (WORD *)AllocVec(bufferSizeBytes, MEMF_PUBLIC | MEMF_CLEAR);
++	sampleBuffer[1] = (WORD *)AllocVec(bufferSizeBytes, MEMF_PUBLIC | MEMF_CLEAR);
++	if (!sampleBuffer[0] || !sampleBuffer[1]) return false;
++
++	return true;
++}
++
++void AudioDriver_AHI::teardownAHI()
++{
++	if (sampleBuffer[0]) { FreeVec(sampleBuffer[0]); sampleBuffer[0] = NULL; }
++	if (sampleBuffer[1]) { FreeVec(sampleBuffer[1]); sampleBuffer[1] = NULL; }
++	if (ahiDevice == 0)  { CloseDevice((struct IORequest *)ahiReq[0]); ahiDevice = -1; }
++	if (ahiReq[1]) { DeleteIORequest((struct IORequest *)ahiReq[1]); ahiReq[1] = NULL; }
++	if (ahiReq[0]) { DeleteIORequest((struct IORequest *)ahiReq[0]); ahiReq[0] = NULL; }
++	if (ahiPort)   { DeleteMsgPort(ahiPort); ahiPort = NULL; }
++}
++
++void AudioDriver_AHI::primeBuffers()
++{
++	currentBuffer = 0;
++
++	fillAudioWithCompensation((char *)sampleBuffer[0], bufferSizeBytes);
++	ahiReq[0]->ahir_Std.io_Command = CMD_WRITE;
++	ahiReq[0]->ahir_Std.io_Data = sampleBuffer[0];
++	ahiReq[0]->ahir_Std.io_Length = bufferSizeBytes;
++	ahiReq[0]->ahir_Std.io_Offset = 0;
++	ahiReq[0]->ahir_Type = AHIST_S16S;
++	ahiReq[0]->ahir_Frequency = mixFrequency;
++	ahiReq[0]->ahir_Volume = 0x10000;
++	ahiReq[0]->ahir_Position = 0x8000;
++	ahiReq[0]->ahir_Link = NULL;
++	SendIO((struct IORequest *)ahiReq[0]);
++
++	fillAudioWithCompensation((char *)sampleBuffer[1], bufferSizeBytes);
++	ahiReq[1]->ahir_Std.io_Command = CMD_WRITE;
++	ahiReq[1]->ahir_Std.io_Data = sampleBuffer[1];
++	ahiReq[1]->ahir_Std.io_Length = bufferSizeBytes;
++	ahiReq[1]->ahir_Std.io_Offset = 0;
++	ahiReq[1]->ahir_Type = AHIST_S16S;
++	ahiReq[1]->ahir_Frequency = mixFrequency;
++	ahiReq[1]->ahir_Volume = 0x10000;
++	ahiReq[1]->ahir_Position = 0x8000;
++	ahiReq[1]->ahir_Link = ahiReq[0];
++	SendIO((struct IORequest *)ahiReq[1]);
++}
++
++void AudioDriver_AHI::refillCompleted()
++{
++	while (GetMsg(ahiPort))
++	{
++		int buf = currentBuffer;
++		currentBuffer ^= 1;
++
++		fillAudioWithCompensation((char *)sampleBuffer[buf], bufferSizeBytes);
++		ahiReq[buf]->ahir_Std.io_Command = CMD_WRITE;
++		ahiReq[buf]->ahir_Std.io_Data = sampleBuffer[buf];
++		ahiReq[buf]->ahir_Std.io_Length = bufferSizeBytes;
++		ahiReq[buf]->ahir_Std.io_Offset = 0;
++		ahiReq[buf]->ahir_Type = AHIST_S16S;
++		ahiReq[buf]->ahir_Frequency = mixFrequency;
++		ahiReq[buf]->ahir_Volume = 0x10000;
++		ahiReq[buf]->ahir_Position = 0x8000;
++		ahiReq[buf]->ahir_Link = ahiReq[currentBuffer];
++		SendIO((struct IORequest *)ahiReq[buf]);
++	}
++}
++
++void AudioDriver_AHI::abortBuffers()
++{
++	AbortIO((struct IORequest *)ahiReq[0]); WaitIO((struct IORequest *)ahiReq[0]);
++	AbortIO((struct IORequest *)ahiReq[1]); WaitIO((struct IORequest *)ahiReq[1]);
++	while (GetMsg(ahiPort)) { }
++}
++
++void AudioDriver_AHI::audioTaskLoop()
++{
++	bool ok = setupAHI();
++	audioInitOK = ok;
++	__asm__ __volatile__("" ::: "memory");
++	Signal(creatorTask, SIGF_SINGLE);   /* unblock initDevice */
++
++	if (!ok)
++	{
++		teardownAHI();
++		return;   /* initDevice sees audioInitOK == false */
++	}
++
++	ULONG portSig = 1L << ahiPort->mp_SigBit;
++	bool localPlaying = false;
++
++	for (;;)
++	{
++		ULONG sigs = Wait(portSig | AUDIOSIG_DIE | AUDIOSIG_START | AUDIOSIG_STOP);
++
++		if (sigs & AUDIOSIG_DIE)
++		{
++			if (localPlaying) { abortBuffers(); localPlaying = false; }
++			break;
++		}
++		if (sigs & AUDIOSIG_STOP)
++		{
++			if (localPlaying) { abortBuffers(); localPlaying = false; }
++		}
++		if (sigs & AUDIOSIG_START)
++		{
++			if (!localPlaying) { primeBuffers(); localPlaying = true; }
++		}
++		if ((sigs & portSig) && localPlaying)
++		{
++			refillCompleted();
++		}
++	}
++
++	teardownAHI();
++	Signal(creatorTask, SIGF_SINGLE);   /* unblock closeDevice */
++}
++
++void AudioDriver_AHI::audioProcEntry()
++{
++	AudioDriver_AHI *self = s_instance;
++	if (self) self->audioTaskLoop();
++}
++
++mp_sint32 AudioDriver_AHI::initDevice(mp_sint32 bufferSizeInWords, mp_uint32 mixFreq, MasterMixer* theMixer)
++{
++	mp_sint32 res = AudioDriverBase::initDevice(bufferSizeInWords, mixFreq, theMixer);
++	if (res < 0) return res;
++
++	bufferSizeBytes = bufferSizeInWords * sizeof(WORD);
++
++	creatorTask = FindTask(NULL);
++	audioInitOK = false;
++	s_instance = this;
++
++	/* A Process (not a bare task): ahi.device open loads driver modules via
++	 * DOS, which needs a process context. The cast is safe - pr_Task is the
++	 * first member of struct Process. */
++	audioTask = (struct Task *)CreateNewProcTags(
++		NP_Entry,     (IPTR)audioProcEntry,
++		NP_Name,      (IPTR)"MilkyTracker Audio",
++		NP_StackSize, 65536,
++		NP_Priority,  20,
++		TAG_DONE);
++	if (!audioTask)
++		return MP_DEVICE_ERROR;
++
++	/* The task opens AHI and reports the result; wait for it. */
++	Wait(SIGF_SINGLE);
++	if (!audioInitOK)
++	{
++		audioTask = NULL;   /* task has already exited on failure */
++		return MP_DEVICE_ERROR;
++	}
++
++	deviceOpen = true;
++	return MP_OK;
++}
++
++mp_sint32 AudioDriver_AHI::closeDevice()
++{
++	if (audioTask)
++	{
++		Signal(audioTask, AUDIOSIG_DIE);
++		Wait(SIGF_SINGLE);   /* task tears down AHI then signals back */
++		audioTask = NULL;
++	}
++	audioPlaying = false;
++	deviceOpen = false;
++	return MP_OK;
++}
++
++mp_sint32 AudioDriver_AHI::start()
++{
++	if (audioTask && !audioPlaying)
++	{
++		audioPlaying = true;
++		deviceHasStarted = true;
++		Signal(audioTask, AUDIOSIG_START);
++	}
++	return MP_OK;
++}
++
++mp_sint32 AudioDriver_AHI::stop()
++{
++	if (audioTask && audioPlaying)
++	{
++		audioPlaying = false;
++		deviceHasStarted = false;
++		Signal(audioTask, AUDIOSIG_STOP);
++	}
++	return MP_OK;
++}
++
++mp_sint32 AudioDriver_AHI::pause() { return stop(); }
++mp_sint32 AudioDriver_AHI::resume() { return start(); }
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AudioDriver_AHI.h MilkyTracker-1.05.01.aros/src/tracker/aros/AudioDriver_AHI.h
+--- MilkyTracker-1.05.01/src/tracker/aros/AudioDriver_AHI.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/AudioDriver_AHI.h	2026-04-26 10:15:30.164678624 +0200
+@@ -0,0 +1,57 @@
++#ifndef __AUDIODRIVER_AHI_H__
++#define __AUDIODRIVER_AHI_H__
++
++#include "AudioDriver_COMPENSATE.h"
++#include <exec/types.h>
++#include <devices/ahi.h>
++
++struct Task;
++
++class AudioDriver_AHI : public AudioDriver_COMPENSATE
++{
++private:
++	struct MsgPort *ahiPort;
++	struct AHIRequest *ahiReq[2];
++	BYTE ahiDevice;
++	WORD *sampleBuffer[2];
++	mp_uint32 bufferSizeBytes;
++	int currentBuffer;
++	bool deviceOpen;
++
++	/* Dedicated audio task. The buffer refill (mixing) used to run in the
++	 * GUI main loop via pump(); that stalled whenever the loop blocked on
++	 * LockLayers during a window drag/resize, underrunning AHI. The task
++	 * owns the AHI port + double buffer and refills independently of the
++	 * GUI - the same threaded-callback model SDL/RtAudio already use. */
++	struct Task    *audioTask;
++	struct Task    *creatorTask;
++	volatile bool   audioInitOK;
++	bool            audioPlaying;
++
++	bool setupAHI();
++	void teardownAHI();
++	void primeBuffers();
++	void refillCompleted();
++	void abortBuffers();
++	void audioTaskLoop();
++	static void audioProcEntry();   /* CreateNewProc body; reads s_instance */
++
++public:
++	AudioDriver_AHI();
++	virtual ~AudioDriver_AHI();
++
++	virtual mp_sint32 initDevice(mp_sint32 bufferSizeInWords, mp_uint32 mixFrequency, MasterMixer* mixer);
++	virtual mp_sint32 closeDevice();
++	virtual mp_sint32 start();
++	virtual mp_sint32 stop();
++	virtual mp_sint32 pause();
++	virtual mp_sint32 resume();
++	virtual const char* getDriverID() { return "AHI Audio"; }
++	virtual mp_sint32 getPreferredBufferSize() const { return 2048; }
++
++	/* Audio is self-driven by audioTask now; the GUI loop no longer pumps. */
++	ULONG getSignalMask() const { return 0; }
++	void pump() {}
++};
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.cpp	2026-04-26 10:15:30.164706406 +0200
+@@ -0,0 +1,131 @@
++#include "DisplayDevice_AROS.h"
++#include "Graphics.h"
++#include <stdio.h>
++#include <string.h>
++#include <aros/debug.h>
++#include <proto/intuition.h>
++#include <proto/graphics.h>
++#include <proto/exec.h>
++#include <proto/cybergraphics.h>
++#include <cybergraphx/cybergraphics.h>
++
++extern void exitEventLoop();
++
++PPDisplayDevice::PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor, pp_int32 bpp) :
++	PPDisplayDeviceBase(width, height, scaleFactor),
++	window(NULL), screen(NULL),
++	pixelBuffer(NULL), pitch(0), bpp(bpp), titleBuf(NULL)
++{
++	D(bug("[DD] constructor start, %dx%d\n", width, height));
++
++	D(bug("[DD] LockPubScreen...\n"));
++	screen = LockPubScreen(NULL);
++	if (!screen) { D(bug("[DD] FAILED LockPubScreen\n")); return; }
++
++	if (width > screen->Width) size.width = screen->Width;
++	if (height > screen->Height) size.height = screen->Height;
++
++	WORD left = (screen->Width - size.width) / 2;
++	WORD top = (screen->Height - size.height) / 2;
++
++	D(bug("[DD] OpenWindowTags %dx%d at %d,%d...\n", size.width, size.height, left, top));
++	window = OpenWindowTags(NULL,
++		WA_InnerWidth, size.width, WA_InnerHeight, size.height,
++		WA_Left, left, WA_Top, top,
++		WA_Title, (IPTR)"MilkyTracker",
++		WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,
++		WA_SizeGadget, FALSE, WA_Activate, TRUE,
++		WA_GimmeZeroZero, TRUE, WA_ReportMouse, TRUE, WA_RMBTrap, TRUE,
++		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE |
++		          IDCMP_RAWKEY | IDCMP_NEWSIZE | IDCMP_REFRESHWINDOW,
++		WA_CustomScreen, (IPTR)screen,
++		TAG_DONE);
++
++	UnlockPubScreen(NULL, screen);
++	if (!window) { D(bug("[DD] FAILED OpenWindowTags\n")); return; }
++	D(bug("[DD] window opened: %p\n", (void*)window));
++
++	pitch = size.width * 4;
++	pixelBuffer = (pp_uint8 *)AllocVec(pitch * size.height, MEMF_ANY | MEMF_CLEAR);
++	if (!pixelBuffer) { D(bug("[DD] FAILED AllocVec framebuffer\n")); return; }
++
++	D(bug("[DD] constructor done\n"));
++}
++
++PPDisplayDevice::~PPDisplayDevice()
++{
++	if (window) { SetWindowTitles(window, (CONST_STRPTR)-1, (CONST_STRPTR)-1); CloseWindow(window); }
++	if (pixelBuffer) FreeVec(pixelBuffer);
++	if (titleBuf) free(titleBuf);
++}
++
++PPGraphicsAbstract* PPDisplayDevice::open()
++{
++	if (!pixelBuffer) return NULL;
++	currentGraphics = new PPGraphics_ARGB32(size.width, size.height, pitch, pixelBuffer);
++	return currentGraphics;
++}
++
++void PPDisplayDevice::close()
++{
++	delete currentGraphics;
++	currentGraphics = NULL;
++}
++
++void PPDisplayDevice::update()
++{
++	if (!pixelBuffer || !window) return;
++	WritePixelArray(pixelBuffer, 0, 0, pitch, window->RPort,
++		0, 0, size.width, size.height, RECTFMT_ARGB);
++}
++
++void PPDisplayDevice::update(const PPRect& r)
++{
++	pp_int32 x = r.x1, y = r.y1, w = r.width(), h = r.height();
++	if (x < 0) { w += x; x = 0; }
++	if (y < 0) { h += y; y = 0; }
++	if (x + w > size.width) w = size.width - x;
++	if (y + h > size.height) h = size.height - y;
++	if (w <= 0 || h <= 0) return;
++
++	if (!pixelBuffer || !window) return;
++	WritePixelArray(pixelBuffer, x, y, pitch, window->RPort,
++		x, y, w, h, RECTFMT_ARGB);
++}
++
++void PPDisplayDevice::setTitle(const PPSystemString& title)
++{
++	if (!window) return;
++	if (titleBuf) free(titleBuf);
++	const char *src = (const char*)title;
++	titleBuf = (char *)malloc(strlen(src) + 1);
++	if (titleBuf) strcpy(titleBuf, src);
++	SetWindowTitles(window, titleBuf ? (CONST_STRPTR)titleBuf : (CONST_STRPTR)"MilkyTracker", (CONST_STRPTR)-1);
++}
++
++bool PPDisplayDevice::goFullScreen(bool b) { return false; }
++
++PPSize PPDisplayDevice::getDisplayResolution() const
++{
++	struct Screen *s = LockPubScreen(NULL);
++	if (s) { PPSize res(s->Width, s->Height); UnlockPubScreen(NULL, s); return res; }
++	return PPSize(640, 480);
++}
++
++void PPDisplayDevice::shutDown() { exitEventLoop(); }
++void PPDisplayDevice::setMouseCursor(MouseCursorTypes type) { PPDisplayDeviceBase::setMouseCursor(type); }
++
++void PPDisplayDevice::signalWaitState(bool b, const PPColor& color)
++{
++	if (b) { waitBarColor = color; setMouseCursor(MouseCursorTypeWait); }
++	else setMouseCursor(MouseCursorTypeStandard);
++}
++
++void PPDisplayDevice::setSize(const PPSize& newSize)
++{
++	PPDisplayDeviceBase::setSize(newSize);
++
++	if (pixelBuffer) FreeVec(pixelBuffer);
++	pitch = newSize.width * 4;
++	pixelBuffer = (pp_uint8 *)AllocVec(pitch * newSize.height, MEMF_ANY | MEMF_CLEAR);
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.h
+--- MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.h	2026-04-26 10:15:30.164739488 +0200
+@@ -0,0 +1,40 @@
++#ifndef __DISPLAYDEVICE_AROS_H__
++#define __DISPLAYDEVICE_AROS_H__
++
++#include "DisplayDeviceBase.h"
++#include "Graphics.h"
++
++#include <intuition/intuition.h>
++
++class PPDisplayDevice : public PPDisplayDeviceBase
++{
++private:
++	struct Window *window;
++	struct Screen *screen;
++	pp_uint8 *pixelBuffer;
++	pp_int32 pitch;
++	pp_int32 bpp;
++	char *titleBuf;
++
++public:
++	PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor = 1, pp_int32 bpp = 32);
++	virtual ~PPDisplayDevice();
++
++	virtual PPGraphicsAbstract* open();
++	virtual void close();
++	virtual void update();
++	virtual void update(const PPRect& r);
++	virtual void setTitle(const PPSystemString& title);
++	virtual bool goFullScreen(bool b);
++	virtual PPSize getDisplayResolution() const;
++	virtual void shutDown();
++	virtual void setMouseCursor(MouseCursorTypes type);
++	virtual void signalWaitState(bool b, const PPColor& color);
++	virtual void setSize(const PPSize& size);
++	virtual bool supportsScaling() const { return false; }
++
++	struct Window* getWindow() const { return window; }
++	void adjust(pp_int32& x, pp_int32& y) { x /= scaleFactor; y /= scaleFactor; }
++};
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPMessageBox_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPMessageBox_AROS.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPMessageBox_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPMessageBox_AROS.cpp	2026-04-26 10:15:30.164531580 +0200
+@@ -0,0 +1,18 @@
++#include "PPMessageBox.h"
++#include "AROS_ModalLoop.h"
++#include "DialogBase.h"
++
++PPMessageBox::ReturnCodes PPMessageBox::runModal()
++{
++	char* captionASCIIZ = this->caption.toASCIIZ();
++	char* contentASCIIZ = this->content.toASCIIZ();
++	PPString caption(captionASCIIZ);
++	PPString content(contentASCIIZ);
++	delete[] captionASCIIZ;
++	delete[] contentASCIIZ;
++
++	PPDialogBase* dialog = new PPDialogBase(screen, NULL, PP_DEFAULT_ID, caption, content);
++	ReturnCodes result = AROS_runModalLoop(screen, dialog);
++	delete dialog;
++	return result;
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPMutex.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPMutex.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPMutex.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPMutex.cpp	2026-04-26 10:15:30.164827282 +0200
+@@ -0,0 +1,43 @@
++/*
++ *  tracker/aros/PPMutex.cpp
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include "PPMutex.h"
++
++PPMutex::PPMutex()
++{
++	InitSemaphore(&semaphore);
++}
++
++PPMutex::~PPMutex()
++{
++	/* Nothing to clean up for AROS semaphores */
++}
++
++void PPMutex::lock()
++{
++	ObtainSemaphore(&semaphore);
++}
++
++void PPMutex::unlock()
++{
++	ReleaseSemaphore(&semaphore);
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPMutex.h MilkyTracker-1.05.01.aros/src/tracker/aros/PPMutex.h
+--- MilkyTracker-1.05.01/src/tracker/aros/PPMutex.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPMutex.h	2026-04-26 10:15:30.164853702 +0200
+@@ -0,0 +1,42 @@
++/*
++ *  tracker/aros/PPMutex.h
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef PPMUTEX__H
++#define PPMUTEX__H
++
++#include <exec/semaphores.h>
++#include <proto/exec.h>
++
++class PPMutex
++{
++private:
++	struct SignalSemaphore semaphore;
++
++public:
++	PPMutex();
++	~PPMutex();
++
++	void lock();
++	void unlock();
++};
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPOpenPanel_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPOpenPanel_AROS.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPOpenPanel_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPOpenPanel_AROS.cpp	2026-04-26 10:15:30.164880421 +0200
+@@ -0,0 +1,38 @@
++#include "PPOpenPanel.h"
++#include "AROS_ModalLoop.h"
++#include "DialogFileSelector.h"
++
++PPOpenPanel::PPOpenPanel(PPScreen* screen, const char* caption) :
++	PPModalDialog(screen)
++{
++	this->caption = new char[strlen(caption)+1];
++	strcpy(this->caption, caption);
++}
++
++PPOpenPanel::~PPOpenPanel()
++{
++	if (caption)
++		delete[] caption;
++}
++
++void PPOpenPanel::addExtension(const PPString& ext, const PPString& desc)
++{
++	Descriptor* d = new Descriptor(ext, desc);
++	items.add(d);
++}
++
++PPOpenPanel::ReturnCodes PPOpenPanel::runModal()
++{
++	DialogFileSelector* dialog = new DialogFileSelector(screen, NULL, PP_DEFAULT_ID, this->caption);
++	for (pp_int32 i = 0; i < items.size(); i++)
++	{
++		PPSystemString ext(items.get(i)->extension);
++		PPSystemString desc(items.get(i)->description);
++		dialog->addExtension(ext, desc);
++	}
++	ReturnCodes result = AROS_runModalLoop(screen, dialog);
++	PPSystemString pathEntry(dialog->getSelectedPathFull());
++	delete dialog;
++	fileName = ((result == ReturnCodeOK) ? pathEntry : "");
++	return result;
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPPath_Amiga.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPPath_Amiga.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPPath_Amiga.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPPath_Amiga.cpp	2026-04-26 10:15:30.164767871 +0200
+@@ -0,0 +1,298 @@
++/*
++ *  ppui/osinterface/amiga/PPPath_Amiga.cpp
++ *
++ *  Copyright 2020 neoman
++ *  Copyright 2026 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include "PPPath_Amiga.h"
++#include <dos/dosextens.h>
++
++#define PPMAX_DIR_PATH 1024
++
++static BPTR currentDirLock = 0;
++
++extern "C" BPTR GetProgramDirLock();
++
++void PPPathEntry_Amiga::createDosDevice(const PPSystemString& dosDevice)
++{
++    this->name = dosDevice;
++    this->name.append(":");
++    this->type = Directory;
++    this->size = 0;
++}
++
++void PPPathEntry_Amiga::create(const PPSystemString& path, const PPSystemString& name)
++{
++    BPTR lock;
++    char dirname[PPMAX_DIR_PATH + 1];
++
++	this->name = name;
++    this->type = Nonexistent;
++
++    strcpy(dirname, path.getStrBuffer());
++
++    if(AddPart(dirname, name.getStrBuffer(), PPMAX_DIR_PATH)) {
++        if((lock = Lock(dirname, SHARED_LOCK)) != 0) {
++            struct FileInfoBlock * fib;
++
++            if((fib = (struct FileInfoBlock *) AllocDosObject(DOS_FIB, TAG_END))) {
++                if(Examine(lock, fib)) {
++                    if(fib->fib_DirEntryType < 0) {
++                        type = File;
++                        size = fib->fib_Size;
++                    } else {
++                        type = Directory;
++                        size = 0;
++                    }
++                }
++
++                FreeDosObject(DOS_FIB, fib);
++            }
++
++            UnLock(lock);
++        }
++    }
++}
++
++PPPath_Amiga::PPPath_Amiga()
++: dirLock(0)
++, dirFIB(NULL)
++, isDosList(false)
++, dosList(NULL)
++{
++	current = getCurrent();
++    updatePath();
++}
++
++PPPath_Amiga::PPPath_Amiga(const PPSystemString& path)
++: dirLock(0)
++, dirFIB(NULL)
++, isDosList(false)
++, dosList(NULL)
++, current(path)
++{
++    updatePath();
++}
++
++bool PPPath_Amiga::updatePath()
++{
++    if(currentDirLock && currentDirLock != GetProgramDirLock()) {
++        UnLock(currentDirLock);
++    }
++
++    if(current.length() == 0) {
++        currentDirLock = GetProgramDirLock();
++        current = getCurrent();
++    } else {
++        if(!(currentDirLock = Lock(current.getStrBuffer(), SHARED_LOCK))) {
++            return false;
++        }
++    }
++
++    return true;
++}
++
++const PPSystemString PPPath_Amiga::getCurrent()
++{
++	STRPTR cwd = (STRPTR) AllocMem(PPMAX_DIR_PATH+1, MEMF_CLEAR);
++  	PPSystemString path;
++
++    if(!currentDirLock) {
++        currentDirLock = GetProgramDirLock();
++    }
++
++    if(NameFromLock(currentDirLock, cwd, PPMAX_DIR_PATH)) {
++        path = cwd;
++    } else {
++        path = "PROGDIR:";
++    }
++
++    FreeMem(cwd, PPMAX_DIR_PATH+1);
++
++    if(path[strlen(path)-1] != ':') {
++        path.ensureTrailingCharacter(getPathSeparatorAsASCII());
++    }
++
++	return path;
++}
++
++bool PPPath_Amiga::change(const PPSystemString& path)
++{
++    PPSystemString old = current;
++	current = path;
++
++	bool res = updatePath();
++	if (res)
++		return true;
++
++	current = old;
++	return false;
++}
++
++bool PPPath_Amiga::stepInto(const PPSystemString& directory)
++{
++	PPSystemString old = current;
++
++    char dirname[PPMAX_DIR_PATH + 1];
++    strcpy(dirname, current.getStrBuffer());
++
++    if(AddPart(dirname, directory.getStrBuffer(), PPMAX_DIR_PATH)) {
++        PPSystemString newdir(dirname);
++        if(change(newdir))
++            return true;
++    }
++
++	return false;
++}
++
++const PPPathEntry* PPPath_Amiga::getFirstEntry()
++{
++    if(isDosList) {
++        dosList = LockDosList(LDF_VOLUMES | LDF_READ);
++        return getNextEntry();
++    }
++
++    if((dirLock = Lock(current.getStrBuffer(), SHARED_LOCK)) != 0) {
++        if((dirFIB = (struct FileInfoBlock *) AllocDosObject(DOS_FIB, TAG_END))) {
++            if(Examine(dirLock, dirFIB)) {
++                if(dirFIB->fib_DirEntryType > 0) {
++                    return getNextEntry();
++                }
++            }
++            FreeDosObject(DOS_FIB, dirFIB);
++            dirFIB = NULL;
++        }
++        UnLock(dirLock);
++        dirLock = 0;
++    }
++
++    return NULL;
++}
++
++const PPPathEntry* PPPath_Amiga::getNextEntry()
++{
++    if(isDosList) {
++		dosList = NextDosEntry(dosList, LDF_VOLUMES);
++        if(dosList != NULL) {
++            char dname[256] = {0};
++
++            STRPTR bname = AROS_BSTR_ADDR(dosList->dol_Name);
++            int len = AROS_BSTR_strlen(dosList->dol_Name);
++            memcpy(dname, bname, len);
++            dname[len] = '\0';
++
++            PPSystemString device(dname);
++
++            this->entry.createDosDevice(device);
++
++            return &this->entry;
++        }
++        UnLockDosList(LDF_VOLUMES | LDF_READ);
++        dosList = NULL;
++        isDosList = false;
++    } else {
++        if(dirLock && dirFIB) {
++            LONG ret = ExNext(dirLock, dirFIB);
++            if(ret) {
++                PPSystemString file((const char *)dirFIB->fib_FileName);
++
++                this->entry.create(current, file);
++
++                return &this->entry;
++            } else {
++                FreeDosObject(DOS_FIB, dirFIB);
++                dirFIB = NULL;
++
++                UnLock(dirLock);
++                dirLock = 0;
++            }
++        }
++    }
++
++    return NULL;
++}
++
++bool PPPath_Amiga::canGotoHome() const
++{
++	return currentDirLock != GetProgramDirLock();
++}
++
++void PPPath_Amiga::gotoHome()
++{
++    currentDirLock = GetProgramDirLock();
++    current = getCurrent();
++}
++
++bool PPPath_Amiga::canGotoRoot() const
++{
++	return true;
++}
++
++void PPPath_Amiga::gotoRoot()
++{
++    isDosList = true;
++}
++
++bool PPPath_Amiga::canGotoParent() const
++{
++	return true;
++}
++
++void PPPath_Amiga::gotoParent()
++{
++    if(isRootDirectory()) {
++        isDosList = true;
++    } else {
++        currentDirLock = ParentDir(currentDirLock);
++        current = getCurrent();
++    }
++}
++
++char PPPath_Amiga::getPathSeparatorAsASCII() const
++{
++	return '/';
++}
++
++const PPSystemString PPPath_Amiga::getPathSeparator() const
++{
++	return PPSystemString(getPathSeparatorAsASCII());
++}
++
++bool PPPath_Amiga::fileExists(const PPSystemString& fileName) const
++{
++    BPTR lock = Lock(fileName.getStrBuffer(), SHARED_LOCK);
++    if(lock) {
++        struct FileInfoBlock *fib;
++        bool result = false;
++        if((fib = (struct FileInfoBlock *) AllocDosObject(DOS_FIB, TAG_END))) {
++            if(Examine(lock, fib))
++                result = (fib->fib_DirEntryType < 0);
++            FreeDosObject(DOS_FIB, fib);
++        }
++        UnLock(lock);
++        return result;
++    }
++	return false;
++}
++
++bool PPPath_Amiga::isRootDirectory() const
++{
++    return current.charAt(current.length() - 1) == ':';
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPPath_Amiga.h MilkyTracker-1.05.01.aros/src/tracker/aros/PPPath_Amiga.h
+--- MilkyTracker-1.05.01/src/tracker/aros/PPPath_Amiga.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPPath_Amiga.h	2026-04-26 10:15:30.164799671 +0200
+@@ -0,0 +1,79 @@
++/*
++ *  ppui/osinterface/amiga/PPPath_Amiga.h
++ *
++ *  Copyright 2020 neoman
++ *  Copyright 2026 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef __PPPATH_AMIGA_H__
++#define __PPPATH_AMIGA_H__
++
++#include "PPPath.h"
++
++#include <proto/exec.h>
++#include <proto/dos.h>
++
++class PPPathEntry_Amiga : public PPPathEntry
++{
++public:
++	PPPathEntry_Amiga() { }
++
++	virtual void create(const PPSystemString& path, const PPSystemString& name);
++    virtual void createDosDevice(const PPSystemString& dosDevice);
++};
++
++class PPPath_Amiga : public PPPath
++{
++protected:
++	PPSystemString current;
++	PPPathEntry_Amiga entry;
++    BPTR dirLock;
++    struct FileInfoBlock * dirFIB;
++    struct DosList * dosList;
++    bool isDosList;
++
++    virtual bool isRootDirectory() const;
++	virtual bool updatePath();
++public:
++	PPPath_Amiga();
++	PPPath_Amiga(const PPSystemString& path);
++	virtual ~PPPath_Amiga() {}
++
++	virtual const PPSystemString getCurrent();
++
++	virtual bool change(const PPSystemString& path);
++	virtual bool stepInto(const PPSystemString& directory);
++
++	virtual const PPPathEntry* getFirstEntry();
++	virtual const PPPathEntry* getNextEntry();
++
++	virtual bool canGotoHome() const;
++	virtual void gotoHome();
++	virtual bool canGotoRoot() const;
++	virtual void gotoRoot();
++	virtual bool canGotoParent() const;
++	virtual void gotoParent();
++
++	virtual char getPathSeparatorAsASCII() const;
++	virtual const PPSystemString getPathSeparator() const;
++
++	virtual bool fileExists(const PPSystemString& fileName) const;
++};
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPQuitSaveAlert_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPQuitSaveAlert_AROS.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPQuitSaveAlert_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPQuitSaveAlert_AROS.cpp	2026-04-26 10:15:30.164907622 +0200
+@@ -0,0 +1,11 @@
++#include "PPQuitSaveAlert.h"
++#include "AROS_ModalLoop.h"
++#include "DialogBase.h"
++
++PPQuitSaveAlert::ReturnCodes PPQuitSaveAlert::runModal()
++{
++	PPDialogBase* dialog = new PPDialogBase(screen, NULL, PP_DEFAULT_ID, "Save current changes?", PPDialogBase::MessageBox_YESNOCANCEL);
++	ReturnCodes result = AROS_runModalLoop(screen, dialog);
++	delete dialog;
++	return result;
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPSavePanel_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/PPSavePanel_AROS.cpp
+--- MilkyTracker-1.05.01/src/tracker/aros/PPSavePanel_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPSavePanel_AROS.cpp	2026-04-26 10:15:30.164934943 +0200
+@@ -0,0 +1,20 @@
++#include "PPSavePanel.h"
++#include "AROS_ModalLoop.h"
++#include "DialogFileSelector.h"
++
++PPSavePanel::ReturnCodes PPSavePanel::runModal()
++{
++	DialogFileSelector* dialog = new DialogFileSelector(screen, NULL, PP_DEFAULT_ID, this->caption, true, true);
++	dialog->setCurrentEditFileName(defaultFileName);
++	for (pp_int32 i = 0; i < items.size(); i++)
++	{
++		PPSystemString ext(items.get(i)->extension);
++		PPSystemString desc(items.get(i)->description);
++		dialog->addExtension(ext, desc);
++	}
++	ReturnCodes result = AROS_runModalLoop(screen, dialog);
++	PPSystemString pathEntry(dialog->getSelectedPathFull());
++	delete dialog;
++	fileName = ((result == ReturnCodeOK) ? pathEntry : "");
++	return result;
++}
+diff -ruN MilkyTracker-1.05.01/src/tracker/aros/PPSystem_AROS.h MilkyTracker-1.05.01.aros/src/tracker/aros/PPSystem_AROS.h
+--- MilkyTracker-1.05.01/src/tracker/aros/PPSystem_AROS.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/aros/PPSystem_AROS.h	2026-04-26 10:15:30.164962294 +0200
+@@ -0,0 +1,28 @@
++/*
++ *  tracker/aros/PPSystem_AROS.h
++ *
++ *  Copyright 2024 AROS port
++ *
++ *  This file is part of Milkytracker.
++ *
++ *  Milkytracker is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  Milkytracker is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with Milkytracker.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef PPSYSTEM_AROS_H
++#define PPSYSTEM_AROS_H
++
++#include "PPSystem_POSIX.h"
++
++#endif
+diff -ruN MilkyTracker-1.05.01/src/tracker/ModuleEditor.cpp MilkyTracker-1.05.01.aros/src/tracker/ModuleEditor.cpp
+--- MilkyTracker-1.05.01/src/tracker/ModuleEditor.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/ModuleEditor.cpp	2026-04-26 10:15:30.161402733 +0200
+@@ -714,16 +714,11 @@
+ 	
+ 		PPSystemString tempFile(getTempFilename());
+ 	
+-		try
+-		{
+-			res = module->saveExtendedModule(tempFile) == MP_OK;
+-			if(!res)
+-				return res;
++		res = module->saveExtendedModule(tempFile) == MP_OK;
++		if(!res)
++			return res;
+ 
+-			res = module->loadModule(tempFile) == MP_OK;
+-		} catch (const std::bad_alloc &) {
+-			return false;
+-		}
++		res = module->loadModule(tempFile) == MP_OK;
+ 	
+ 		// restore one shot looping flag
+ 		if (type == XModule::ModuleType_MOD)
+diff -ruN MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp MilkyTracker-1.05.01.aros/src/tracker/TrackerSettings.cpp
+--- MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/TrackerSettings.cpp	2026-04-26 10:15:30.171628652 +0200
+@@ -683,7 +683,6 @@
+ 			pp_int32 i = str.getIntValue();
+ 			str = theKey->getStringValue();
+ 			sectionInstruments->setEncodedEnvelope(SectionInstruments::EnvelopeTypeVolume, i, str);
+-      printf("env %i %s\n",i,str.getStrBuffer());
+ 		}
+ 	}
+ 	else if (theKey->getKey().startsWith("PREDEFENVELOPEPANNING_"))
+diff -ruN MilkyTracker-1.05.01/src/tracker/version.h MilkyTracker-1.05.01.aros/src/tracker/version.h
+--- MilkyTracker-1.05.01/src/tracker/version.h	1970-01-01 01:00:00.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/tracker/version.h	2026-04-26 10:15:30.171591903 +0200
+@@ -0,0 +1,4 @@
++// 0xXYYZZ = X.YY.ZZ
++const int MILKYTRACKER_VERSION = 0x10500;
++// Version string restricted to 20 chars for XM export!
++const char MILKYTRACKER_VERSION_STRING[] = "MilkyTracker 1.05.01";

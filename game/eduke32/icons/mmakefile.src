@@ -1,0 +1,11 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game-eduke32 : ports-game-eduke32-icons
+
+ICONS     := EDuke32
+TARGETDIR := $(AROS_CONTRIB)/Games/FPS/EDuke32
+
+%build_icons mmake=ports-game-eduke32-icons \
+    icons=$(ICONS) dir=$(TARGETDIR)

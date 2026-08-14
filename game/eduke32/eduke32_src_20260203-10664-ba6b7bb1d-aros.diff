@@ -1,0 +1,1210 @@
+diff --color -ruN a/Common.mak b/Common.mak
+--- a/Common.mak	2026-02-03 11:50:16
++++ b/Common.mak	2026-07-16 00:27:18
+@@ -47,6 +47,9 @@
+     ifeq ($(PLATFORM),$(filter $(PLATFORM),LINUX DINGOO GCW CAANOO))
+         SUBPLATFORM := LINUX
+     endif
++    ifeq ($(PLATFORM),AROS)
++        SUBPLATFORM := AROS
++    endif
+ endif
+ 
+ ifeq ($(HOSTPLATFORM),DARWIN)
+@@ -390,6 +393,13 @@
+     override NOASM := 1
+ else ifeq ($(PLATFORM),$(filter $(PLATFORM),BEOS))
+     override NOASM := 1
++else ifeq ($(PLATFORM),AROS)
++    override USE_OPENGL := 1
++    override NETCODE := 0
++    override HAVE_GTK2 := 0
++    override STARTUP_WINDOW := 0
++    override USE_MIMALLOC := 0
++    override NOASM := 1
+ endif
+ 
+ ifneq (i386,$(strip $(IMPLICIT_ARCH)))
+@@ -540,6 +550,11 @@
+     LIBDIRS += -L$(LIBOGC_LIB)
+ else ifeq ($(PLATFORM),$(filter $(PLATFORM),DINGOO GCW))
+     COMPILERFLAGS += -D__OPENDINGUX__
++else ifeq ($(PLATFORM),AROS)
++    COMPILERFLAGS += -D__AROS__ -DAROS -D_GNU_SOURCE=1 -D_REENTRANT
++    LIBDIRS += -L$(AROS_LIB)
++    LINKERFLAGS += -Wl,-e,__startup_entry -Wl,--allow-multiple-definition -Wl,--defsym,__eh_frame_start=0 -Wl,--defsym,__eh_frame_end=0
++    LINKERFLAGS += $(AROS_LIB)/startup.o $(AROS_LIB)/cxx-startup.o $(AROS_LIB)/arm-exidx-unwind.o
+ else ifeq ($(SUBPLATFORM),LINUX)
+     # Locate .so files
+     LINKERFLAGS += -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+@@ -608,7 +623,12 @@
+ endif
+ 
+ ifeq (1,$(LLD))
+-    COMMONFLAGS += -fuse-ld=lld
++    # On AROS the clang driver's default linker is collect-aros, which emits a
++    # relocatable (ET_REL) AROS executable. Forcing lld would produce a static
++    # ET_EXEC that the AROS loader cannot relocate, so don't override the linker.
++    ifneq ($(PLATFORM),AROS)
++        COMMONFLAGS += -fuse-ld=lld
++    endif
+     LF :=
+ endif
+ 
+@@ -917,6 +937,10 @@
+         SDLCONFIG :=
+     endif
+ 
++    ifeq ($(PLATFORM),AROS)
++        SDLCONFIG :=
++    endif
++
+     ifeq ($(PLATFORM),WII)
+         SDLCONFIG :=
+     endif
+@@ -989,11 +1013,16 @@
+     # -lshfolder
+ else ifeq ($(PLATFORM),WII)
+     LIBS += -laesnd_tueidj -lfat -lwiiuse -lbte -lwiikeyboard -logc
++else ifeq ($(PLATFORM),AROS)
++    # The compiler runtime (compiler-rt builtins, incl. the ARM __aeabi_*
++    # helpers in the correct float ABI) is auto-linked by the AROS clang
++    # driver, so no arch-specific runtime libs are needed here.
++    LIBS += -lSDL2 -lstdc++ -lautoinit -lamiga -larossupport -laros -lstdc -lm
+ else ifeq ($(SUBPLATFORM),LINUX)
+     LIBS += -lrt -latomic
+ endif
+ 
+-ifeq (,$(filter $(PLATFORM),WINDOWS WII))
++ifeq (,$(filter $(PLATFORM),WINDOWS WII AROS))
+     ifneq ($(PLATFORM),BSD)
+         LIBS += -ldl
+     endif
+diff --color -ruN a/GNUmakefile b/GNUmakefile
+--- a/GNUmakefile	2026-02-03 11:50:16
++++ b/GNUmakefile	2026-07-02 15:08:20
+@@ -162,6 +162,9 @@
+ ifneq ($(RENDERTYPE),WIN)
+     imgui_excl += imgui_impl_win32.cpp
+ endif
++ifeq (0,$(USE_OPENGL))
++    imgui_excl += imgui_impl_opengl3.cpp
++endif
+ 
+ imgui_objs := $(call getfiltered,imgui,*.cpp)
+ 
+@@ -874,7 +877,7 @@
+ $$($1_obj)/%.$$o: $$($1_src)/%.glsl | $$($1_obj)
+ 	@echo Creating $$($1_obj)/$$(<F).cpp from $$<
+ 	@$$(call RAW_ECHO,extern char const *$$(basename $$(<F));) > $$($1_obj)/$$(<F).cpp
+-	@$$(call RAW_ECHO,char const *$$(basename $$(<F)) = R"shader$$(paren_open)) >> $$($1_obj)/$$(<F).cpp
++	@printf '%s' 'char const *$$(basename $$(<F)) = R"shader$$(paren_open)' >> $$($1_obj)/$$(<F).cpp
+ 	@$$(call CAT,$$<) >> $$($1_obj)/$$(<F).cpp
+ 	@$$(call RAW_ECHO,$$(paren_close)shader";) >> $$($1_obj)/$$(<F).cpp
+ 	$$(COMPILE_STATUS)
+diff --color -ruN a/source/audiolib/include/multivoc.h b/source/audiolib/include/multivoc.h
+--- a/source/audiolib/include/multivoc.h	2026-02-03 11:50:16
++++ b/source/audiolib/include/multivoc.h	2026-04-07 17:31:01
+@@ -68,7 +68,11 @@
+ 
+ const char *MV_ErrorString(int ErrorNumber);
+ 
++#ifdef __AROS__
++extern int MV_Locked;
++#else
+ extern thread_local int MV_Locked;
++#endif
+ static FORCE_INLINE void MV_Lock(void)
+ {
+     extern void SoundDriver_PCM_Lock(void);
+diff --color -ruN a/source/audiolib/src/multivoc.cpp b/source/audiolib/src/multivoc.cpp
+--- a/source/audiolib/src/multivoc.cpp	2026-02-03 11:50:16
++++ b/source/audiolib/src/multivoc.cpp	2026-04-07 17:30:59
+@@ -101,7 +101,11 @@
+ fix16_t MV_GlobalVolume = fix16_one;
+ fix16_t MV_VolumeSmoothFactor = fix16_one;
+ 
++#ifdef __AROS__
++int MV_Locked;
++#else
+ thread_local int MV_Locked;
++#endif
+ char *MV_MusicBuffer;
+ static void (*MV_MusicCallback)(void);
+ 
+diff --color -ruN a/source/build/include/compat.h b/source/build/include/compat.h
+--- a/source/build/include/compat.h	2026-02-03 11:50:16
++++ b/source/build/include/compat.h	2026-04-07 10:20:58
+@@ -7,7 +7,12 @@
+ 
+ #pragma once
+ 
+-#ifndef __APPLE__
++#if defined(__AROS__)
++/* AROS: no malloc.h, use stdlib.h only */
++/* Undefine AROS macros that clash with Build Engine / Duke3D identifiers */
++# undef GLOBAL
++# undef BOOL
++#elif !defined(__APPLE__)
+ #include <malloc.h>
+ #endif
+ #include <stdlib.h>
+@@ -342,6 +347,10 @@
+ # define EDUKE32_BSD
+ #endif
+ 
++#ifdef __AROS__
++# define EDUKE32_AROS
++#endif
++
+ #ifdef __APPLE__
+ # include <TargetConditionals.h>
+ # if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR
+@@ -445,6 +454,11 @@
+ # endif
+ 
+ #elif defined(_WIN32) || defined(SKYOS) || defined(__SYLLABLE__)
++# define B_LITTLE_ENDIAN 1
++# define B_BIG_ENDIAN    0
++
++#elif defined(__AROS__)
++/* AROS on x86/x86_64 is little-endian */
+ # define B_LITTLE_ENDIAN 1
+ # define B_BIG_ENDIAN    0
+ #endif
+diff --color -ruN a/source/build/include/enet.h b/source/build/include/enet.h
+--- a/source/build/include/enet.h	2026-02-03 11:50:16
++++ b/source/build/include/enet.h	2026-04-07 15:20:26
+@@ -144,7 +144,9 @@
+     #include <sys/ioctl.h>
+     #include <sys/time.h>
+     #include <sys/socket.h>
++    #ifndef __AROS__
+     #include <poll.h>
++    #endif
+     #include <arpa/inet.h>
+     #include <netinet/in.h>
+     #include <netinet/tcp.h>
+@@ -202,7 +204,11 @@
+ #define ENET_MIN(x, y) ((x) < (y) ? (x) : (y))
+ 
+ #define ENET_IPV6           1
++#if defined(__AROS__)
++#define ENET_HOST_ANY       enet_v4_any()
++#else
+ #define ENET_HOST_ANY       in6addr_any
++#endif
+ #define ENET_HOST_BROADCAST 0xFFFFFFFFU
+ #define ENET_PORT_ANY       0
+ 
+@@ -210,6 +216,32 @@
+ extern "C" {
+ #endif
+ 
++#if defined(__AROS__)
++    static inline struct in6_addr enet_v4_any(void) {
++        struct in6_addr addr;
++        memset(&addr, 0, sizeof(addr));
++        return addr;
++    }
++
++    static inline void enet_v4_to_in6(struct in6_addr *dst, uint32_t host) {
++        memset(dst, 0, sizeof(*dst));
++        dst->s6_addr[10] = 0xff;
++        dst->s6_addr[11] = 0xff;
++        memcpy(&dst->s6_addr[12], &host, sizeof(host));
++    }
++
++    static inline uint32_t enet_in6_to_v4(const struct in6_addr *src) {
++        uint32_t host = 0;
++        memcpy(&host, &src->s6_addr[12], sizeof(host));
++        return host;
++    }
++
++    static inline int enet_in6_is_v4_mapped(const struct in6_addr *src) {
++        static const uint8_t prefix[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff };
++        return memcmp(src->s6_addr, prefix, sizeof(prefix)) == 0;
++    }
++#endif
++
+ // =======================================================================//
+ // !
+ // ! Basic stuff
+@@ -1000,6 +1032,21 @@
+ extern "C" {
+ #endif
+ 
++#if defined(__AROS__)
++#include <proto/exec.h>
++#include <proto/bsdsocket.h>
++#endif
++
++#ifdef __cplusplus
++}
++#endif
++#if defined(__AROS__)
++struct Library *SocketBase = NULL;
++#endif
++#ifdef __cplusplus
++extern "C" {
++#endif
++
+ // =======================================================================//
+ // !
+ // ! Atomics
+@@ -4941,24 +4988,60 @@
+     #ifndef _WIN32
+ 
+     int enet_initialize(void) {
++#if defined(__AROS__)
++        SocketBase = OpenLibrary("bsdsocket.library", 4);
++        if (!SocketBase) return -1;
++#endif
+         return 0;
+     }
+ 
+-    void enet_deinitialize(void) {}
++    void enet_deinitialize(void) {
++#if defined(__AROS__)
++        if (SocketBase) { CloseLibrary(SocketBase); SocketBase = NULL; }
++#endif
++    }
+ 
+     enet_uint64 enet_host_random_seed(void) {
+         return (enet_uint64) time(NULL);
+     }
+ 
+     int enet_address_set_host_ip(ENetAddress *address, char *name) {
++#if defined(__AROS__)
++        struct in_addr in;
++        in_addr_t addr;
++
++        addr = inet_addr(name);
++        if (addr == INADDR_NONE) {
++            return -1;
++        }
++
++        in.s_addr = addr;
++        enet_v4_to_in6(&address->host, in.s_addr);
++        address->sin6_scope_id = 0;
++        return 0;
++#else
+         if (!inet_pton(AF_INET6, name, &address->host)) {
+             return -1;
+         }
+ 
+         return 0;
++#endif
+     }
+ 
+     int enet_address_set_host(ENetAddress *address, char *name) {
++#if defined(__AROS__)
++        struct hostent *hostEntry = gethostbyname(name);
++
++        if (hostEntry != NULL && hostEntry->h_addrtype == AF_INET && hostEntry->h_length >= (int)sizeof(struct in_addr)) {
++            struct in_addr in;
++            memcpy(&in, hostEntry->h_addr_list[0], sizeof(in));
++            enet_v4_to_in6(&address->host, in.s_addr);
++            address->sin6_scope_id = 0;
++            return 0;
++        }
++
++        return enet_address_set_host_ip(address, name);
++#else
+         struct addrinfo hints, *resultList = NULL, *result = NULL;
+ 
+         memset(&hints, 0, sizeof(hints));
+@@ -5001,17 +5084,63 @@
+         }
+ 
+         return enet_address_set_host_ip(address, name);
++#endif
+     } /* enet_address_set_host */
+ 
+     int enet_address_get_host_ip(ENetAddress *address, char *name, size_t nameLength) {
++#if defined(__AROS__)
++        struct in_addr in;
++        const char *result;
++
++        if (name == NULL || nameLength < INET_ADDRSTRLEN || !enet_in6_is_v4_mapped(&address->host)) {
++            return -1;
++        }
++
++        in.s_addr = enet_in6_to_v4(&address->host);
++        result = inet_ntoa(in);
++        if (result == NULL) {
++            return -1;
++        }
++
++        if (strlen(result) >= nameLength) {
++            return -1;
++        }
++
++        strcpy(name, result);
++        return 0;
++#else
+         if (inet_ntop(AF_INET6, &address->host, name, nameLength) == NULL) {
+             return -1;
+         }
+ 
+         return 0;
++#endif
+     }
+ 
+     int enet_address_get_host(ENetAddress *address, char *name, size_t nameLength) {
++#if defined(__AROS__)
++        struct in_addr in;
++        struct hostent *hostEntry;
++        size_t hostLen;
++
++        if (!enet_in6_is_v4_mapped(&address->host)) {
++            return -1;
++        }
++
++        in.s_addr = enet_in6_to_v4(&address->host);
++        hostEntry = gethostbyaddr((char *)&in, sizeof(in), AF_INET);
++        if (hostEntry == NULL) {
++            return enet_address_get_host_ip(address, name, nameLength);
++        }
++
++        hostLen = strlen(hostEntry->h_name);
++        if (hostLen >= nameLength) {
++            return -1;
++        }
++
++        memcpy(name, hostEntry->h_name, hostLen + 1);
++        return 0;
++#else
+         struct sockaddr_in6 sin;
+         int err;
+ 
+@@ -5034,9 +5163,25 @@
+         }
+ 
+         return enet_address_get_host_ip(address, name, nameLength);
++#endif
+     } /* enet_address_get_host */
+ 
+     int enet_socket_bind(ENetSocket socket, ENetAddress *address) {
++#if defined(__AROS__)
++        struct sockaddr_in sin;
++        memset(&sin, 0, sizeof(sin));
++        sin.sin_family = AF_INET;
++
++        if (address != NULL) {
++            sin.sin_port = ENET_HOST_TO_NET_16(address->port);
++            sin.sin_addr.s_addr = enet_in6_to_v4(&address->host);
++        } else {
++            sin.sin_port = 0;
++            sin.sin_addr.s_addr = htonl(INADDR_ANY);
++        }
++
++        return bind(socket, (struct sockaddr *)&sin, sizeof(sin));
++#else
+         struct sockaddr_in6 sin;
+         memset(&sin, 0, sizeof(struct sockaddr_in6));
+         sin.sin6_family = AF_INET6;
+@@ -5052,9 +5197,23 @@
+         }
+ 
+         return bind(socket, (struct sockaddr *)&sin, sizeof(struct sockaddr_in6));
++#endif
+     }
+ 
+     int enet_socket_get_address(ENetSocket socket, ENetAddress *address) {
++#if defined(__AROS__)
++        struct sockaddr_in sin;
++        socklen_t sinLength = sizeof(sin);
++
++        if (getsockname(socket, (struct sockaddr *) &sin, &sinLength) == -1) {
++            return -1;
++        }
++
++        enet_v4_to_in6(&address->host, sin.sin_addr.s_addr);
++        address->port = ENET_NET_TO_HOST_16(sin.sin_port);
++        address->sin6_scope_id = 0;
++        return 0;
++#else
+         struct sockaddr_in6 sin;
+         socklen_t sinLength = sizeof(struct sockaddr_in6);
+ 
+@@ -5067,6 +5226,7 @@
+         address->sin6_scope_id  = sin.sin6_scope_id;
+ 
+         return 0;
++#endif
+     }
+ 
+     int enet_socket_listen(ENetSocket socket, int backlog) {
+@@ -5074,7 +5234,11 @@
+     }
+ 
+     ENetSocket enet_socket_create(ENetSocketType type) {
++#if defined(__AROS__)
++        return socket(PF_INET, type == ENET_SOCKET_TYPE_DATAGRAM ? SOCK_DGRAM : SOCK_STREAM, 0);
++#else
+         return socket(PF_INET6, type == ENET_SOCKET_TYPE_DATAGRAM ? SOCK_DGRAM : SOCK_STREAM, 0);
++#endif
+     }
+ 
+     int enet_socket_set_option(ENetSocket socket, ENetSocketOption option, int value) {
+@@ -5122,7 +5286,11 @@
+                 break;
+ 
+             case ENET_SOCKOPT_IPV6_V6ONLY:
++#if defined(__AROS__)
++                result = 0;
++#else
+                 result = setsockopt(socket, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&value, sizeof(int));
++#endif
+                 break;
+ 
+             default:
+@@ -5148,6 +5316,22 @@
+     }
+ 
+     int enet_socket_connect(ENetSocket socket, ENetAddress *address) {
++#if defined(__AROS__)
++        struct sockaddr_in sin;
++        int result;
++
++        memset(&sin, 0, sizeof(sin));
++        sin.sin_family = AF_INET;
++        sin.sin_port = ENET_HOST_TO_NET_16(address->port);
++        sin.sin_addr.s_addr = enet_in6_to_v4(&address->host);
++
++        result = connect(socket, (struct sockaddr *)&sin, sizeof(sin));
++        if (result == -1 && errno == EINPROGRESS) {
++            return 0;
++        }
++
++        return result;
++#else
+         struct sockaddr_in6 sin;
+         int result;
+ 
+@@ -5164,10 +5348,30 @@
+         }
+ 
+         return result;
++#endif
+     }
+ 
+     ENetSocket enet_socket_accept(ENetSocket socket, ENetAddress *address) {
++#if defined(__AROS__)
+         int result;
++        struct sockaddr_in sin;
++        socklen_t sinLength = sizeof(sin);
++
++        result = accept(socket, address != NULL ? (struct sockaddr *) &sin : NULL, address != NULL ? &sinLength : NULL);
++
++        if (result == -1) {
++            return ENET_SOCKET_NULL;
++        }
++
++        if (address != NULL) {
++            enet_v4_to_in6(&address->host, sin.sin_addr.s_addr);
++            address->port = ENET_NET_TO_HOST_16(sin.sin_port);
++            address->sin6_scope_id = 0;
++        }
++
++        return result;
++#else
++        int result;
+         struct sockaddr_in6 sin;
+         socklen_t sinLength = sizeof(struct sockaddr_in6);
+ 
+@@ -5184,6 +5388,7 @@
+         }
+ 
+         return result;
++#endif
+     }
+ 
+     int enet_socket_shutdown(ENetSocket socket, ENetSocketShutdown how) {
+@@ -5197,7 +5402,37 @@
+     }
+ 
+     int enet_socket_send(ENetSocket socket, ENetAddress *address, ENetBuffer *buffers, size_t bufferCount) {
++#if defined(__AROS__)
+         struct msghdr msgHdr;
++        struct sockaddr_in sin;
++        int sentLength;
++
++        memset(&msgHdr, 0, sizeof(msgHdr));
++
++        if (address != NULL) {
++            memset(&sin, 0, sizeof(sin));
++            sin.sin_family = AF_INET;
++            sin.sin_port = ENET_HOST_TO_NET_16(address->port);
++            sin.sin_addr.s_addr = enet_in6_to_v4(&address->host);
++            msgHdr.msg_name = &sin;
++            msgHdr.msg_namelen = sizeof(sin);
++        }
++
++        msgHdr.msg_iov = (struct iovec *) buffers;
++        msgHdr.msg_iovlen = bufferCount;
++
++        sentLength = sendmsg(socket, &msgHdr, MSG_NOSIGNAL);
++        if (sentLength == -1) {
++            if (errno == EWOULDBLOCK) {
++                return 0;
++            }
++
++            return -1;
++        }
++
++        return sentLength;
++#else
++        struct msghdr msgHdr;
+         struct sockaddr_in6 sin;
+         int sentLength;
+ 
+@@ -5229,10 +5464,48 @@
+         }
+ 
+         return sentLength;
++#endif
+     } /* enet_socket_send */
+ 
+     int enet_socket_receive(ENetSocket socket, ENetAddress *address, ENetBuffer *buffers, size_t bufferCount) {
++#if defined(__AROS__)
+         struct msghdr msgHdr;
++        struct sockaddr_in sin;
++        int recvLength;
++
++        memset(&msgHdr, 0, sizeof(msgHdr));
++
++        if (address != NULL) {
++            memset(&sin, 0, sizeof(sin));
++            msgHdr.msg_name = &sin;
++            msgHdr.msg_namelen = sizeof(sin);
++        }
++
++        msgHdr.msg_iov = (struct iovec *) buffers;
++        msgHdr.msg_iovlen = bufferCount;
++
++        recvLength = recvmsg(socket, &msgHdr, MSG_NOSIGNAL);
++        if (recvLength == -1) {
++            if (errno == EWOULDBLOCK) {
++                return 0;
++            }
++
++            return -1;
++        }
++
++        if (msgHdr.msg_flags & MSG_TRUNC) {
++            return -1;
++        }
++
++        if (address != NULL) {
++            enet_v4_to_in6(&address->host, sin.sin_addr.s_addr);
++            address->port = ENET_NET_TO_HOST_16(sin.sin_port);
++            address->sin6_scope_id = 0;
++        }
++
++        return recvLength;
++#else
++        struct msghdr msgHdr;
+         struct sockaddr_in6 sin;
+         int recvLength;
+ 
+@@ -5267,6 +5540,7 @@
+         }
+ 
+         return recvLength;
++#endif
+     } /* enet_socket_receive */
+ 
+     int enet_socketset_select(ENetSocket maxSocket, ENetSocketSet *readSet, ENetSocketSet *writeSet, enet_uint32 timeout) {
+@@ -5279,6 +5553,55 @@
+     }
+ 
+     int enet_socket_wait(ENetSocket socket, enet_uint32 *condition, enet_uint64 timeout) {
++#if defined(__AROS__)
++        ENetSocketSet readSet, writeSet;
++        ENetSocketSet *readPtr = NULL, *writePtr = NULL;
++        struct timeval timeVal;
++        int selectCount;
++
++        ENET_SOCKETSET_EMPTY(readSet);
++        ENET_SOCKETSET_EMPTY(writeSet);
++
++        if (*condition & ENET_SOCKET_WAIT_SEND) {
++            ENET_SOCKETSET_ADD(writeSet, socket);
++            writePtr = &writeSet;
++        }
++
++        if (*condition & ENET_SOCKET_WAIT_RECEIVE) {
++            ENET_SOCKETSET_ADD(readSet, socket);
++            readPtr = &readSet;
++        }
++
++        timeVal.tv_sec = timeout / 1000;
++        timeVal.tv_usec = (timeout % 1000) * 1000;
++
++        selectCount = select(socket + 1, readPtr, writePtr, NULL, &timeVal);
++
++        if (selectCount < 0) {
++            if (errno == EINTR && *condition & ENET_SOCKET_WAIT_INTERRUPT) {
++                *condition = ENET_SOCKET_WAIT_INTERRUPT;
++                return 0;
++            }
++
++            return -1;
++        }
++
++        *condition = ENET_SOCKET_WAIT_NONE;
++
++        if (selectCount == 0) {
++            return 0;
++        }
++
++        if (writePtr != NULL && ENET_SOCKETSET_CHECK(*writePtr, socket)) {
++            *condition |= ENET_SOCKET_WAIT_SEND;
++        }
++
++        if (readPtr != NULL && ENET_SOCKETSET_CHECK(*readPtr, socket)) {
++            *condition |= ENET_SOCKET_WAIT_RECEIVE;
++        }
++
++        return 0;
++#else
+         struct pollfd pollSocket;
+         int pollCount;
+ 
+@@ -5320,6 +5643,7 @@
+         }
+ 
+         return 0;
++#endif
+     } /* enet_socket_wait */
+ 
+     #endif // !_WIN32
+diff --color -ruN a/source/build/include/libasync.h b/source/build/include/libasync.h
+--- a/source/build/include/libasync.h	2026-02-03 11:50:16
++++ b/source/build/include/libasync.h	2026-04-07 15:22:48
+@@ -31,6 +31,7 @@
+ #include <exception>
+ #include <functional>
+ #include <iterator>
++#include <limits>
+ #include <memory>
+ #include <mutex>
+ #include <thread>
+@@ -3042,7 +3043,9 @@
+ 
+ // We don't make use of dynamic TLS initialization/destruction so we can just
+ // use the legacy TLS attributes.
+-#ifdef __GNUC__
++#ifdef __AROS__
++# define THREAD_LOCAL
++#elif defined(__GNUC__)
+ # define  THREAD_LOCAL __thread
+ #elif defined (_MSC_VER)
+ # define THREAD_LOCAL __declspec(thread)
+@@ -3349,9 +3352,11 @@
+ 	{
+ 		// Unsigned to signed conversion is implementation-defined if the value
+ 		// doesn't fit, so we convert manually.
+-		static_assert(static_cast<std::size_t>(PTRDIFF_MAX) + 1 == static_cast<std::size_t>(PTRDIFF_MIN), "Wrong integer wrapping behavior");
+-		if (x > static_cast<std::size_t>(PTRDIFF_MAX))
+-			return static_cast<std::ptrdiff_t>(x - static_cast<std::size_t>(PTRDIFF_MIN)) + PTRDIFF_MIN;
++		constexpr auto ptrdiff_max = std::numeric_limits<std::ptrdiff_t>::max();
++		constexpr auto ptrdiff_min = std::numeric_limits<std::ptrdiff_t>::min();
++		static_assert(static_cast<std::size_t>(ptrdiff_max) + 1 == static_cast<std::size_t>(ptrdiff_min), "Wrong integer wrapping behavior");
++		if (x > static_cast<std::size_t>(ptrdiff_max))
++			return static_cast<std::ptrdiff_t>(x - static_cast<std::size_t>(ptrdiff_min)) + ptrdiff_min;
+ 		else
+ 			return static_cast<std::ptrdiff_t>(x);
+ 	}
+diff --color -ruN a/source/build/include/minicoro.h b/source/build/include/minicoro.h
+--- a/source/build/include/minicoro.h	2026-02-03 11:50:16
++++ b/source/build/include/minicoro.h	2026-04-07 15:23:03
+@@ -380,7 +380,7 @@
+ #endif
+ 
+ #ifndef MCO_THREAD_LOCAL
+-  #ifdef MCO_NO_MULTITHREAD
++  #if defined(MCO_NO_MULTITHREAD) || defined(__AROS__)
+     #define MCO_THREAD_LOCAL
+   #else
+     #ifdef thread_local
+diff --color -ruN a/source/build/include/mio.hpp b/source/build/include/mio.hpp
+--- a/source/build/include/mio.hpp	2026-02-03 11:50:16
++++ b/source/build/include/mio.hpp	2026-07-02 14:25:31
+@@ -78,6 +78,8 @@
+         SYSTEM_INFO SystemInfo;
+         GetSystemInfo(&SystemInfo);
+         return SystemInfo.dwAllocationGranularity;
++#elif defined(__AROS__)
++        return 4096; // AROS has no sysconf(_SC_PAGE_SIZE)
+ #else
+         return sysconf(_SC_PAGE_SIZE);
+ #endif
+@@ -772,7 +774,29 @@
+ #ifndef _WIN32
+ # include <unistd.h>
+ # include <fcntl.h>
+-# include <sys/mman.h>
++# if defined(__AROS__)
++// AROS has no mmap(); provide failing stubs so mio degrades gracefully to
++// normal file I/O (see texcache_readdata's is_mapped() fallback path).
++#  include <errno.h>
++#  ifndef PROT_READ
++#   define PROT_READ  1
++#   define PROT_WRITE 2
++#  endif
++#  ifndef MAP_SHARED
++#   define MAP_SHARED 1
++#  endif
++#  ifndef MAP_FAILED
++#   define MAP_FAILED ((void *)-1)
++#  endif
++#  ifndef MS_SYNC
++#   define MS_SYNC 2
++#  endif
++static inline void *mmap(void *, size_t, int, int, int, off_t) { errno = ENODEV; return MAP_FAILED; }
++static inline int   munmap(void *, size_t) { return 0; }
++static inline int   msync(void *, size_t, int) { return 0; }
++# else
++#  include <sys/mman.h>
++# endif
+ # include <sys/stat.h>
+ #endif
+ 
+@@ -1332,6 +1356,8 @@
+         SYSTEM_INFO SystemInfo;
+         GetSystemInfo(&SystemInfo);
+         return SystemInfo.dwAllocationGranularity;
++#elif defined(__AROS__)
++        return 4096; // AROS has no sysconf(_SC_PAGE_SIZE)
+ #else
+         return sysconf(_SC_PAGE_SIZE);
+ #endif
+diff --color -ruN a/source/build/include/texcache.h b/source/build/include/texcache.h
+--- a/source/build/include/texcache.h	2026-02-03 11:50:16
++++ b/source/build/include/texcache.h	2026-07-02 14:17:40
+@@ -1,9 +1,15 @@
+ #ifndef texcache_h_
+ # define texcache_h_
+ 
+-#include "mio.hpp"
+ #include "polymost.h"
+ #include "mdsprite.h"
++
++#ifdef USE_OPENGL
++// mio.hpp is a C++ header (pulls in <string>); it must be included outside the
++// extern "C" block below, otherwise its standard headers get C linkage on
++// toolchains where <string> hasn't already been included (e.g. AROS/libc++).
++#include "mio.hpp"
++#endif
+ 
+ #ifdef __cplusplus
+ extern "C" {
+diff --color -ruN a/source/build/src/baselayer.cpp b/source/build/src/baselayer.cpp
+--- a/source/build/src/baselayer.cpp	2026-02-03 11:50:16
++++ b/source/build/src/baselayer.cpp	2026-04-07 10:18:32
+@@ -871,14 +871,13 @@
+ 
+     FILE *fp = freopen("stdout.txt", "w", stdout);
+ 
+-    if (!fp)
+-        fp = fopen("stdout.txt", "w");
+-
+     if (fp)
+     {
+-        setvbuf(fp, 0, _IONBF, 0);
+-        *stdout = *fp;
+-        *stderr = *fp;
++        setvbuf(stdout, nullptr, _IONBF, 0);
++
++        FILE *errfp = freopen("stdout.txt", "a", stderr);
++        if (errfp)
++            setvbuf(stderr, nullptr, _IONBF, 0);
+     }
+ #endif
+ }
+diff --color -ruN a/source/build/src/compat.cpp b/source/build/src/compat.cpp
+--- a/source/build/src/compat.cpp	2026-02-03 11:50:16
++++ b/source/build/src/compat.cpp	2026-04-07 09:22:53
+@@ -20,11 +20,11 @@
+ #endif
+ #endif
+ 
+-#if defined __linux || defined EDUKE32_BSD
++#if (defined __linux || defined EDUKE32_BSD) && !defined __AROS__
+ #include <libgen.h>  // for dirname()
+ #include <pwd.h>     // for getpwuid()
+ #endif
+-#if defined EDUKE32_BSD
++#if defined EDUKE32_BSD && !defined __AROS__
+ # include <limits.h> // for PATH_MAX
+ # include <sys/sysctl.h> // for sysctl() to get path to executable
+ #endif
+@@ -84,7 +84,12 @@
+ //
+ char *Bgethomedir(void)
+ {
+-#ifdef _WIN32
++#ifdef EDUKE32_AROS
++    char const *e = getenv("HOME");
++    if (e == NULL || e[0] == '\0')
++        e = "PROGDIR:";
++    return Xstrdup(e);
++#elif defined _WIN32
+     int32_t loaded = 0;
+     auto hShell32 = GetModuleHandle("shell32.dll");
+ 
+@@ -141,7 +146,9 @@
+ {
+     char *dir = NULL;
+ 
+-#ifdef _WIN32
++#ifdef EDUKE32_AROS
++    dir = Xstrdup("PROGDIR:");
++#elif defined _WIN32
+     TCHAR appdir[MAX_PATH];
+ 
+     if (GetModuleFileName(NULL, appdir, MAX_PATH) > 0) {
+@@ -594,7 +601,9 @@
+ 
+     if (pageSize == -1)
+     {
+-#ifdef _WIN32
++#ifdef EDUKE32_AROS
++        pageSize = 4096;
++#elif defined _WIN32
+         SYSTEM_INFO system_info;
+         GetSystemInfo(&system_info);
+         pageSize = system_info.dwPageSize;
+@@ -617,7 +626,9 @@
+ {
+     size_t siz = UINT32_MAX;
+ 
+-#ifdef _WIN32
++#ifdef EDUKE32_AROS
++    siz = 256 * 1024 * 1024; /* default 256MB, AROS lacks sysconf(_SC_PHYS_PAGES) */
++#elif defined _WIN32
+     HMODULE lib = LoadLibrary("KERNEL32.DLL");
+ 
+     if (lib)
+diff --color -ruN a/source/build/src/glbuild.cpp b/source/build/src/glbuild.cpp
+--- a/source/build/src/glbuild.cpp	2026-02-03 11:50:16
++++ b/source/build/src/glbuild.cpp	2026-07-13 15:23:43
+@@ -24,7 +24,7 @@
+ # ifdef RENDERTYPESDL
+ #  include "sdlayer.h"
+ # endif
+-# if !defined _WIN32
++# if !defined _WIN32 && !defined __AROS__
+ #  include <dlfcn.h>
+ # endif
+ 
+diff --color -ruN a/source/build/src/loguru.cpp b/source/build/src/loguru.cpp
+--- a/source/build/src/loguru.cpp	2026-02-03 11:50:16
++++ b/source/build/src/loguru.cpp	2026-04-07 09:22:53
+@@ -92,6 +92,12 @@
+ 	#ifndef LOGURU_STACKTRACES
+ 		#define LOGURU_STACKTRACES 0
+ 	#endif
++#elif defined(__AROS__)
++	#define LOGURU_PTHREADS    0
++	#define LOGURU_WINTHREADS  0
++	#ifndef LOGURU_STACKTRACES
++		#define LOGURU_STACKTRACES 0
++	#endif
+ #else
+ 	#define LOGURU_PTHREADS    1
+ 	#define LOGURU_WINTHREADS  0
+diff --color -ruN a/source/build/src/polymost.cpp b/source/build/src/polymost.cpp
+--- a/source/build/src/polymost.cpp	2026-02-03 11:50:16
++++ b/source/build/src/polymost.cpp	2026-07-15 09:40:50
+@@ -21,6 +21,7 @@
+ #include "texcache.h"
+ #include "hash.h"
+ 
++
+ #ifdef POLYMOST2
+ int32_t r_enablepolymost2 = 0;
+ #endif // POLYMOST2
+@@ -1451,7 +1452,13 @@
+     float m[4][4];
+     Bmemset(m,0,sizeof(m));
+     float const nearclip = 4.f / (gxyaspect * gyxscale * 512.f);
+-    float const farclip = 8.f;
++    /* The parallaxed sky is drawn beyond this farclip (z_eye ~= 15 at
++     * 640px wide) and normally survives only because GL_DEPTH_CLAMP is
++     * enabled. Without ARB_depth_clamp (Mesa vc4 on the RPi) the sky
++     * polys get frustum-clipped away entirely, leaving stale pixels in
++     * the sky region -- so push the far plane out instead; the
++     * hyperbolic depth mapping makes the precision cost negligible. */
++    float const farclip = glinfo.depthclamp ? 8.f : 64.f;
+ 
+     m[0][0] = 1.f;
+     m[1][1] = fxdimen / (fydimen * ratio);
+@@ -3284,6 +3291,7 @@
+ 
+     pthtyp *pth = our_texcache_fetch(method | (videoGetRenderMode() == REND_POLYMOST && polymost_useindexedtextures() ? DAMETH_INDEXED : 0));
+ 
++
+     if (!pth)
+     {
+         if (editstatus)
+@@ -5174,6 +5182,7 @@
+     int32_t dapyscale, dapskybits, dapyoffs, daptileyscale;
+     int8_t const * dapskyoff = getpsky(globalpicnum, &dapyscale, &dapskybits, &dapyoffs, &daptileyscale);
+ 
++
+     ghoriz = (qglobalhoriz*(1.f/65536.f)-float(ydimen>>1))*dapyscale*(1.f/65536.f)+float(ydimen>>1)+ghorizcorrect;
+ 
+     float const dd = fxdimen*.0000001f; //Adjust sky depth based on screen size!
+@@ -5333,6 +5342,7 @@
+             cxy[i].x = v.x * r + ghalfx;
+             cxy[i].y = v.y * r + ghalfy;
+         }
++
+ 
+         polymost_drawpoly(cxy, n3, method|DAMETH_WALL);
+ 
+diff --color -ruN a/source/build/src/polymost1Frag.glsl b/source/build/src/polymost1Frag.glsl
+--- a/source/build/src/polymost1Frag.glsl	2026-02-03 11:50:16
++++ b/source/build/src/polymost1Frag.glsl	2026-07-13 13:55:09
+@@ -119,4 +119,5 @@
+                           (c_vec4_luma_709.zzzw * v_cc.z) + u_colorCorrection.wwzw,
+                           c_vec2_zero_one.xxxy)
+                    * color;
++
+ }
+diff --color -ruN a/source/build/src/sdlayer.cpp b/source/build/src/sdlayer.cpp
+--- a/source/build/src/sdlayer.cpp	2026-02-03 11:50:16
++++ b/source/build/src/sdlayer.cpp	2026-08-14 14:53:05
+@@ -33,7 +33,9 @@
+ # include "gtkbits.h"
+ #endif
+ 
+-#ifdef __ANDROID__
++#if defined EDUKE32_AROS
++/* AROS: SDL2 handles everything, no platform-specific includes needed */
++#elif defined __ANDROID__
+ # include <android/log.h>
+ #elif defined __APPLE__
+ # include "osxbits.h"
+@@ -323,7 +325,7 @@
+ //
+ 
+ /* XXX: libexecinfo could be used on systems without gnu libc. */
+-#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__
++#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__ && !defined EDUKE32_AROS
+ # define PRINTSTACKONSEGV 1
+ # include <execinfo.h>
+ #endif
+@@ -475,6 +477,21 @@
+         while (*wp) wp++;
+     }
+     argv[argc] = NULL;
++#endif
++
++#ifdef EDUKE32_AROS
++    /* When started from Workbench, AROS' C startup follows the Amiga
++     * convention and passes argc = 0 with argv = (char **)WBenchMsg.
++     * loguru::init() asserts argc > 0 and dereferences argv[0], so we
++     * would die (silently, without a console) before showing anything.
++     * Synthesize a minimal argv in that case. */
++    static char *aros_wb_argv[] = { (char *)"EDuke32", NULL };
++
++    if (argc == 0)
++    {
++        argc = 1;
++        argv = aros_wb_argv;
++    }
+ #endif
+ 
+     engineSetupAllocator();
+diff --color -ruN a/source/build/src/smmalloc_tls.cpp b/source/build/src/smmalloc_tls.cpp
+--- a/source/build/src/smmalloc_tls.cpp	2026-02-03 11:50:16
++++ b/source/build/src/smmalloc_tls.cpp	2026-04-07 17:30:57
+@@ -21,8 +21,11 @@
+ // 	THE SOFTWARE.
+ #include "smmalloc.h"
+ 
++#ifdef __AROS__
++sm::internal::TlsPoolBucket tlsCacheBuckets[SMM_MAX_BUCKET_COUNT];
++#else
+ thread_local sm::internal::TlsPoolBucket tlsCacheBuckets[SMM_MAX_BUCKET_COUNT];
+-// sm::internal::TlsPoolBucket tlsCacheBuckets[SMM_MAX_BUCKET_COUNT];
++#endif
+ 
+ namespace sm
+ {
+diff --color -ruN a/source/duke3d/src/dnames.cpp b/source/duke3d/src/dnames.cpp
+--- a/source/duke3d/src/dnames.cpp	2026-02-03 11:50:16
++++ b/source/duke3d/src/dnames.cpp	2026-04-07 10:13:34
+@@ -663,7 +663,7 @@
+     { "STALL",               &STALL,               STALL__ },
+     { "STALLBROKE",          &STALLBROKE,          STALLBROKE__ },
+     { "STARTALPHANUM",       &STARTALPHANUM,       STARTALPHANUM__ },
+-    { "STATIC",              &STATIC,              STATIC__ },
++    { "STATIC",              &DYN_STATIC,          STATIC__ },
+     { "STATUE",              &STATUE,              STATUE__ },
+     { "STATUEFLASH",         &STATUEFLASH,         STATUEFLASH__ },
+     { "STEAM",               &STEAM,               STEAM__ },
+@@ -1436,7 +1436,7 @@
+ int16_t STALL               = STALL__;
+ int16_t STALLBROKE          = STALLBROKE__;
+ int16_t STARTALPHANUM       = STARTALPHANUM__;
+-int16_t STATIC              = STATIC__;
++int16_t DYN_STATIC          = STATIC__;
+ int16_t STATUE              = STATUE__;
+ int16_t STATUEFLASH         = STATUEFLASH__;
+ int16_t STEAM               = STEAM__;
+diff --color -ruN a/source/duke3d/src/dnames.h b/source/duke3d/src/dnames.h
+--- a/source/duke3d/src/dnames.h	2026-02-03 11:50:16
++++ b/source/duke3d/src/dnames.h	2026-04-07 10:13:34
+@@ -1455,7 +1455,7 @@
+ extern int16_t STALL;
+ extern int16_t STALLBROKE;
+ extern int16_t STARTALPHANUM;
+-extern int16_t STATIC;
++extern int16_t DYN_STATIC;
+ extern int16_t STATUE;
+ extern int16_t STATUEFLASH;
+ extern int16_t STEAM;
+diff --color -ruN a/source/duke3d/src/game.cpp b/source/duke3d/src/game.cpp
+--- a/source/duke3d/src/game.cpp	2026-02-03 11:50:16
++++ b/source/duke3d/src/game.cpp	2026-07-15 09:40:07
+@@ -3973,7 +3973,7 @@
+ 
+             if (actor[OW(i)].t_data[0] == 1)
+             {
+-                t->picnum = STATIC;
++                t->picnum = DYN_STATIC;
+                 t->cstat |= (wrand()&12);
+                 t->xrepeat += 10;
+                 t->yrepeat += 9;
+diff --color -ruN a/source/duke3d/src/screens.cpp b/source/duke3d/src/screens.cpp
+--- a/source/duke3d/src/screens.cpp	2026-02-03 11:50:16
++++ b/source/duke3d/src/screens.cpp	2026-04-07 10:16:25
+@@ -293,7 +293,7 @@
+ 
+         for (bssize_t x=-64; x<394; x+=64)
+             for (bssize_t y=0; y<200; y+=64)
+-                rotatesprite_win(ksgn(x)*(klabs(x)<<16), y<<16, 65536L, 0, STATIC, 0, 0, 2+flipbits);
++                rotatesprite_win(ksgn(x)*(klabs(x)<<16), y<<16, 65536L, 0, DYN_STATIC, 0, 0, 2+flipbits);
+     }
+ }
+ 
+diff --color -ruN a/source/glad/src/glad.c b/source/glad/src/glad.c
+--- a/source/glad/src/glad.c	2026-02-03 11:50:16
++++ b/source/glad/src/glad.c	2026-07-02 14:36:21
+@@ -97,6 +97,26 @@
+         libGL = NULL;
+     }
+ }
++#elif defined(__AROS__)
++/* AROS has no dlopen(); route glad's built-in loader through SDL (gl.library).
++   eduke32 normally calls gladLoadGLLoader(SDL_GL_GetProcAddress) directly, but
++   gladLoadGL() must still compile and work. */
++#include <SDL2/SDL.h>
++static void* libGL;
++typedef void* (APIENTRYP PFNGLXGETPROCADDRESSPROC_PRIVATE)(const char*);
++static PFNGLXGETPROCADDRESSPROC_PRIVATE gladGetProcAddressPtr;
++
++static
++int open_gl(void) {
++    gladGetProcAddressPtr = (PFNGLXGETPROCADDRESSPROC_PRIVATE)SDL_GL_GetProcAddress;
++    libGL = (void*)1;
++    return gladGetProcAddressPtr != NULL;
++}
++
++static
++void close_gl(void) {
++    libGL = NULL;
++}
+ #else
+ #include <dlfcn.h>
+ static void* libGL;
+@@ -159,6 +179,8 @@
+     if(result == NULL) {
+ #if defined(_WIN32) || defined(__CYGWIN__)
+         result = (void*)GetProcAddress((HMODULE) libGL, namez);
++#elif defined(__AROS__)
++        result = (void*)SDL_GL_GetProcAddress(namez);
+ #else
+         result = dlsym(libGL, namez);
+ #endif
+diff --color -ruN a/source/imgui/include/imgui_impl_opengl3_loader.h b/source/imgui/include/imgui_impl_opengl3_loader.h
+--- a/source/imgui/include/imgui_impl_opengl3_loader.h	2026-02-03 11:50:16
++++ b/source/imgui/include/imgui_impl_opengl3_loader.h	2026-07-02 14:32:23
+@@ -688,6 +688,18 @@
+     *(void **)(&res) = dlsym(libgl, proc);
+     return res;
+ }
++#elif defined(__AROS__)
++// AROS has no dlopen(); resolve GL entry points via SDL (gl.library), matching
++// the rest of the port (glad also loads through SDL_GL_GetProcAddress).
++#include <SDL2/SDL.h>
++static int open_libgl(void) { return GL3W_OK; }
++static void close_libgl(void) {}
++static GL3WglProc get_proc(const char *proc)
++{
++    GL3WglProc res;
++    *(void **)(&res) = (void *)SDL_GL_GetProcAddress(proc);
++    return res;
++}
+ #else
+ #include <dlfcn.h>
+ 
+diff --color -ruN a/source/imgui/src/imgui.cpp b/source/imgui/src/imgui.cpp
+--- a/source/imgui/src/imgui.cpp	2026-02-03 11:50:16
++++ b/source/imgui/src/imgui.cpp	2026-04-07 10:28:36
+@@ -15900,13 +15900,18 @@
+ #else
+     const char* args[] { "xdg-open", path, NULL };
+ #endif
+-    pid_t pid = fork();
++    pid_t pid =
++#if defined(__AROS__)
++        vfork();
++#else
++        fork();
++#endif
+     if (pid < 0)
+         return false;
+     if (!pid)
+     {
+         execvp(args[0], const_cast<char **>(args));
+-        exit(-1);
++        _exit(-1);
+     }
+     else
+     {
+diff --color -ruN a/source/imgui/src/imgui_impl_sdl2.cpp b/source/imgui/src/imgui_impl_sdl2.cpp
+--- a/source/imgui/src/imgui_impl_sdl2.cpp	2026-02-03 11:50:16
++++ b/source/imgui/src/imgui_impl_sdl2.cpp	2026-04-07 10:33:39
+@@ -114,8 +114,13 @@
+ #endif
+ 
+ // SDL
++#if defined(__AROS__)
++#include <SDL2/SDL.h>
++#include <SDL2/SDL_syswm.h>
++#else
+ #include <SDL.h>
+ #include <SDL_syswm.h>
++#endif
+ #include <stdio.h>              // for snprintf()
+ #ifdef __APPLE__
+ #include <TargetConditionals.h>
+@@ -134,7 +139,11 @@
+ #define SDL_HAS_VULKAN                      SDL_VERSION_ATLEAST(2,0,6)
+ #define SDL_HAS_OPEN_URL                    SDL_VERSION_ATLEAST(2,0,14)
+ #if SDL_HAS_VULKAN
++#if defined(__AROS__)
++#include <SDL2/SDL_vulkan.h>
++#else
+ #include <SDL_vulkan.h>
++#endif
+ #endif
+ 
+ // SDL Data

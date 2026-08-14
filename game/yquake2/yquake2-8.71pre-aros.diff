@@ -1,0 +1,503 @@
+diff --git a/Makefile b/Makefile
+index 4d637960..3aa5ee12 100644
+--- a/Makefile
++++ b/Makefile
+@@ -696,7 +696,7 @@ ref_gl1:
+ 	$(MAKE) $(BINDIR)/ref_gl1.so
+ 
+ 
+-$(BINDIR)/ref_gl1.so : CFLAGS += -fPIC
++$(BINDIR)/ref_gl1.so : CFLAGS +=
+ $(BINDIR)/ref_gl1.so : LDFLAGS += -shared
+ $(BINDIR)/ref_gl1.so : LDLIBS += -lGL
+ 
+@@ -937,7 +937,7 @@ $(BUILDDIR)/baseq2/%.o: %.c
+ 	${Q}mkdir -p $(@D)
+ 	${Q}$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
+ 
+-$(BINDIR)/baseq2/game.so : CFLAGS += -fPIC -Wno-unused-result
++$(BINDIR)/baseq2/game.so : CFLAGS += -Wno-unused-result
+ $(BINDIR)/baseq2/game.so : LDFLAGS += -shared
+ endif
+ 
+diff --git a/src/backends/generic/misc.c b/src/backends/generic/misc.c
+index d9acea5a..49737d5e 100644
+--- a/src/backends/generic/misc.c
++++ b/src/backends/generic/misc.c
+@@ -29,7 +29,7 @@
+ 
+ #include "../../common/header/shared.h"
+ 
+-#if defined(__linux) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__sun) || defined(__APPLE__)
++#if defined(__linux) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__sun) || defined(__APPLE__) || defined(__AROS__)
+ #include <unistd.h> // readlink(), amongst others
+ #endif
+ 
+@@ -50,6 +50,10 @@
+ #include <FindDirectory.h>
+ #endif
+ 
++#ifdef __AROS__
++#include <proto/dos.h> // GetProgramDir(), NameFromLock()
++#endif
++
+ #ifndef PATH_MAX
+ // this is mostly for windows. windows has a MAX_PATH = 260 #define, but allows
+ // longer paths anyway.. this might not be the maximum allowed length, but is
+@@ -61,7 +65,32 @@ static void SetExecutablePath(char* exePath)
+ {
+ 	// !!! this assumes that exePath can hold PATH_MAX chars !!!
+ 
+-#ifdef _WIN32
++#if defined(__AROS__)
++
++	// AROS: there is no /proc; resolve the program's directory via
++	// dos.library.  GetProgramName() cannot be used to append the
++	// executable name, because it reads the CLI structure and a
++	// Workbench-launched process has none.  Terminate with '/' instead,
++	// so Sys_GetBinaryDir() finds that as the last separator and cuts
++	// off nothing.  A path ending in ':' is already a directory.
++	BPTR dirLock = GetProgramDir();
++
++	if (dirLock != 0 && NameFromLock(dirLock, exePath, PATH_MAX))
++	{
++		size_t len = strlen(exePath);
++
++		if (len > 0 && exePath[len - 1] != ':' && len + 2 <= PATH_MAX)
++		{
++			exePath[len] = '/';
++			exePath[len + 1] = '\0';
++		}
++	}
++	else
++	{
++		exePath[0] = '\0';
++	}
++
++#elif defined(_WIN32)
+ 	WCHAR wexePath[PATH_MAX];
+ 	DWORD len;
+ 
+diff --git a/src/backends/unix/main.c b/src/backends/unix/main.c
+index 2bbf07da..bb08adec 100644
+--- a/src/backends/unix/main.c
++++ b/src/backends/unix/main.c
+@@ -30,6 +30,9 @@
+ #include <libgen.h>
+ #include <unistd.h>
+ #include <sys/stat.h>
++#ifndef O_NDELAY
++#define O_NDELAY O_NONBLOCK   /* AROS spells it O_NONBLOCK */
++#endif
+ #ifndef FNDELAY
+ #define FNDELAY O_NDELAY
+ #endif
+diff --git a/src/backends/unix/network.c b/src/backends/unix/network.c
+index c89637e5..e5e99ad6 100644
+--- a/src/backends/unix/network.c
++++ b/src/backends/unix/network.c
+@@ -44,6 +44,15 @@
+ #include <arpa/inet.h>
+ #include <net/if.h>
+ 
++#ifndef PF_UNSPEC
++#define PF_UNSPEC AF_UNSPEC   /* AROS bsdsocket defines only AF_* */
++#endif
++
++#ifdef YQ2_STATIC_LINK
++/* AROS bsdsocket lacks gai_strerror(); it is only used for log strings. */
++#define gai_strerror(e) "getaddrinfo error"
++#endif
++
+ netadr_t net_local_adr;
+ 
+ #define LOOPBACK 0x7f000001
+diff --git a/src/backends/unix/shared/hunk.c b/src/backends/unix/shared/hunk.c
+index eebb49ca..38a36269 100644
+--- a/src/backends/unix/shared/hunk.c
++++ b/src/backends/unix/shared/hunk.c
+@@ -29,13 +29,78 @@
+  #define _GNU_SOURCE
+ #endif
+ 
++#ifndef YQ2_STATIC_LINK
+ #include <sys/mman.h>
++#endif
+ #include <errno.h>
+ #include <sys/time.h>
+ #include <unistd.h>
+ 
+ #include "../../../common/header/common.h"
+ 
++#ifdef YQ2_STATIC_LINK
++/* AROS has no mmap(); back the hunk with malloc. Each Hunk_Begin owns one
++ * block, finalized by Hunk_End and released by Hunk_Free(base).
++ * MAP_ANONYMOUS gave zeroed pages, which callers rely on, so zero it. */
++#include <stdlib.h>
++#include <string.h>
++
++byte *membase;
++size_t maxhunksize;
++size_t curhunksize;
++
++void *
++Hunk_Begin(int maxsize)
++{
++	maxhunksize = maxsize + sizeof(size_t) + 32;
++	curhunksize = 0;
++
++	membase = (byte *)malloc(maxhunksize);
++	if (membase == NULL)
++	{
++		Sys_Error("unable to allocate %d bytes", maxsize);
++	}
++	memset(membase, 0, maxhunksize);
++
++	*((size_t *)membase) = curhunksize;
++	return membase + sizeof(size_t);
++}
++
++void *
++Hunk_Alloc(int size)
++{
++	byte *buf;
++
++	size = (size + 31) & ~31;   /* round to cacheline */
++
++	if (curhunksize + size > maxhunksize)
++	{
++		Sys_Error("%s: overflow %d > %d",
++			__func__, (int)(curhunksize + size), (int)maxhunksize);
++	}
++
++	buf = membase + sizeof(size_t) + curhunksize;
++	curhunksize += size;
++	return buf;
++}
++
++int
++Hunk_End(void)
++{
++	*((size_t *)membase) = curhunksize + sizeof(size_t);
++	return curhunksize;
++}
++
++void
++Hunk_Free(void *base)
++{
++	if (base)
++	{
++		free(((byte *)base) - sizeof(size_t));
++	}
++}
++#else
++
+ #if defined(__FreeBSD__) || defined(__OpenBSD__)
+  #include <machine/param.h>
+  #define MAP_ANONYMOUS MAP_ANON
+@@ -171,4 +236,5 @@ Hunk_Free(void *base)
+ 		}
+ 	}
+ }
++#endif /* YQ2_STATIC_LINK */
+ 
+diff --git a/src/backends/unix/system.c b/src/backends/unix/system.c
+index 0c7543f4..149d218b 100644
+--- a/src/backends/unix/system.c
++++ b/src/backends/unix/system.c
+@@ -25,7 +25,9 @@
+  */
+ 
+ #include <dirent.h>
++#ifndef YQ2_STATIC_LINK
+ #include <dlfcn.h>
++#endif
+ #include <fcntl.h>
+ #include <stdlib.h>
+ #include <stdarg.h>
+@@ -48,8 +50,21 @@
+ #include "../../common/header/common.h"
+ #include "../../common/header/glob.h"
+ 
++#ifdef YQ2_STATIC_LINK
++/* AROS POSIX gaps: O_NDELAY/FNDELAY are spelled O_NONBLOCK, and there is
++ * no realpath(). */
++#ifndef O_NDELAY
++#define O_NDELAY O_NONBLOCK
++#endif
++#ifndef FNDELAY
++#define FNDELAY O_NDELAY
++#endif
++#endif
++
+ // Pointer to game library
++#ifndef YQ2_STATIC_LINK
+ static void *game_library;
++#endif
+ 
+ // Evil hack to determine if stdin is available
+ qboolean stdin_active = true;
+@@ -406,6 +421,23 @@ Sys_FindClose(void)
+ 
+ /* ================================================================ */
+ 
++#ifdef YQ2_STATIC_LINK
++/* Static build (AROS): the game module is linked into the executable
++ * instead of dlopen'd from baseq2/game.so — elf.library dlopen isn't
++ * available. Call the linked GetGameAPI directly. */
++extern void *GetGameAPI(void *import);
++
++void
++Sys_UnloadGame(void)
++{
++}
++
++void *
++Sys_GetGameAPI(void *parms)
++{
++	return GetGameAPI(parms);
++}
++#else
+ void
+ Sys_UnloadGame(void)
+ {
+@@ -508,6 +540,7 @@ Sys_GetGameAPI(void *parms)
+ 
+ 	return GetGameAPI(parms);
+ }
++#endif /* YQ2_STATIC_LINK */
+ 
+ /* ================================================================ */
+ 
+@@ -648,6 +681,11 @@ Sys_RemoveDir(const char *path)
+ qboolean
+ Sys_Realpath(const char *in, char *out, size_t size)
+ {
++#ifdef YQ2_STATIC_LINK
++	/* AROS has no realpath(); paths are already absolute here. */
++	Q_strlcpy(out, in, size);
++	return true;
++#else
+ 	char *converted = realpath(in, NULL);
+ 
+ 	if (converted == NULL)
+@@ -660,10 +698,44 @@ Sys_Realpath(const char *in, char *out, size_t size)
+ 	free(converted);
+ 
+ 	return true;
++#endif
+ }
+ 
+ /* ================================================================ */
+ 
++#ifdef YQ2_STATIC_LINK
++/* Static build (AROS): only the gl1 renderer is linked in. Resolve its
++ * entry point by name; there is nothing to dlopen or free. */
++extern void *GetRefAPI(void *import);
++
++void *
++Sys_GetProcAddress(void *handle, const char *sym)
++{
++	(void)handle;
++	if (sym && !strcmp(sym, "GetRefAPI"))
++		return (void *)GetRefAPI;
++	if (sym && !strcmp(sym, "GetGameAPI"))
++		return (void *)GetGameAPI;
++	return NULL;
++}
++
++void
++Sys_FreeLibrary(void *handle)
++{
++	(void)handle;
++}
++
++void *
++Sys_LoadLibrary(const char *path, const char *sym, void **handle)
++{
++	static int token;
++
++	(void)path;
++	*handle = &token;   /* non-NULL so the caller proceeds */
++
++	return sym ? Sys_GetProcAddress(&token, sym) : NULL;
++}
++#else
+ void *
+ Sys_GetProcAddress(void *handle, const char *sym)
+ {
+@@ -734,6 +806,7 @@ Sys_LoadLibrary(const char *path, const char *sym, void **handle)
+ 
+ 	return entry;
+ }
++#endif /* YQ2_STATIC_LINK */
+ 
+ /* ================================================================ */
+ 
+diff --git a/src/client/sound/sdl.c b/src/client/sound/sdl.c
+index b99fa8d9..1efeca49 100644
+--- a/src/client/sound/sdl.c
++++ b/src/client/sound/sdl.c
+@@ -1222,6 +1222,9 @@ SDL_Update(void)
+ 
+ 	if (!soundtime)
+ 	{
++#ifndef USE_SDL3
++		SDL_UnlockAudio();
++#endif
+ 		return;
+ 	}
+ 
+@@ -1649,13 +1652,20 @@ SDL_BackendInit(void)
+ 	lpf_initialize(&lpf_context, lpf_default_gain_hf, backend->speed);
+ 
+ 	SDL_UpdateScaletable();
+-	SDL_PauseAudio(0);
+-
+-	Com_Printf("SDL audio initialized.\n");
+ 
++	/* Must be set BEFORE unpausing the device. SDL_Callback() bails out
++	 * without advancing playpos while snd_inited is 0, and SDL_Update()
++	 * refuses to mix anything while soundtime is 0 - and soundtime only
++	 * becomes non-zero once playpos has moved. Any callback landing in that
++	 * window is therefore thrown away, and on a cold start nothing else
++	 * bootstraps soundtime, so the mixer never starts. */
+ 	soundtime = 0;
+ 	snd_inited = 1;
+ 
++	SDL_PauseAudio(0);
++
++	Com_Printf("SDL audio initialized.\n");
++
+ 	return true;
+ }
+ 
+diff --git a/src/client/vid/vid.c b/src/client/vid/vid.c
+index 6768cef4..d144fc0c 100644
+--- a/src/client/vid/vid.c
++++ b/src/client/vid/vid.c
+@@ -328,6 +328,11 @@ VID_GetRendererLibPath(const char *renderer, char *path, size_t len)
+ qboolean
+ VID_HasRenderer(const char *renderer)
+ {
++#ifdef YQ2_STATIC_LINK
++	/* Static build (AROS): only the gl1 renderer is linked in, there is
++	 * no ref_*.so on disk to probe for. */
++	return strcmp(renderer, "gl1") == 0;
++#else
+ 	char reflib_path[MAX_OSPATH] = {0};
+ 	VID_GetRendererLibPath(renderer, reflib_path, sizeof(reflib_path));
+ 
+@@ -337,6 +342,7 @@ VID_HasRenderer(const char *renderer)
+ 	}
+ 
+ 	return false;
++#endif
+ }
+ 
+ /*
+diff --git a/src/backends/unix/aros_netstub.c b/src/backends/unix/aros_netstub.c
+new file mode 100644
+index 00000000..daf72975
+--- /dev/null
++++ b/src/backends/unix/aros_netstub.c
+@@ -0,0 +1,99 @@
++/*
++ * AROS: libnet provides the core BSD socket calls (socket/bind/sendto/
++ * recvfrom/select/...) but not these resolver/format helpers. Provide
++ * them here. inet_ntop/inet_pton get real IPv4 implementations (used for
++ * address logging); getaddrinfo/getnameinfo are stubbed — real
++ * multiplayer name resolution is a later refinement, single-player only
++ * uses the in-memory loopback path.
++ *
++ * Deliberately does NOT include <arpa/inet.h>/<netdb.h>: those macro-
++ * redirect inet_ntop->__inet_ntop etc. We define the plain symbols the
++ * linker actually wants. Only symbol names matter across TUs, so the
++ * simplified prototypes here are ABI-compatible with the callers.
++ */
++
++#include <stdio.h>
++
++#define AROS_AF_INET 2   /* BSD AF_INET */
++
++unsigned int
++if_nametoindex(const char *ifname)
++{
++	(void)ifname;
++	return 0;
++}
++
++int
++getaddrinfo(const char *node, const char *service,
++            const void *hints, void **res)
++{
++	(void)node;
++	(void)service;
++	(void)hints;
++	if (res)
++	{
++		*res = 0;
++	}
++	return -1;   /* EAI_FAIL-ish; callers log and give up */
++}
++
++void
++freeaddrinfo(void *res)
++{
++	(void)res;
++}
++
++int
++getnameinfo(const void *sa, unsigned int salen, char *host,
++            unsigned int hostlen, char *serv, unsigned int servlen, int flags)
++{
++	(void)sa;
++	(void)salen;
++	(void)flags;
++	if (host && hostlen)
++	{
++		host[0] = '\0';
++	}
++	if (serv && servlen)
++	{
++		serv[0] = '\0';
++	}
++	return -1;
++}
++
++const char *
++inet_ntop(int af, const void *src, char *dst, unsigned int size)
++{
++	if (af == AROS_AF_INET)
++	{
++		const unsigned char *p = src;
++		snprintf(dst, size, "%u.%u.%u.%u", p[0], p[1], p[2], p[3]);
++		return dst;
++	}
++	if (size)
++	{
++		dst[0] = '\0';
++	}
++	return 0;
++}
++
++int
++inet_pton(int af, const char *src, void *dst)
++{
++	if (af == AROS_AF_INET)
++	{
++		unsigned int a, b, c, d;
++
++		if (sscanf(src, "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
++		{
++			unsigned char *p = dst;
++			p[0] = (unsigned char)a;
++			p[1] = (unsigned char)b;
++			p[2] = (unsigned char)c;
++			p[3] = (unsigned char)d;
++			return 1;
++		}
++		return 0;
++	}
++	return -1;
++}

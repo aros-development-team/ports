@@ -4,31 +4,304 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM- ports-audio : ports-audio-milkytracker
 
-#MM- ports-audio-milkytracker : contrib-sdl
+#MM  ports-audio-milkytracker : \
+#MM  includes \
+#MM  linklibs \
+#MM  workbench-libs-z \
+#MM  workbench-libs-png \
+#MM  ports-audio-milkytracker-examples \
+#MM  ports-audio-milkytracker-fetch
 
-PACKAGE      := milkytracker
-VERSION      := 0.90.86
+#MM  ports-audio-milkytracker-examples : ports-audio-milkytracker-examples-fetch
+
+PACKAGE      := MilkyTracker
+VERSION      := 1.05.01
+ARCHBASE     := $(PACKAGE)-$(VERSION)
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Audio/MilkyTracker
-REPOSITORIES := https://github.com/milkytracker/milkytracker.github.io/raw/master/files
+REPOSITORIES := https://github.com/milkytracker/MilkyTracker/archive
+ARCHSUFFIX   := "tar.gz"
+ARCHNAME     := v$(VERSION)
 
-USER_CPPFLAGS := -UHAVE_CONFIG_H -D_XOPEN_SOURCE
-USER_CXXFLAGS:= $(CXXFLAGS_GNU03) $(CFLAGS_PERMISSIVE)
-USER_INCLUDES:= -I$(AROS_CONTRIB_INCLUDES)
-USER_LDFLAGS := -static-libstdc++
+SRCBASE      := $(PORTSDIR)/milkytracker/$(ARCHBASE)
 
-%fetch_and_build mmake=ports-audio-milkytracker prefix=$(TARGETDIR) \
-       package=$(PACKAGE) version=$(VERSION) suffixes="tar.bz2" \
-       patch=yes package_repo=$(REPOSITORIES) nix=no nix_dir_layout=no \
-       extracppflags="$(USER_INCLUDES)" extracxxflags="$(USER_CXXFLAGS)" extraoptions="" \
-       postinstall=ports-audio-milkytracker-songs
+# Compiler flags
+NOWARN_FLAGS  := $(NOWARN_UNUSED_VARIABLE) $(NOWARN_FORMAT)
+USER_CXXFLAGS := -std=c++11 -DMILKYTRACKER $(NOWARN_FLAGS)
+USER_CPPFLAGS :=
+USER_INCLUDES := \
+    -I$(SRCBASE)/src/tracker/aros \
+    -I$(SRCBASE)/src/ppui \
+    -I$(SRCBASE)/src/ppui/osinterface \
+    -I$(SRCBASE)/src/ppui/osinterface/posix \
+    -I$(SRCBASE)/src/tracker \
+    -I$(SRCBASE)/src/milkyplay \
+    -I$(SRCBASE)/src/fx \
+    -I$(SRCBASE)/src/compression \
+    -I$(SRCBASE)/src/compression/zziplib \
+    -I$(SRCBASE)/src/tracker/fx
+USER_LDFLAGS  := -static-libstdc++
 
-%copy_dir_recursive mmake=ports-audio-milkytracker-songs \
-       src=$(PORTSDIR)/$(PACKAGE)/$(PACKAGE)-$(VERSION)/resources/music \
-       dst=$(TARGETDIR)/music
+# --- PPUI ---
+PPUI_FILES := \
+    $(SRCBASE)/src/ppui/Button \
+    $(SRCBASE)/src/ppui/CheckBox \
+    $(SRCBASE)/src/ppui/CheckBoxLabel \
+    $(SRCBASE)/src/ppui/Container \
+    $(SRCBASE)/src/ppui/ContextMenu \
+    $(SRCBASE)/src/ppui/Control \
+    $(SRCBASE)/src/ppui/DialogBase \
+    $(SRCBASE)/src/ppui/DialogFileSelector \
+    $(SRCBASE)/src/ppui/Dictionary \
+    $(SRCBASE)/src/ppui/DictionaryKey \
+    $(SRCBASE)/src/ppui/Event \
+    $(SRCBASE)/src/ppui/Font \
+    $(SRCBASE)/src/ppui/Graphics_ARGB32 \
+    $(SRCBASE)/src/ppui/Graphics_32bpp_generic \
+    $(SRCBASE)/src/ppui/KeyboardBindingHandler \
+    $(SRCBASE)/src/ppui/ListBox \
+    $(SRCBASE)/src/ppui/ListBoxFileBrowser \
+    $(SRCBASE)/src/ppui/Menu \
+    $(SRCBASE)/src/ppui/MessageBoxContainer \
+    $(SRCBASE)/src/ppui/PPUIConfig \
+    $(SRCBASE)/src/ppui/RadioGroup \
+    $(SRCBASE)/src/ppui/Screen \
+    $(SRCBASE)/src/ppui/Scrollbar \
+    $(SRCBASE)/src/ppui/Seperator \
+    $(SRCBASE)/src/ppui/Slider \
+    $(SRCBASE)/src/ppui/StaticText \
+    $(SRCBASE)/src/ppui/Tools \
+    $(SRCBASE)/src/ppui/TransparentContainer
 
-#MM
-ports-audio-milkytracker-clean :
-	$(RM) $(TARGETDIR)
-	$(RM) $(GENDIR)/$(CURDIR)
+# --- PPUI Amiga + OS interface ---
+PPUI_PLATFORM_FILES := \
+    $(SRCBASE)/src/ppui/osinterface/posix/PPSystem_POSIX \
+    $(SRCBASE)/src/tracker/aros/PPPath_Amiga \
+    $(SRCBASE)/src/ppui/osinterface/PPPathFactory
+
+# --- MilkyPlay ---
+MILKYPLAY_FILES := \
+    $(SRCBASE)/src/milkyplay/AudioDriverBase \
+    $(SRCBASE)/src/milkyplay/AudioDriverManager \
+    $(SRCBASE)/src/milkyplay/AudioDriver_NULL \
+    $(SRCBASE)/src/milkyplay/AudioDriver_WAVWriter \
+    $(SRCBASE)/src/milkyplay/ChannelMixer \
+    $(SRCBASE)/src/milkyplay/ExporterXM \
+    $(SRCBASE)/src/milkyplay/LittleEndian \
+    $(SRCBASE)/src/milkyplay/Loader669 \
+    $(SRCBASE)/src/milkyplay/LoaderAMF \
+    $(SRCBASE)/src/milkyplay/LoaderAMS \
+    $(SRCBASE)/src/milkyplay/LoaderCBA \
+    $(SRCBASE)/src/milkyplay/LoaderDBM \
+    $(SRCBASE)/src/milkyplay/LoaderDIGI \
+    $(SRCBASE)/src/milkyplay/LoaderDSM \
+    $(SRCBASE)/src/milkyplay/LoaderDTM \
+    $(SRCBASE)/src/milkyplay/LoaderFAR \
+    $(SRCBASE)/src/milkyplay/LoaderGDM \
+    $(SRCBASE)/src/milkyplay/LoaderIMF \
+    $(SRCBASE)/src/milkyplay/LoaderIT \
+    $(SRCBASE)/src/milkyplay/LoaderMDL \
+    $(SRCBASE)/src/milkyplay/LoaderMOD \
+    $(SRCBASE)/src/milkyplay/LoaderMTM \
+    $(SRCBASE)/src/milkyplay/LoaderMXM \
+    $(SRCBASE)/src/milkyplay/LoaderOKT \
+    $(SRCBASE)/src/milkyplay/LoaderPLM \
+    $(SRCBASE)/src/milkyplay/LoaderPSM \
+    $(SRCBASE)/src/milkyplay/LoaderPTM \
+    $(SRCBASE)/src/milkyplay/LoaderS3M \
+    $(SRCBASE)/src/milkyplay/LoaderSTM \
+    $(SRCBASE)/src/milkyplay/LoaderULT \
+    $(SRCBASE)/src/milkyplay/LoaderUNI \
+    $(SRCBASE)/src/milkyplay/LoaderXM \
+    $(SRCBASE)/src/milkyplay/MasterMixer \
+    $(SRCBASE)/src/milkyplay/PlayerBase \
+    $(SRCBASE)/src/milkyplay/PlayerFAR \
+    $(SRCBASE)/src/milkyplay/PlayerGeneric \
+    $(SRCBASE)/src/milkyplay/PlayerIT \
+    $(SRCBASE)/src/milkyplay/PlayerSTD \
+    $(SRCBASE)/src/milkyplay/ResamplerFactory \
+    $(SRCBASE)/src/milkyplay/SampleLoaderAIFF \
+    $(SRCBASE)/src/milkyplay/SampleLoaderALL \
+    $(SRCBASE)/src/milkyplay/SampleLoaderAbstract \
+    $(SRCBASE)/src/milkyplay/SampleLoaderGeneric \
+    $(SRCBASE)/src/milkyplay/SampleLoaderIFF \
+    $(SRCBASE)/src/milkyplay/SampleLoaderWAV \
+    $(SRCBASE)/src/milkyplay/XIInstrument \
+    $(SRCBASE)/src/milkyplay/XMFile \
+    $(SRCBASE)/src/milkyplay/XModule
+
+# --- FX (visual effects) ---
+# fx/Filter renamed to FXFilter to avoid collision with tracker/fx/Filter
+FX_FILES := \
+    $(SRCBASE)/src/fx/Camera \
+    $(SRCBASE)/src/fx/FXFilter \
+    $(SRCBASE)/src/fx/Fire \
+    $(SRCBASE)/src/fx/Math3d \
+    $(SRCBASE)/src/fx/ParticleBlobs \
+    $(SRCBASE)/src/fx/ParticleEmitter \
+    $(SRCBASE)/src/fx/ParticleFX \
+    $(SRCBASE)/src/fx/ParticleFun \
+    $(SRCBASE)/src/fx/ParticleScene \
+    $(SRCBASE)/src/fx/Starfield \
+    $(SRCBASE)/src/fx/TCBSpline \
+    $(SRCBASE)/src/fx/TCBSplineTest \
+    $(SRCBASE)/src/fx/Texture \
+    $(SRCBASE)/src/fx/TexturedGrid \
+    $(SRCBASE)/src/fx/TexturedPlane \
+    $(SRCBASE)/src/fx/Twister \
+    $(SRCBASE)/src/fx/TwisterFX \
+    $(SRCBASE)/src/fx/fpmath
+
+# --- Compression ---
+# DecompressorZIP/ZipExtractor need zziplib, DecompressorLZX/unlzx need lhasa
+# DecompressorLHA needs lhasa - all excluded as external deps unavailable
+COMPRESSION_FILES := \
+    $(SRCBASE)/src/compression/Decompressor \
+    $(SRCBASE)/src/compression/DecompressorGZIP \
+    $(SRCBASE)/src/compression/DecompressorPP20 \
+    $(SRCBASE)/src/compression/DecompressorUMX \
+    $(SRCBASE)/src/compression/PP20
+
+# --- Tracker core ---
+TRACKER_FILES := \
+    $(SRCBASE)/src/tracker/AnimatedFXControl \
+    $(SRCBASE)/src/tracker/ColorExportImport \
+    $(SRCBASE)/src/tracker/ColorPaletteContainer \
+    $(SRCBASE)/src/tracker/DialogHelp \
+    $(SRCBASE)/src/tracker/DialogChannelSelector \
+    $(SRCBASE)/src/tracker/DialogEQ \
+    $(SRCBASE)/src/tracker/DialogGroupSelection \
+    $(SRCBASE)/src/tracker/DialogHandlers \
+    $(SRCBASE)/src/tracker/DialogListBox \
+    $(SRCBASE)/src/tracker/DialogPanning \
+    $(SRCBASE)/src/tracker/DialogQuickChooseInstrument \
+    $(SRCBASE)/src/tracker/DialogResample \
+    $(SRCBASE)/src/tracker/DialogWithValues \
+    $(SRCBASE)/src/tracker/DialogZap \
+    $(SRCBASE)/src/tracker/DialogSliders \
+    $(SRCBASE)/src/tracker/EditorBase \
+    $(SRCBASE)/src/tracker/EnvelopeContainer \
+    $(SRCBASE)/src/tracker/EnvelopeEditor \
+    $(SRCBASE)/src/tracker/EnvelopeEditorControl \
+    $(SRCBASE)/src/tracker/FileExtProvider \
+    $(SRCBASE)/src/tracker/FileIdentificator \
+    $(SRCBASE)/src/tracker/GlobalColorConfig \
+    $(SRCBASE)/src/tracker/InputControlListener \
+    $(SRCBASE)/src/tracker/LogoBig \
+    $(SRCBASE)/src/tracker/LogoSmall \
+    $(SRCBASE)/src/tracker/ModuleEditor \
+    $(SRCBASE)/src/tracker/ModuleServices \
+    $(SRCBASE)/src/tracker/PatternEditor \
+    $(SRCBASE)/src/tracker/PatternEditorClipBoard \
+    $(SRCBASE)/src/tracker/PatternEditorControl \
+    $(SRCBASE)/src/tracker/PatternEditorControlEventListener \
+    $(SRCBASE)/src/tracker/PatternEditorControlKeyboard \
+    $(SRCBASE)/src/tracker/PatternEditorControlTransposeHandler \
+    $(SRCBASE)/src/tracker/PatternEditorTools \
+    $(SRCBASE)/src/tracker/PatternTools \
+    $(SRCBASE)/src/tracker/PeakLevelControl \
+    $(SRCBASE)/src/tracker/Piano \
+    $(SRCBASE)/src/tracker/PianoControl \
+    $(SRCBASE)/src/tracker/PlayerController \
+    $(SRCBASE)/src/tracker/PlayerLogic \
+    $(SRCBASE)/src/tracker/PlayerMaster \
+    $(SRCBASE)/src/tracker/RecPosProvider \
+    $(SRCBASE)/src/tracker/RecorderLogic \
+    $(SRCBASE)/src/tracker/ResamplerHelper \
+    $(SRCBASE)/src/tracker/SampleEditor \
+    $(SRCBASE)/src/tracker/SampleEditorControl \
+    $(SRCBASE)/src/tracker/SampleEditorControlToolHandler \
+    $(SRCBASE)/src/tracker/SampleEditorResampler \
+    $(SRCBASE)/src/tracker/SamplePlayer \
+    $(SRCBASE)/src/tracker/ScopesControl \
+    $(SRCBASE)/src/tracker/SectionAbout \
+    $(SRCBASE)/src/tracker/SectionAbstract \
+    $(SRCBASE)/src/tracker/SectionAdvancedEdit \
+    $(SRCBASE)/src/tracker/SectionDiskMenu \
+    $(SRCBASE)/src/tracker/SectionHDRecorder \
+    $(SRCBASE)/src/tracker/SectionInstruments \
+    $(SRCBASE)/src/tracker/SectionOptimize \
+    $(SRCBASE)/src/tracker/SectionQuickOptions \
+    $(SRCBASE)/src/tracker/SectionSamples \
+    $(SRCBASE)/src/tracker/SectionSettings \
+    $(SRCBASE)/src/tracker/SectionSwitcher \
+    $(SRCBASE)/src/tracker/SectionTranspose \
+    $(SRCBASE)/src/tracker/SectionUpperLeft \
+    $(SRCBASE)/src/tracker/SongLengthEstimator \
+    $(SRCBASE)/src/tracker/SystemMessage \
+    $(SRCBASE)/src/tracker/Synth \
+    $(SRCBASE)/src/tracker/Synths \
+    $(SRCBASE)/src/tracker/SynthFM \
+    $(SRCBASE)/src/tracker/TabHeaderControl \
+    $(SRCBASE)/src/tracker/TabManager \
+    $(SRCBASE)/src/tracker/TabTitleProvider \
+    $(SRCBASE)/src/tracker/TitlePageManager \
+    $(SRCBASE)/src/tracker/ToolInvokeHelper \
+    $(SRCBASE)/src/tracker/Tracker \
+    $(SRCBASE)/src/tracker/TrackerConfig \
+    $(SRCBASE)/src/tracker/TrackerInit \
+    $(SRCBASE)/src/tracker/TrackerKeyboard \
+    $(SRCBASE)/src/tracker/TrackerSettings \
+    $(SRCBASE)/src/tracker/TrackerSettingsDatabase \
+    $(SRCBASE)/src/tracker/TrackerShortCuts \
+    $(SRCBASE)/src/tracker/TrackerShutDown \
+    $(SRCBASE)/src/tracker/TrackerStartUp \
+    $(SRCBASE)/src/tracker/TrackerUpdate \
+    $(SRCBASE)/src/tracker/Undo \
+    $(SRCBASE)/src/tracker/VRand \
+    $(SRCBASE)/src/tracker/Zapper
+
+# --- Tracker FX (EQ, convolver) ---
+# Filter.cpp here overwrites fx/Filter.o - this is intentional
+TRACKER_FX_FILES := \
+    $(SRCBASE)/src/tracker/fx/Convolver \
+    $(SRCBASE)/src/tracker/fx/EQConstants \
+    $(SRCBASE)/src/tracker/fx/Equalizer \
+    $(SRCBASE)/src/tracker/fx/Filter
+
+# --- AROS platform backend ---
+AROS_FILES := \
+    $(SRCBASE)/src/tracker/aros/AROS_Main \
+    $(SRCBASE)/src/tracker/aros/AROS_KeyTranslation \
+    $(SRCBASE)/src/tracker/aros/AROS_ModalLoop \
+    $(SRCBASE)/src/tracker/aros/DisplayDevice_AROS \
+    $(SRCBASE)/src/tracker/aros/AudioDriver_AHI \
+    $(SRCBASE)/src/tracker/aros/PPMutex \
+    $(SRCBASE)/src/tracker/aros/PPOpenPanel_AROS \
+    $(SRCBASE)/src/tracker/aros/PPSavePanel_AROS \
+    $(SRCBASE)/src/tracker/aros/PPMessageBox_AROS \
+    $(SRCBASE)/src/tracker/aros/PPQuitSaveAlert_AROS
+
+# All C++ files
+CXXFILES := \
+    $(PPUI_FILES) \
+    $(PPUI_PLATFORM_FILES) \
+    $(MILKYPLAY_FILES) \
+    $(FX_FILES) \
+    $(COMPRESSION_FILES) \
+    $(TRACKER_FILES) \
+    $(TRACKER_FX_FILES) \
+    $(AROS_FILES)
+
+%build_prog mmake=ports-audio-milkytracker progname=MilkyTracker \
+    cxxfiles="$(CXXFILES)" targetdir=$(TARGETDIR) \
+    uselibs="z png stdc++"
+
+############################################################################################################
+
+%fetch mmake=ports-audio-milkytracker-fetch archive=$(ARCHNAME) \
+    destination=$(PORTSDIR)/milkytracker suffixes="$(ARCHSUFFIX)" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) \
+    patches_specs=milkytracker-1.05.01-aros.diff:$(ARCHBASE):-p1
+
+EXAMPLES_ARCH := MilkyTracker-ExampleSongs
+EXAMPLES_REPO := https://milkytracker.org/songs
+EXAMPLE_SONGS := milky.xm slumberjack.xm sv_ttt.xm theday.xm universalnetwork2_real.xm
+
+%fetch mmake=ports-audio-milkytracker-examples-fetch archive=$(EXAMPLES_ARCH) \
+    destination=$(PORTSDIR)/milkytracker suffixes="zip" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(EXAMPLES_REPO)
+
+%copy_files_q mmake=ports-audio-milkytracker-examples files=$(EXAMPLE_SONGS) \
+    src=$(PORTSDIR)/milkytracker dst=$(TARGETDIR)/Examples
 
 %common

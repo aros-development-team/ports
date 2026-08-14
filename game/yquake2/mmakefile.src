@@ -1,0 +1,102 @@
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game : ports-game-yquake2
+
+#MM  ports-game-yquake2 : \
+#MM    contrib-sdl2 \
+#MM    ports-game-yquake2-fetch
+
+PACKAGE      := yquake2
+# Pinned to the commit the AROS diff was made against, not to a release: the
+# 8.70 tag is 64 commits behind and upstream changed src/backends/unix/system.c
+# in between, which is one of the files we patch.
+COMMIT       := caa9d9a9282ef12aab04ef251147de19779be271
+ARCHBASE     := $(PACKAGE)-$(COMMIT)
+ARCHNAME     := $(COMMIT)
+REPOSITORIES := https://github.com/yquake2/yquake2/archive
+
+TARGETDIR    := $(AROS_CONTRIB)/Games/FPS/Quake2
+
+YQUAKE2_SRCDIR := $(PORTSDIR)/yquake2/$(ARCHBASE)
+
+# yquake2 is designed around dlopen (quake2 + ref_gl1.so + game.so);
+# elf.library dlopen isn't available on this AROS, so everything is
+# STATIC-linked into one `quake2` binary (-DYQ2_STATIC_LINK). gl1 =
+# OpenGL 1.4 fixed-function (matches the vc4 Mesa driver); sound via SDL.
+YQUAKE2_CC := $(CC) $(TARGET_SYSROOT) $(CFLAGS) -fno-common -DYQ2_STATIC_LINK
+
+YQUAKE2_MAKE_OPTS := \
+    YQ2_OSTYPE=AROS \
+    YQ2_ARCH=$(AROS_TARGET_CPU) \
+    WITH_SDL3=no \
+    WITH_OPENAL=no \
+    WITH_CURL=no \
+    CC="$(YQUAKE2_CC)" \
+    INCLUDE="" \
+    LDFLAGS="" \
+    LDLIBS="-lm" \
+    SDLCFLAGS="-I$(AROS_DEVELOPER)/include/SDL2" \
+    SDLLDFLAGS="-lSDL2"
+
+# Static link: all objects, dropping the game's and renderer's duplicate
+# copies of the shared helpers (shared/flash/rand/hunk — identical code)
+# so only the client's survive. --allow-multiple-definition mops up the
+# remaining benign dups (stb_image, md4, AROS startup).
+YQUAKE2_LIBS := -lSDL2 -lGL -lnet -lstdc -lautoinit -lamiga -larossupport \
+    -laros -lstdc -lm
+
+# arm32 needs the EABI helpers and an explicit FPU; aarch64 has neither.
+YQUAKE2_LDARCH_arm := -marm -mfloat-abi=hard -march=armv7-a+fp -mfpu=neon-vfpv4
+YQUAKE2_LIBS_arm   := -laeabi -lm
+
+YQUAKE2_LDARCH := $(YQUAKE2_LDARCH_$(AROS_TARGET_CPU))
+YQUAKE2_LIBS   += $(YQUAKE2_LIBS_$(AROS_TARGET_CPU))
+
+# yquake2's BUILDROOT is `override :=`, so the object tree can't be made
+# per-CPU: objects from another target linger and get linked silently.
+YQUAKE2_ARCHSTAMP := $(YQUAKE2_SRCDIR)/build/.cpu-$(AROS_TARGET_CPU)
+
+#MM
+ports-game-yquake2 :
+	@# Drop an object tree left behind by a different target CPU.
+	@if [ ! -f $(YQUAKE2_ARCHSTAMP) ] ; then \
+	    echo "===> wiping yquake2 objects (target CPU is $(AROS_TARGET_CPU))" ; \
+	    rm -rf $(YQUAKE2_SRCDIR)/build $(YQUAKE2_SRCDIR)/release ; \
+	fi
+	$(MKDIR) $(YQUAKE2_SRCDIR)/build $(YQUAKE2_SRCDIR)/release
+	@touch $(YQUAKE2_ARCHSTAMP)
+	@# Build all objects. The stock game/ref_gl1/client targets also try to
+	@# link .so/exe (fails on AROS: no -shared/collect via that path), so
+	@# ignore the link step — the objects are produced before it.
+	-$(MAKE) -k -C $(YQUAKE2_SRCDIR) $(YQUAKE2_MAKE_OPTS) game ref_gl1 client
+	@echo "===> static-linking quake2 (AROS)"
+	@# aros_netstub.c (BSD resolver/inet helpers missing from libnet) is
+	@# not in yquake2's object lists, so compile it here.
+	$(YQUAKE2_CC) -c $(YQUAKE2_SRCDIR)/src/backends/unix/aros_netstub.c \
+	    -o $(YQUAKE2_SRCDIR)/build/release/client/src/backends/unix/aros_netstub.o
+	( cd $(YQUAKE2_SRCDIR) && \
+	  { find build/release/client -name '*.o'; \
+	    find build/release/baseq2 -name '*.o' | grep -vE 'common/shared/(shared|flash|rand)\.o$$'; \
+	    find build/release/ref_gl1 -name '*.o' | grep -vE 'common/shared/shared\.o$$|unix/shared/hunk\.o$$'; \
+	  } > build/q2objs.txt && \
+	  $(CC) $(TARGET_SYSROOT) $(CFLAGS) $(YQUAKE2_LDARCH) \
+	    -Wl,-e,__startup_entry -Wl,--allow-multiple-definition \
+	    -Wl,--defsym,__eh_frame_start=0 -Wl,--defsym,__eh_frame_end=0 \
+	    $(AROS_DEVELOPER)/lib/startup.o @build/q2objs.txt \
+	    -o release/quake2 \
+	    -L$(AROS_DEVELOPER)/lib $(YQUAKE2_LIBS) )
+	$(MKDIR) $(TARGETDIR)
+	$(MKDIR) $(TARGETDIR)/baseq2
+	$(CP) $(YQUAKE2_SRCDIR)/release/quake2 $(TARGETDIR)/Quake2
+
+%fetch mmake=ports-game-yquake2-fetch archive=$(ARCHNAME) \
+    destination=$(PORTSDIR)/yquake2 suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) \
+    patches_specs=yquake2-8.71pre-aros.diff:$(ARCHBASE):-p1
+
+#MM
+ports-game-yquake2-clean :
+	$(RM) $(TARGETDIR)
+	-$(MAKE) -C $(YQUAKE2_SRCDIR) $(YQUAKE2_MAKE_OPTS) clean 2>/dev/null
+
+%common

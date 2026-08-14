@@ -1,0 +1,74 @@
+include $(SRCDIR)/config/aros-contrib.cfg
+
+# eduke32 is fetched from the dukeworld synthesis snapshots (pinned for a
+# reproducible build) and patched with the AROS diff, so the source no longer
+# lives in this repository.  To roll to a newer snapshot, bump EDUKE32_VERSION,
+# regenerate the diff with ports-game-eduke32-create-patch, and rename it.
+EDUKE32_VERSION   := 20260203-10664-ba6b7bb1d
+EDUKE32_ARCHBASE  := eduke32_src_$(EDUKE32_VERSION)
+EDUKE32_SRCDIR    := eduke32_$(EDUKE32_VERSION)
+EDUKE32_REPO      := https://dukeworld.com/eduke32/synthesis/$(EDUKE32_VERSION)
+EDUKE32_PATCHSPEC := $(EDUKE32_ARCHBASE)-aros.diff:$(EDUKE32_SRCDIR):-p1
+
+EDUKE32_BUILDBASE := $(PORTSDIR)/eduke32
+EDUKE32_BUILDDIR  := $(EDUKE32_BUILDBASE)/$(EDUKE32_SRCDIR)
+TARGETDIR         := $(AROS_CONTRIB)/Games/FPS/EDuke32
+
+#MM- ports-game : ports-game-eduke32
+
+#MM  ports-game-eduke32 : \
+#MM    ports-game-eduke32-fetch \
+#MM    contrib-sdl2
+
+EDUKE32_MAKE_OPTS := \
+    PLATFORM=AROS \
+    CC="$(CC) $(TARGET_SYSROOT) $(CFLAGS)" \
+    CXX="$(CXX) $(TARGET_SYSROOT) $(CFLAGS)" \
+    AS="$(AS)" \
+    AR="$(AR)" \
+    RANLIB="$(RANLIB)" \
+    STRIP="$(STRIP)" \
+    AROS_LIB="$(AROS_LIB)" \
+    RENDERTYPE=SDL \
+    SDL_TARGET=2 \
+    SDLCONFIG="" \
+    USE_OPENGL=1 \
+    POLYMER=0 \
+    USE_LIBVPX=0 \
+    USE_MIMALLOC=0 \
+    NETCODE=0 \
+    HAVE_GTK2=0 \
+    STARTUP_WINDOW=0 \
+    HAVE_FLAC=0 \
+    HAVE_VORBIS=0 \
+    HAVE_XMP=1 \
+    NOASM=1 \
+    LTO=0 \
+    CPLUSPLUS=1 \
+    PRETTY_OUTPUT=0 \
+    PACKAGE_REPOSITORY=1 \
+    RELEASE=1 \
+    OPTLEVEL=2
+
+%fetch mmake=ports-game-eduke32-fetch archive=$(EDUKE32_ARCHBASE) \
+    destination=$(EDUKE32_BUILDBASE) location=$(PORTSSOURCEDIR) \
+    archive_origins=$(EDUKE32_REPO) suffixes="tar.xz" \
+    patches_specs=$(EDUKE32_PATCHSPEC)
+
+%create_patch mmake=ports-game-eduke32-create-patch archive=$(EDUKE32_ARCHBASE) \
+    srcdir=$(EDUKE32_SRCDIR) destination=$(EDUKE32_BUILDBASE) suffixes="tar.xz"
+
+#MM
+ports-game-eduke32 : ports-game-eduke32-fetch
+	$(MAKE) -C $(EDUKE32_BUILDDIR) $(EDUKE32_MAKE_OPTS) duke3d
+	$(MKDIR) $(TARGETDIR)
+	$(CP) $(EDUKE32_BUILDDIR)/eduke32 $(TARGETDIR)/EDuke32
+	$(CP) $(EDUKE32_BUILDDIR)/mapster32 $(TARGETDIR)/Mapster32
+
+#MM
+ports-game-eduke32-clean :
+	$(RM) $(TARGETDIR)
+	-$(MAKE) -C $(EDUKE32_BUILDDIR) $(EDUKE32_MAKE_OPTS) clean 2>/dev/null
+	$(RM) $(EDUKE32_BUILDDIR)
+
+%common

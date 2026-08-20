@@ -4,52 +4,42 @@ include $(SRCDIR)/config/aros-contrib.cfg
 
 #MM- ports-graphics : ports-graphics-grafx2
 
-#MM  ports-graphics-grafx2 : includes linklibs contrib-sdl \
-#MM    contrib-sdl-sdl-image contrib-sdl-sdl-ttf contrib-development-lua \
+#MM  ports-graphics-grafx2 : includes linklibs \
+#MM    contrib-development-lua \
 #MM    ports-graphics-grafx2-genfiles \
-#MM    ports-graphics-grafx2-docs \
 #MM    ports-graphics-grafx2-data
 
-#MM    ports-graphics-grafx2-genfiles : ports-graphics-grafx2-fetch ports-graphics-grafx2-3rdparty
-#MM    ports-graphics-grafx2-3rdparty : ports-graphics-grafx2-fetch
-
-#MM  ports-graphics-grafx2-docs : ports-graphics-grafx2-fetch
+#MM  ports-graphics-grafx2-genfiles : ports-graphics-grafx2-fetch ports-graphics-grafx2-3rdparty
+#MM  ports-graphics-grafx2-3rdparty : ports-graphics-grafx2-fetch
 
 #MM  ports-graphics-grafx2-data : ports-graphics-grafx2-fetch
 
-#MM  ports-graphics-grafx2-quick : ports-graphics-grafx2-fetch
-
-GFX2VERS     := 2.7
-REPOSITORIES := https://gitlab.com/GrafX2/grafX2/-/archive/v$(GFX2VERS)
-ARCHBASE     := grafX2-v$(GFX2VERS)
+GFXVERS      := 2.9
+REPOSITORIES := https://gitlab.com/GrafX2/grafX2/-/archive/v$(GFXVERS)
+ARCHBASE     := grafX2-v$(GFXVERS)
 TARGETDIR    := $(AROS_CONTRIB)/MultiMedia/Gfx/GrafX2
-SDL_PREFIX   := $(AROS_DEVELOPER)
 ARCHSUFFIX   := "tgz"
 PATCHSPEC    := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
 
 NOWARN_FLAGS := $(NOWARN_MISLEADING_INDENTATION) $(NOWARN_UNUSED_BUT_SET_VARIABLE) $(NOWARN_CPP) $(NOWARN_FORMAT)
-USER_CFLAGS  := $(COMPILER_COMMON_CFLAGS) $(NOWARN_FLAGS) $(shell $(SDL_PREFIX)/bin/sdl-config --prefix=$(SDL_PREFIX) --cflags)
+USER_CFLAGS  := $(COMPILER_COMMON_CFLAGS) $(NOWARN_FLAGS) -g
 USER_CPPFLAGS := \
-        -DSTDC_NOINLINE_CTYPE \
-        -D__ENABLE_LUA__ \
-		-DUSE_SDL \
-		-D__no_tifflib__ \
-		-DNORECOIL \
-		-DCPU_6502_STATIC \
-		-DCPU_6502_USE_LOCAL_HEADER \
-		-DCPU_6502_DEPENDENCIES_H=\"6502types.h\"
-USER_INCLUDES:= -I$(AROS_INCLUDES)/lua -I$(AROS_CONTRIB_INCLUDES) -iquote $(GENDIR)/$(CURDIR)/3rdparty/6502/API/emulation/CPU -iquote $(PORTSDIR)/grafx2/$(ARCHBASE)/src
+	-D_GNU_SOURCE=1 \
+	-D_REENTRANT \
+	-D__ENABLE_LUA__ \
+	-D__no_tifflib__ \
+	-DCPU_6502_STATIC \
+	-DCPU_6502_USE_LOCAL_HEADER \
+	-DCPU_6502_DEPENDENCIES_H=\"6502types.h\"
+USER_INCLUDES := -I$(AROS_INCLUDES)/lua -I$(AROS_CONTRIB_INCLUDES) -iquote $(GENDIR)/$(CURDIR) -iquote $(GENDIR)/$(CURDIR)/3rdparty/6502/API/emulation/CPU -iquote $(PORTSDIR)/grafx2/$(ARCHBASE)/src
 USER_LDFLAGS := -L$(AROS_CONTRIB_LIB)
-
-APIOBJ = sdlscreen
-PLATFORMOBJ :=
 
 FILES := \
 	main \
 	init \
 	graph \
-	$(APIOBJ) \
 	misc \
+	osdep \
 	special \
 	buttons \
 	palette \
@@ -59,6 +49,7 @@ FILES := \
 	readline \
 	engine \
 	filesel \
+	fileseltools \
 	op_c \
 	readini \
 	saveini \
@@ -86,9 +77,9 @@ FILES := \
 	transform \
 	pversion \
 	factory \
-	$(PLATFORMOBJ) \
 	loadsave \
 	loadsavefuncs \
+	loadrecoil \
 	pngformat \
 	motoformats \
 	stformats \
@@ -98,6 +89,8 @@ FILES := \
 	msxformats \
 	packbits \
 	giformat \
+	2gsformats \
+	packbytes \
 	fileformats \
 	miscfileformats \
 	libraw2crtc \
@@ -112,25 +105,29 @@ FILES := \
 	gfx2log \
 	gfx2mem \
 	tifformat \
-	c64load
+	c64load \
+	cgfxscreen
 
 FILES := $(addprefix $(PORTSDIR)/grafx2/$(ARCHBASE)/src/,$(FILES))
-GENFILES := $(GENDIR)/$(CURDIR)/version $(GENDIR)/$(CURDIR)/6502
+GENFILES := $(GENDIR)/$(CURDIR)/version $(GENDIR)/$(CURDIR)/6502 $(GENDIR)/$(CURDIR)/recoil
 
 %build_prog mmake=ports-graphics-grafx2 progname=GrafX2 \
     files="$(FILES) $(GENFILES)" targetdir=$(TARGETDIR) \
-    uselibs="lua SDL_ttf SDL_image SDL GL jpeg png z freetype2"
+    uselibs="lua png jpeg z freetype2"
 
-# SVN revision number
+# Generated source files
 $(GENDIR)/$(CURDIR)/version.c : | $(GENDIR)/$(CURDIR)
-	@$(ECHO) "char SVN_revision[]=\"c6460cf9\";" > $@
+	@$(ECHO) "const char SVN_revision[]=\"AROS\";" > $@
 
 $(GENDIR)/$(CURDIR)/6502.c : | $(GENDIR)/$(CURDIR)
 	mkdir -p $(GENDIR)/$(CURDIR)/doc
 	make -C $(GENDIR)/$(CURDIR)/3rdparty 6502 && $(CP) $(GENDIR)/$(CURDIR)/3rdparty/6502/sources/6502.c $@
 
+$(GENDIR)/$(CURDIR)/recoil.c : | $(GENDIR)/$(CURDIR)
+	make -C $(GENDIR)/$(CURDIR)/3rdparty recoil && $(CP) $(GENDIR)/$(CURDIR)/3rdparty/recoil-*/recoil.c $@ && $(CP) $(GENDIR)/$(CURDIR)/3rdparty/recoil-*/recoil.h $(GENDIR)/$(CURDIR)/
+
 #MM
-ports-graphics-grafx2-genfiles : $(GENDIR)/$(CURDIR)/version.c $(GENDIR)/$(CURDIR)/6502.c 
+ports-graphics-grafx2-genfiles : $(GENDIR)/$(CURDIR)/version.c $(GENDIR)/$(CURDIR)/6502.c $(GENDIR)/$(CURDIR)/recoil.c
 
 ############################################################################################################
 
@@ -144,11 +141,14 @@ ports-graphics-grafx2-genfiles : $(GENDIR)/$(CURDIR)/version.c $(GENDIR)/$(CURDI
 
 ############################################################################################################
 
-%copy_dir_recursive mmake=ports-graphics-grafx2-docs src=$(PORTSDIR)/grafx2/$(ARCHBASE)/doc \
-    dst=$(TARGETDIR)/doc
-
-%copy_dir_recursive mmake=ports-graphics-grafx2-data src=$(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2 \
-    dst=$(TARGETDIR)/data
+#MM  ports-graphics-grafx2-data : ports-graphics-grafx2-fetch
+ports-graphics-grafx2-data:
+	$(MKDIR) $(TARGETDIR)/data $(TARGETDIR)/data/fonts $(TARGETDIR)/data/skins $(TARGETDIR)/data/scripts
+	$(CP) $(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2/gfx2def.ini $(TARGETDIR)/data/
+	$(CP) $(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2/gfx2.png $(TARGETDIR)/data/
+	$(CP) $(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2/fonts/* $(TARGETDIR)/data/fonts/
+	$(CP) $(PORTSDIR)/grafx2/$(ARCHBASE)/share/grafx2/skins/* $(TARGETDIR)/data/skins/
+	$(CP) $(PORTSDIR)/grafx2/$(ARCHBASE)/misc/morphos/grafx2.info $(TARGETDIR)/GrafX2.info
 
 %copy_dir_recursive mmake=ports-graphics-grafx2-3rdparty src=$(PORTSDIR)/grafx2/$(ARCHBASE)/3rdparty \
     dst=$(GENDIR)/$(CURDIR)/3rdparty

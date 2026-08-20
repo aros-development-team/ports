@@ -1,0 +1,2122 @@
+diff -ruN grafX2-v2.9/src/buttons.c grafX2-v2.9.aros/src/buttons.c
+--- grafX2-v2.9/src/buttons.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/buttons.c	2026-03-11 18:58:41
+@@ -19,8 +19,7 @@
+ */
+ 
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
+-    #include <proto/dos.h>
+-    #include <sys/types.h>
++    #include <exec/types.h>
+ #endif
+ 
+ #include <fcntl.h>
+@@ -39,7 +38,6 @@
+ #if !defined(__VBCC__) && !defined(_MSC_VER)
+ #include <unistd.h>
+ #endif
+-#include <ctype.h>
+ #include <sys/stat.h>
+ 
+ #include "const.h"
+@@ -76,8 +74,8 @@
+ #include "keycodes.h"
+ 
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
+-    #include <proto/dos.h>
+     #include <dirent.h>
++    #include <proto/dos.h>
+ #elif defined(__MINT__)
+     #include <mint/sysbind.h>
+     #include <dirent.h>
+diff -ruN grafX2-v2.9/src/cgfxscreen.c grafX2-v2.9.aros/src/cgfxscreen.c
+--- grafX2-v2.9/src/cgfxscreen.c	1970-01-01 01:00:00
++++ grafX2-v2.9.aros/src/cgfxscreen.c	2026-03-11 18:56:33
+@@ -0,0 +1,440 @@
++#include "cgfxscreen.h"
++#include "clib/cybergraphics_protos.h"
++#include "exec/memory.h"
++#include "gfx2log.h"
++#include "gfx2surface.h"
++#include "global.h"
++#include "intuition/screens.h"
++#include "loadsave.h"
++#include "misc.h"
++#include "screen.h"
++#include <aros/cpu.h>
++#include <clib/exec_protos.h>
++#include <clib/graphics_protos.h>
++#include <clib/intuition_protos.h>
++#include <cybergraphx/cybergraphics.h>
++#include <exec/types.h>
++#include <graphics/gfx.h>
++#include <graphics/rastport.h>
++#include <graphics/view.h>
++#include <intuition/intuition.h>
++#include <proto/cybergraphics.h>
++#include <proto/exec.h>
++#include <string.h>
++#include <unistd.h>
++
++static CONST_STRPTR title = "GrafX2";
++struct Window *AmigaWindow = NULL;
++static struct Screen *AmigaScreen = NULL;
++static BOOL _fullscreen = FALSE;
++static T_GFX2_Surface *icon = NULL;
++static STRPTR BlankCursor = NULL;
++static ULONG lut[256] = {0};
++static APTR lock = 0;
++static UBYTE *bitmap_data = NULL;
++static ULONG *bitmap_data32 = NULL;
++static IPTR bitmap_pitch = 0;
++static IPTR bitmap_pitch32 = 0;
++volatile int Allow_colorcycling = 0;
++
++BOOL PointerSet = FALSE;
++struct IntuitionBase *IntuitionBase;
++struct GfxBase *GfxBase;
++struct Library *CyberGfxBase;
++
++static short Min_X = 0;
++static short Min_Y = 0;
++static short Max_X = 10000;
++static short Max_Y = 10000;
++static short Status_line_dirty_begin = 0;
++static short Status_line_dirty_end = 0;
++
++void FindWindowPosition(WORD *top, WORD *left, int width, int height) {
++  if ((*top == 0 && *left == 0) && !_fullscreen) {
++    *left = (AmigaScreen->Width - width) / 2;
++    *top = (AmigaScreen->Height - height) / 2;
++  }
++}
++
++void GFX2_Set_mode(int *width, int *height, int fullscreen) {
++  IPTR modeID = INVALID_ID;
++  BlankCursor = AllocMem(16, MEMF_CHIP | MEMF_CLEAR);
++  WORD _top = 0;
++  WORD _left = 0;
++
++  if (bitmap_data) {
++    FreeVec(bitmap_data);
++  }
++
++  if (AmigaWindow) {
++    _top = AmigaWindow->TopEdge;
++    _left = AmigaWindow->LeftEdge;
++    CloseWindow(AmigaWindow);
++    AmigaWindow = NULL;
++  }
++
++  if (_fullscreen && AmigaScreen) {
++    CloseScreen(AmigaScreen);
++    AmigaScreen = NULL;
++  }
++
++  if (fullscreen) {
++    modeID = Probe_Video_Mode(*width, *height);
++    if ((int)modeID == INVALID_ID) {
++      Cleanup("Could not find suitable screen mode!");
++    }
++
++    ULONG depth = GetCyberIDAttr(CYBRIDATTR_DEPTH, modeID);
++
++    AmigaScreen = OpenScreenTags(
++        NULL, SA_Left, 0, SA_Top, 0, SA_Width, *width, SA_Height, *height,
++        SA_Depth, depth, SA_DisplayID, modeID, SA_Type,
++        CUSTOMSCREEN | SDEPTH_TOFRONT, SA_ShowTitle, TRUE, SA_Behind, FALSE,
++        SA_Draggable, TRUE, SA_Quiet, TRUE, SA_Title, (IPTR)title, SA_PubName,
++        (IPTR)title, TAG_DONE);
++
++    if (!AmigaScreen) {
++      Cleanup("Failed to open CyberGraphics screen!");
++    }
++  } else {
++    if (!(AmigaScreen = LockPubScreen(NULL))) {
++      Cleanup("Can't lock pub screen!");
++    }
++
++    if (*width > AmigaScreen->Width || *height > AmigaScreen->Height) {
++      *width = Min(*width, AmigaScreen->Width);
++      *height = Min(*height, AmigaScreen->Height);
++      GFX2_Log(GFX2_WARNING, "Window size adjusted to fit screen: %dx%d\n",
++               *width, *height);
++    }
++  }
++
++  FindWindowPosition(&_top, &_left, *width, *height);
++
++  AmigaWindow = OpenWindowTags(
++      NULL, WA_InnerWidth, fullscreen ? AmigaScreen->Width : *width,
++      WA_InnerHeight, fullscreen ? AmigaScreen->Height : *height, WA_Top, _top,
++      WA_Left, _left, WA_DetailPen, 0, WA_BlockPen, 1, WA_GimmeZeroZero, 1,
++      WA_ReportMouse, 1, WA_Activate, 1, WA_RMBTrap, 1, WA_MinWidth, 320,
++      WA_MinHeight, 200, WA_MaxWidth, AmigaScreen->Width, WA_MaxHeight,
++      AmigaScreen->Height, WA_SizeGadget, fullscreen ? 0 : 1, WA_CloseGadget,
++      fullscreen ? 0 : 1, WA_DepthGadget, fullscreen ? 0 : 1, WA_DragBar,
++      fullscreen ? 0 : 1, WA_Backdrop, fullscreen ? 1 : 0, WA_Borderless,
++      fullscreen ? 1 : 0, WA_IDCMP,
++      IDCMP_CLOSEWINDOW | IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE | IDCMP_RAWKEY |
++          IDCMP_NEWSIZE,
++      WA_CustomScreen, (IPTR)AmigaScreen, TAG_DONE);
++
++  if (!AmigaWindow) {
++    Cleanup("Failed to open window!");
++  } else if (!fullscreen) {
++    UnlockPubScreen(NULL, AmigaScreen);
++  }
++
++  if (!GetCyberMapAttr(AmigaWindow->RPort->BitMap, CYBRMATTR_ISCYBERGFX)) {
++    Cleanup("Bitmap is not a CyberGraphics bitmap!");
++  }
++
++  bitmap_pitch = (*width + 15) & ~15;       // Original 8-bit pitch
++  bitmap_pitch32 = ((*width + 3) & ~3) * 4; // 32-bit pitch
++
++  bitmap_data = AllocVec(bitmap_pitch * *height, MEMF_ANY | MEMF_CLEAR);
++  bitmap_data32 = AllocVec(bitmap_pitch32 * *height, MEMF_ANY | MEMF_CLEAR);
++
++  if (!bitmap_data || !bitmap_data32) {
++    Cleanup("Failed to allocate bitmap data!");
++  }
++
++  *width = AmigaWindow->GZZWidth;
++  *height = AmigaWindow->GZZHeight;
++
++  _fullscreen = fullscreen;
++}
++
++void RestoreSystemPointer() {
++  if (PointerSet) {
++    ClearPointer(AmigaWindow);
++    PointerSet = FALSE;
++  }
++}
++
++void RemoveSystemPointer() {
++  if (!PointerSet) {
++    SetPointer(AmigaWindow, (UWORD *)BlankCursor, 1, 1, 0, 0);
++    PointerSet = TRUE;
++  }
++}
++
++void Get_Max_Screen_Dim(short *width, short *height) {
++  if (!(AmigaScreen = LockPubScreen(NULL))) {
++    Cleanup("Can't lock pub screen!");
++  }
++
++  *width = Min(*width, AmigaScreen->Width);
++  *height = Min(*height, AmigaScreen->Height);
++
++  UnlockPubScreen(NULL, AmigaScreen);
++}
++
++IPTR Probe_Video_Mode(int width, int height) {
++  IPTR modeID =
++      BestCModeIDTags(CYBRBIDTG_NominalWidth, width, CYBRBIDTG_NominalHeight,
++                      height, CYBRBIDTG_Depth, 24, TAG_DONE);
++  return modeID;
++}
++
++byte Get_Screen_pixel(int x, int y) { return *Get_Screen_pixel_ptr(x, y); }
++
++void Set_Screen_pixel(int x, int y, byte value) {
++  *Get_Screen_pixel_ptr(x, y) = value;
++}
++
++byte *Get_Screen_pixel_ptr(int x, int y) {
++  return (byte *)(bitmap_data + (y * bitmap_pitch) + x);
++}
++
++void Screen_FillRect(int x, int y, int w, int h, byte color) {
++  if (!AmigaScreen || !bitmap_data)
++    return;
++
++  if (x < 0) {
++    w += x;
++    x = 0;
++  }
++  if (y < 0) {
++    h += y;
++    y = 0;
++  }
++  if (x > Screen_width || y > Screen_height)
++    return;
++  if ((x + w) > Screen_width)
++    w = Screen_width - x;
++  if ((y + h) > Screen_height)
++    h = Screen_height - y;
++  if (w <= 0 || h <= 0)
++    return;
++
++  // Fill first line
++  byte *dst = Get_Screen_pixel_ptr(x, y);
++  memset(dst, color, w);
++
++  // Copy first line to remaining lines
++  dst += bitmap_pitch;
++  for (int i = 1; i < h; i++) {
++    memcpy(dst, dst - bitmap_pitch, w);
++    dst += bitmap_pitch;
++  }
++}
++
++void Update_rect(short x, short y, unsigned short width,
++                 unsigned short height) {
++  if (!bitmap_data || !bitmap_data32)
++    return;
++  if (width == 0 || height == 0) {
++    // Full screen update
++    Min_X = Min_Y = 0;
++    Max_X = Screen_width;
++    Max_Y = Screen_height;
++
++    // Convert the entire screen from 8-bit to 32-bit
++    for (int cy = 0; cy < Screen_height; cy++) {
++      UBYTE *src = bitmap_data + (cy * bitmap_pitch);
++      ULONG *dst = bitmap_data32 + (cy * (bitmap_pitch32 / 4));
++
++      for (int cx = 0; cx < Screen_width; cx++) {
++        dst[cx] = lut[src[cx]];
++      }
++    }
++  } else {
++    // Partial screen update
++    if (x < Min_X)
++      Min_X = x;
++    if (y < Min_Y)
++      Min_Y = y;
++    if (x + width > Max_X)
++      Max_X = x + width;
++    if (y + height > Max_Y)
++      Max_Y = y + height;
++
++    // Convert the updated region from 8-bit to 32-bit
++    for (int cy = y; cy < y + height; cy++) {
++      UBYTE *src = bitmap_data + (cy * bitmap_pitch) + x;
++      ULONG *dst = bitmap_data32 + (cy * (bitmap_pitch32 / 4)) + x;
++
++      for (int cx = 0; cx < width; cx++) {
++        dst[cx] = lut[src[cx]];
++      }
++    }
++  }
++}
++
++int GFX2_SetPalette(const T_Components *colors, int firstcolor, int ncolors) {
++  // colors may point to Current_palette + firstcolor (from Set_color),
++  // so index relative to the pointer, not absolute.
++  const T_Components *c = colors - firstcolor;
++  for (int i = firstcolor; i < firstcolor + ncolors; i++) {
++    UBYTE *p = (UBYTE *)&lut[i];
++    p[0] = 0xFF;     // Alpha
++    p[1] = c[i].R;   // Red
++    p[2] = c[i].G;   // Green
++    p[3] = c[i].B;   // Blue
++  }
++
++  Update_rect(0, 0, Screen_width, Screen_height);
++  return 1;
++}
++
++void Set_mouse_position(void) {}
++
++int GFX2_GetScreenSize(int *width, int *height) {
++  *width = AmigaScreen->Width * Pixel_width;
++  *height = AmigaScreen->Height * Pixel_height;
++  return 1;
++}
++
++int GFX2_MessageBox(const char *text, const char *caption, unsigned int type) {
++  struct EasyStruct es = {sizeof(struct EasyStruct), 0, (STRPTR)caption,
++                          (STRPTR)text, "OK"};
++  return EasyRequestArgs(NULL, &es, NULL, NULL);
++}
++
++void Allow_drag_and_drop(int flag) {}
++
++void Define_icon(void) {
++  icon = Load_surface("gfx2.png", Data_directory, NULL);
++}
++
++void Flush_update(void) {
++  if (Min_X >= Max_X || Min_Y >= Max_Y) {
++    ; // Nothing to do
++  } else {
++    if (Min_X < 0)
++      Min_X = 0;
++    if (Min_Y < 0)
++      Min_Y = 0;
++
++    // Calculate actual pixel coordinates
++    int x = Min_X * Pixel_width;
++    int y = Min_Y * Pixel_height;
++    int width = Min(Screen_width - Min_X, Max_X - Min_X) * Pixel_width;
++    int height = Min(Screen_height - Min_Y, Max_Y - Min_Y) * Pixel_height;
++
++    // Use the 32-bit buffer directly with WritePixelArray
++    WritePixelArray(bitmap_data32, x, y, // Source X, Y
++                    bitmap_pitch32,      // Source modulo (bytes per row)
++                    AmigaWindow->RPort,  // Destination RastPort
++                    x, y,                // Destination X, Y
++                    width, height,       // Width, Height
++                    RECTFMT_ARGB32
++    );
++    // Reset bounderies
++    Min_X = Min_Y = 10000;
++    Max_X = Max_Y = 0;
++  }
++
++  // Handle status line updates
++  if (Status_line_dirty_end) {
++    int status_x =
++        (18 + Status_line_dirty_begin * 8) * Menu_factor_X * Pixel_width;
++    int status_y = Menu_status_Y * Pixel_height;
++    int status_width = (Status_line_dirty_end - Status_line_dirty_begin) * 8 *
++                       Menu_factor_X * Pixel_width;
++    int status_height = 8 * Menu_factor_Y * Pixel_height;
++
++    WritePixelArray(bitmap_data32, status_x, status_y, // Source X, Y
++                    bitmap_pitch32,     // Source modulo (bytes per row)
++                    AmigaWindow->RPort, // Destination RastPort
++                    status_x, status_y, // Destination X, Y
++                    status_width, status_height, // Width, Height
++                    RECTFMT_ARGB32
++    );
++    // Reset bounderies
++    Status_line_dirty_begin = 25;
++    Status_line_dirty_end = 0;
++  }
++}
++
++void Clear_border(byte color) {}
++
++void Update_status_line(short char_pos, short width) {
++  if (Status_line_dirty_end < char_pos + width)
++    Status_line_dirty_end = char_pos + width;
++  if (Status_line_dirty_begin > char_pos)
++    Status_line_dirty_begin = char_pos;
++
++  // Convert the status line region from 8-bit to 32-bit
++  int status_x = (18 + char_pos * 8) * Menu_factor_X;
++  int status_y = Menu_status_Y;
++  int status_width = width * 8 * Menu_factor_X;
++  int status_height = 8 * Menu_factor_Y;
++
++  // Ensure we don't go out of bounds
++  if (status_x + status_width > Screen_width)
++    status_width = Screen_width - status_x;
++  if (status_y + status_height > Screen_height)
++    status_height = Screen_height - status_y;
++
++  // Convert the status line pixels from 8-bit to 32-bit
++  for (int cy = status_y; cy < status_y + status_height; cy++) {
++    UBYTE *src = bitmap_data + (cy * bitmap_pitch) + status_x;
++    ULONG *dst = bitmap_data32 + (cy * (bitmap_pitch32 / 4)) + status_x;
++
++    for (int cx = 0; cx < status_width; cx++) {
++      dst[cx] = lut[src[cx]];
++    }
++  }
++}
++
++void Cleanup(char *msg) {
++  if (msg) {
++    GFX2_Log(GFX2_ERROR, "Error : %s\n", msg);
++  }
++
++  if (BlankCursor)
++    FreeMem(BlankCursor, 16);
++
++  if (bitmap_data)
++    FreeVec(bitmap_data);
++
++  if (bitmap_data32)
++    FreeVec(bitmap_data32);
++
++  if (AmigaWindow) {
++    // Drain any pending messages before closing
++    struct Message *msg;
++    while ((msg = GetMsg(AmigaWindow->UserPort)))
++      ReplyMsg(msg);
++    CloseWindow(AmigaWindow);
++    AmigaWindow = NULL;
++  }
++
++  if (AmigaScreen) {
++    if (_fullscreen) {
++      CloseScreen(AmigaScreen);
++    } else {
++      UnlockPubScreen(NULL, AmigaScreen);
++    }
++  }
++
++  if (CyberGfxBase)
++    CloseLibrary(CyberGfxBase);
++  if (GfxBase)
++    CloseLibrary((struct Library *)GfxBase);
++  if (IntuitionBase)
++    CloseLibrary((struct Library *)IntuitionBase);
++}
++
++void Openlibs() {
++  if (!(IntuitionBase =
++            (struct IntuitionBase *)OpenLibrary("intuition.library", 39))) {
++    Cleanup("Can't open intuition.library V39!");
++  }
++
++  if (!(GfxBase = (struct GfxBase *)OpenLibrary("graphics.library", 39))) {
++    Cleanup("Can't open graphics.library V39!");
++  }
++
++  if (!(CyberGfxBase = OpenLibrary("cybergraphics.library", 0))) {
++    Cleanup("Can't open cybergraphics.library!");
++  }
++}
+diff -ruN grafX2-v2.9/src/cgfxscreen.h grafX2-v2.9.aros/src/cgfxscreen.h
+--- grafX2-v2.9/src/cgfxscreen.h	1970-01-01 01:00:00
++++ grafX2-v2.9.aros/src/cgfxscreen.h	2026-03-11 18:56:33
+@@ -0,0 +1,22 @@
++#ifndef __CGFXSCREEN_H__
++#define __CGFXSCREEN_H__
++
++#include <intuition/intuition.h>
++
++#if defined(__amigaos__)
++#define IPTR ULONG
++#endif
++
++extern struct IntuitionBase *IntuitionBase;
++extern struct GfxBase *GfxBase;
++extern struct Library *CyberGfxBase;
++extern struct Window *AmigaWindow;
++extern BOOL PointerSet;
++
++void Openlibs();
++IPTR Probe_Video_Mode(int width, int height);
++void RemoveSystemPointer();
++void RestoreSystemPointer();
++void Cleanup(char *msg);
++void Get_Max_Screen_Dim(short *width, short *height);
++#endif
+diff -ruN grafX2-v2.9/src/engine.c grafX2-v2.9.aros/src/engine.c
+--- grafX2-v2.9/src/engine.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/engine.c	2026-03-11 18:58:41
+@@ -56,6 +56,10 @@
+ #include "palette.h"
+ #include "unicode.h"
+ 
++#if defined(__AROS__)
++#include "cgfxscreen.h"
++#endif
++
+ #if defined(__GP2X__) || defined(__WIZ__) || defined(__CAANOO__) || defined(__SWITCH__)
+ // We don't want to underline the keyboard shortcuts as there is no keyboard
+ #define NO_KEYBOARD
+diff -ruN grafX2-v2.9/src/fileformats.c grafX2-v2.9.aros/src/fileformats.c
+--- grafX2-v2.9/src/fileformats.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/fileformats.c	2026-03-11 19:02:31
+@@ -40,7 +40,7 @@
+ #include <machine/endian.h>
+ #elif defined(__FreeBSD__)
+ #include <sys/endian.h>
+-#else
++#elif !defined(__AROS__) && !defined(__amigaos__)
+ #include <endian.h>
+ #endif
+ #endif
+diff -ruN grafX2-v2.9/src/filesel.c grafX2-v2.9.aros/src/filesel.c
+--- grafX2-v2.9/src/filesel.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/filesel.c	2026-03-11 19:02:31
+@@ -19,8 +19,13 @@
+ */
+ 
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
++    #include <exec/types.h>
+     #include <proto/dos.h>
+     #include <sys/types.h>
++
++#if defined(__AROS__)
++#define towlower tolower
++#endif
+ #elif defined (__MINT__)
+     #include <mint/sysbind.h>
+ #elif defined(WIN32)
+@@ -44,7 +49,9 @@
+ #include <unistd.h>
+ #endif
+ #include <ctype.h>
++#if !defined(__AROS__) && !defined(__amigaos4__) && !defined(__MORPHOS__) && !defined(__amigaos__)
+ #include <wctype.h>
++#endif
+ #include <sys/types.h>
+ 
+ #include "const.h"
+diff -ruN grafX2-v2.9/src/gfx2log.c grafX2-v2.9.aros/src/gfx2log.c
+--- grafX2-v2.9/src/gfx2log.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/gfx2log.c	2026-03-11 19:02:31
+@@ -27,6 +27,9 @@
+ #if defined(USE_SDL2)
+ #include <SDL.h>
+ #endif
++#if defined(__AROS__)
++#include <aros/debug.h>
++#endif
+ #include <stdio.h>
+ #include <string.h>
+ #include "gfx2log.h"
+@@ -48,7 +51,13 @@
+   if ((unsigned)GFX2_verbosity_level < (unsigned)priority)
+     return;
+ #endif
+-#if defined(USE_SDL2)
++#if defined(__AROS__)
++  {
++    char message[512];
++    vsnprintf(message, sizeof(message), fmt, ap);
++    bug("[GrafX2] %s", message);
++  }
++#elif defined(USE_SDL2)
+   {
+     int sdl_priority;
+     switch(priority)
+diff -ruN grafX2-v2.9/src/ifformat.c grafX2-v2.9.aros/src/ifformat.c
+--- grafX2-v2.9/src/ifformat.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/ifformat.c	2026-03-11 19:02:50
+@@ -47,7 +47,16 @@
+ #elif defined(__FreeBSD__)
+ #include <sys/endian.h>
+ #else
++#ifndef __amigaos__
+ #include <endian.h>
++#endif
++#endif
++#ifdef __AROS__
++#include <aros/macros.h>
++#include <exec/types.h>
++#ifndef linux
++#define be32toh AROS_BE2LONG
++#endif
+ #endif
+ 
+ //////////////////////////////////// IFF ////////////////////////////////////
+diff -ruN grafX2-v2.9/src/init.c grafX2-v2.9.aros/src/init.c
+--- grafX2-v2.9/src/init.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/init.c	2026-03-11 18:59:15
+@@ -25,8 +25,9 @@
+ #endif
+ 
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
+-  #include <proto/exec.h>
+-  #include <proto/dos.h>
++  #include "cgfxscreen.h"
++  #include <dos/dos.h>
++  #include <exec/types.h>
+ #endif
+ 
+ #include <stdio.h>
+@@ -91,7 +92,7 @@
+ 
+ // Rechercher la liste et le type des lecteurs de la machine
+ 
+-#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
++#if defined(__amigaos4__) || defined(__MORPHOS__) || defined(__amigaos__)
+ void bstrtostr( BSTR in, STRPTR out, TEXT max );
+ #endif
+ 
+@@ -1411,6 +1412,11 @@
+   else if (SDL_GetDisplayMode(0, mode, &dm) == 0) {
+     if (width == dm.w && height == dm.h)
+       supported = 1;
++  }
++#elif defined(__AROS__)
++  IPTR modeID = Probe_Video_Mode(width, height);
++  if (modeID != INVALID_ID) {
++    supported = 1;
+   }
+ #endif
+ 
+diff -ruN grafX2-v2.9/src/input.c grafX2-v2.9.aros/src/input.c
+--- grafX2-v2.9/src/input.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/input.c	2026-03-11 18:58:50
+@@ -44,6 +44,15 @@
+ #include <X11/Xatom.h>
+ #endif
+ 
++#if defined(__AROS__)
++#include "cgfxscreen.h"
++#include <clib/exec_protos.h>
++#include <clib/intuition_protos.h>
++#include <exec/types.h>
++#include <intuition/intuition.h>
++#include <proto/dos.h>
++#endif
++
+ #if defined(_MSC_VER)
+ #define strdup _strdup
+ #endif
+@@ -1403,6 +1412,126 @@
+ }
+ #endif
+ 
++#if defined(__AROS__)
++
++// Handle button swapping when modifier changes
++static int Handle_button_swap(WORD mod) {
++  if (Config.Swap_buttons == mod && Button_inverter == 0) {
++    Button_inverter = 1;
++    if (Input_new_mouse_K) {
++      Input_new_mouse_K ^= 3; // Flip bits 0 and 1
++      return Handle_mouse_btn_change();
++    }
++  }
++  return 1;
++}
++
++// Handle key press for non-modifier keys
++static int Handle_AROS_regular_key(WORD code, WORD qualifier) {
++  WORD keycode = Handle_AROS_functionkeys(code);
++  if (keycode == KEY_UNKNOWN) {
++    struct InputEvent ie;
++    char buffer[10];
++    LONG actual;
++
++    ie.ie_Class = IECLASS_RAWKEY;
++    ie.ie_SubClass = 0;
++    ie.ie_Code = code;
++    ie.ie_Qualifier = qualifier;
++    ie.ie_EventAddress = NULL;
++
++    actual = MapRawKey(&ie, buffer, sizeof(buffer), NULL);
++
++    if (actual > 0) {
++      char c = buffer[0];
++      Key_ANSI = Key_UNICODE = c;
++
++      switch (c) {
++      case '0' ... '9':
++        keycode = KEY_0 + (c - '0');
++        break;
++      case 'a' ... 'z':
++        keycode = KEY_a + (c - 'a');
++        break;
++      case 'A' ... 'Z':
++        keycode = KEY_a + (c - 'A');
++        break;
++      case ',':
++        keycode = KEY_COMMA;
++        break;
++      case '\\':
++        keycode = KEY_BACKSLASH;
++        break;
++      case ';':
++        keycode = KEY_SEMICOLON;
++        break;
++      case '[':
++        keycode = KEY_LEFTBRACKET;
++        break;
++      case ']':
++        keycode = KEY_RIGHTBRACKET;
++        break;
++      case '=':
++        keycode = KEY_EQUALS;
++        break;
++      case '`':
++        keycode = KEY_BACKQUOTE;
++        break;
++      case 0x20:
++        keycode = KEY_SPACE;
++        break;
++      case 0x27:
++        keycode = KEY_QUOTE;
++        break;
++      case 0x2f:
++        keycode = KEY_KP_DIVIDE;
++        break;
++      case 0x2a:
++        keycode = KEY_KP_MULTIPLY;
++        break;
++      case 0x2d:
++        keycode = KEY_MINUS;
++        break;
++      case 0x2e:
++        keycode = KEY_PERIOD;
++        break;
++      case 0x2b:
++        keycode = KEY_KP_PLUS;
++        break;
++      case 0xd:
++        keycode = KEY_KP_ENTER;
++        break;
++      }
++    }
++    Handle_special_key_press();
++  }
++  Key = (keycode & 0x0FFF) | aros_key_mod;
++
++  return 1;
++}
++
++// Handle modifier key press
++static int Handle_AROS_modifier_press(WORD code) {
++  WORD mod = Get_AROS_modifier(code);
++  if (mod) {
++    aros_key_mod |= mod;
++    int result = Handle_button_swap(mod);
++    return result || Handle_special_key_press();
++  }
++  return 0;
++}
++
++// Handle modifier key release
++static void Handle_AROS_modifier_release(WORD code) {
++  WORD mod = Get_AROS_modifier(code);
++  if (mod) {
++    aros_key_mod &= ~mod;
++    Release_control(code, mod);
++  }
++}
++
++#endif
++
+ #if defined(WIN32) && !defined(USE_SDL) && !defined(USE_SDL2)
+ int user_feedback_required = 0; // Flag qui indique si on doit arrêter de traiter les évènements ou si on peut enchainer
+ #endif
+@@ -2001,6 +2130,131 @@
+       WaitMessage();
+       KillTimer(NULL, timerId);
+     }
++#elif defined(__AROS__)
++  struct IntuiMessage *msg;
++
++  Color_cycling();
++  Flush_update();
++
++  // Reset certain inputs
++  int user_feedback_required = 0;
++  Key_ANSI = 0;
++  Key_UNICODE = 0;
++  Key = 0;
++  Mouse_moved = 0;
++  Input_new_mouse_X = Mouse_X;
++  Input_new_mouse_Y = Mouse_Y;
++  Input_new_mouse_K = Mouse_K;
++  word mod = 0;
++
++  // Process all pending messages
++  while ( //! user_feedback_required &&
++      (msg = (struct IntuiMessage *)GetMsg(AmigaWindow->UserPort))) {
++
++    switch (msg->Class) {
++    case IDCMP_CLOSEWINDOW:
++      Quit_is_required = 1;
++      user_feedback_required = 1;
++      break;
++
++    case IDCMP_MOUSEMOVE: {
++      int x, y;
++
++      x = msg->MouseX;
++      y = msg->MouseY;
++
++      if (x < 0 || y < (AmigaWindow->BorderTop - 2) ||
++          x > (AmigaWindow->Width - AmigaWindow->BorderRight) ||
++          y > AmigaWindow->Height) {
++        RestoreSystemPointer();
++        break;
++      } else {
++        RemoveSystemPointer();
++      }
++
++      x = (x - AmigaWindow->BorderLeft) / Pixel_width;
++      y = (y - AmigaWindow->BorderTop) / Pixel_height;
++
++      user_feedback_required = Move_cursor_with_constraints(x, y);
++
++    } break;
++
++    case IDCMP_MOUSEBUTTONS: {
++      switch (msg->Code) {
++      case SELECTDOWN:
++        Input_new_mouse_K |= 1;
++        user_feedback_required = Handle_mouse_btn_change();
++        break;
++      case SELECTUP:
++        Input_new_mouse_K &= ~1;
++        user_feedback_required = Handle_mouse_btn_change();
++        break;
++      case MENUDOWN:
++        Input_new_mouse_K |= 2;
++        user_feedback_required = Handle_mouse_btn_change();
++        break;
++      case MENUUP:
++        Input_new_mouse_K &= ~2;
++        user_feedback_required = Handle_mouse_btn_change();
++        break;
++      case MIDDLEDOWN:
++        Key = KEY_MOUSEMIDDLE | Get_Key_modifiers();
++        user_feedback_required = 1;
++        break;
++      case MIDDLEUP:
++        Key = KEY_MOUSEMIDDLE | Get_Key_modifiers();
++        user_feedback_required = 1;
++        break;
++      }
++    } break;
++
++    case IDCMP_RAWKEY: {
++      WORD code = msg->Code & ~IECODE_UP_PREFIX;
++      if (msg->Code & IECODE_UP_PREFIX) {
++        // Key release
++        Handle_AROS_modifier_release(code);
++      } else {
++        // Key press
++        if (!Handle_AROS_modifier_press(code)) {
++          // Not a modifier key, process as regular key
++          user_feedback_required =
++              Handle_AROS_regular_key(code, msg->Qualifier);
++        }
++      }
++    } break;
++
++    case IDCMP_NEWSIZE: {
++      Resize_width = msg->IDCMPWindow->Width;
++      Resize_height = msg->IDCMPWindow->Height;
++      break;
++    }
++
++    case IDCMP_REFRESHWINDOW: {
++      BeginRefresh(AmigaWindow);
++      EndRefresh(AmigaWindow, TRUE);
++    }
++    }
++    ReplyMsg((struct Message *)msg);
++  }
++
++  Mouse_Emulation();
++
++  // If the cursor was moved since last update,
++  // it was erased, so we need to redraw it (with the preview brush)
++  if (Mouse_moved) {
++    Compute_paintbrush_coordinates();
++    Display_cursor();
++    return 1;
++  }
++
++  if (user_feedback_required) {
++    return 1;
++  }
++
++  /* No pending input — wait for next IDCMP message instead of busy-looping.
++   * This yields CPU time to other tasks (input.device, USB handler, etc.) */
++  WaitPort(AmigaWindow->UserPort);
++
+ #elif defined(USE_X11)
+     int user_feedback_required = 0; // Flag qui indique si on doit arrêter de traiter les évènements ou si on peut enchainer
+ 
+diff -ruN grafX2-v2.9/src/io.c grafX2-v2.9.aros/src/io.c
+--- grafX2-v2.9/src/io.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/io.c	2026-03-11 19:02:50
+@@ -38,8 +38,9 @@
+ #endif
+ 
+ #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__) || defined(__amigaos__)
++    #include <dos/dos.h>
+     #include <proto/dos.h>
+-    #include <sys/types.h>
++    #include <exec/types.h>
+     #include <dirent.h>
+ #elif defined(WIN32)
+ #ifdef _MSC_VER
+@@ -621,7 +622,41 @@
+     while (FindNextFileA(h, &fd));
+     FindClose(h);
+   }
+-#else
++  #elif defined(__AROS__)
++    struct FileInfoBlock *fib;
++    BPTR lock;
++    char * full_filename;
++
++    // Get a lock on the directory
++    lock = Lock(directory_name, ACCESS_READ);
++    if (lock == 0)
++      return;
++
++    // Allocate FileInfoBlock structure
++    fib = AllocDosObject(DOS_FIB, NULL);
++    if (fib == NULL) {
++      UnLock(lock);
++      return;
++    }
++
++    // Read first directory entry
++    if (Examine(lock, fib)) {
++      while (ExNext(lock, fib)) {
++        // Skip if entry is a directory
++        if (fib->fib_DirEntryType < 0) {
++          full_filename = Filepath_append_to_dir(directory_name, fib->fib_FileName);
++          if (full_filename != NULL) {
++            Callback(full_filename, fib->fib_FileName);
++            free(full_filename);
++          }
++        }
++      }
++    }
++
++    // Cleanup
++    FreeDosObject(DOS_FIB, fib);
++    UnLock(lock);
++  #else
+   // directory traversal
+   DIR*  current_directory;
+   struct dirent* entry; // directory entry
+@@ -930,7 +965,9 @@
+   }
+   if (lockf(Lock_file_handle, F_TLOCK, 0)==-1)
+   {
+-    close(Lock_file_handle);
++#if !defined(__AROS__)
++    close(Lock_file_handle);
++#endif
+     // Usually write-protected media
+     return -1;
+   }
+@@ -951,7 +988,9 @@
+   #else
+   if (Lock_file_handle != -1)
+   {
+-    close(Lock_file_handle);
++#if !defined(__AROS__)
++    close(Lock_file_handle);
++#endif
+     Lock_file_handle = -1;
+   }
+   #endif
+diff -ruN grafX2-v2.9/src/keyboard.c grafX2-v2.9.aros/src/keyboard.c
+--- grafX2-v2.9/src/keyboard.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/keyboard.c	2026-03-11 19:00:21
+@@ -28,6 +28,12 @@
+ #include "keycodes.h"
+ #include "gfx2log.h"
+ 
++#if defined(__AROS__)
++#include <clib/exec_protos.h>
++#include <clib/intuition_protos.h>
++#include <exec/types.h>
++#endif
++
+ #if defined(USE_X11)
+ /// State of modifier keys (shift, CTRL, ALT, etc.)
+ extern word X11_key_mod;
+@@ -522,19 +528,23 @@
+     { KEY_MOUSEMIDDLE, "Mouse3" },
+     { KEY_MOUSEWHEELUP, "WheelUp" },
+     { KEY_MOUSEWHEELDOWN, "WheelDown" },
+-#if !defined(USE_SDL) && !defined(USE_SDL2) && defined(WIN32)
+-    /* windows VK_* codes which translate to ASCII characters are
+-     * not using the ASCII code, except for digit and letters */
++#if defined(WIN32) || defined(__AROS__)
+     { KEY_COMMA,       "','" },
+     { KEY_PERIOD,      "'.'" },
+     { KEY_EQUALS,      "'='" },
+     { KEY_MINUS,       "'-'" },
++    { KEY_BACKQUOTE,   "'`'" },
++    { KEY_LEFTBRACKET, "'['" },
++    { KEY_RIGHTBRACKET,"']'" },
++    { KEY_SPACE,       "' '" },
++    { KEY_QUOTE,       "'\''"},
++#endif
++#if !defined(USE_SDL) && !defined(USE_SDL2) && defined(WIN32)
++    /* windows VK_* codes which translate to ASCII characters are
++     * not using the ASCII code, except for digit and letters */
+     { VK_OEM_1,        "';'" },
+     { VK_OEM_2,        "'/'" },
+-    { KEY_BACKQUOTE,   "'`'" }, // VK_OEM_3
+-    { KEY_LEFTBRACKET, "'['" }, // VK_OEM_4
+     { VK_OEM_5,        "'\\'"},
+-    { KEY_RIGHTBRACKET,"']'" }, // VK_OEM_6
+     { VK_OEM_7,        "'''" },
+     { VK_OEM_8,        "'!'" },
+     { VK_OEM_102,      "<>" },
+@@ -901,9 +911,186 @@
+     mod |= GFX2_MOD_META;
+ #elif defined(USE_X11)
+   mod = X11_key_mod;
++#elif defined(__AROS__)
++  mod = aros_key_mod;
++#elif defined(__amigaos__)
++  mod = amiga_key_mod;
+ #else
+   GFX2_Log(GFX2_WARNING, "Get_Key_modifiers() not implemented !\n");
+ #endif
+   return mod;
++}
++#endif
++
++#if defined(__AROS__)
++
++WORD aros_key_mod = 0;
++
++// Define modifier key mapping structure
++static const struct {
++  WORD code;
++  WORD mod;
++} AROS_MODIFIERS[] = {
++    {AROS_KEY_LSHIFT, GFX2_MOD_SHIFT}, {AROS_KEY_RSHIFT, GFX2_MOD_SHIFT},
++    {AROS_KEY_CTRL, GFX2_MOD_CTRL},    {AROS_KEY_LALT, GFX2_MOD_ALT},
++    {AROS_KEY_RALT, GFX2_MOD_ALT},     {AROS_KEY_LAMIGA, GFX2_MOD_META},
++    {AROS_KEY_RAMIGA, GFX2_MOD_META},  {0, 0} // Terminator
++};
++
++WORD Handle_AROS_functionkeys(WORD rawkey) {
++  switch (rawkey) {
++  case AROS_KEY_ESC:
++    return KEY_ESCAPE;
++  case AROS_KEY_DEL:
++    return KEY_DELETE;
++  case AROS_KEY_BS:
++    return KEY_BACKSPACE;
++  case AROS_KEY_TAB:
++    return KEY_TAB;
++  case AROS_KEY_RETURN:
++    return KEY_RETURN;
++  case AROS_KEY_UP:
++    return KEY_UP;
++  case AROS_KEY_DOWN:
++    return KEY_DOWN;
++  case AROS_KEY_LEFT:
++    return KEY_LEFT;
++  case AROS_KEY_RIGHT:
++    return KEY_RIGHT;
++  case AROS_KEY_HOME:
++    return KEY_HOME;
++  case AROS_KEY_END:
++    return KEY_END;
++  case AROS_KEY_PGUP:
++    return KEY_PAGEUP;
++  case AROS_KEY_PGDN:
++    return KEY_PAGEDOWN;
++  case AROS_KEY_F1:
++    return KEY_F1;
++  case AROS_KEY_F2:
++    return KEY_F2;
++  case AROS_KEY_F3:
++    return KEY_F3;
++  case AROS_KEY_F4:
++    return KEY_F4;
++  case AROS_KEY_F5:
++    return KEY_F5;
++  case AROS_KEY_F6:
++    return KEY_F6;
++  case AROS_KEY_F7:
++    return KEY_F7;
++  case AROS_KEY_F8:
++    return KEY_F8;
++  case AROS_KEY_F9:
++    return KEY_F9;
++  case AROS_KEY_F10:
++    return KEY_F10;
++  case AROS_KEY_F11:
++    return KEY_F11;
++  case AROS_KEY_F12:
++    return KEY_F12;
++  default:
++    return KEY_UNKNOWN;
++  }
++}
++
++// Get modifier value for a key code
++WORD Get_AROS_modifier(WORD code) {
++  for (int i = 0; AROS_MODIFIERS[i].code != 0; i++) {
++    if (code == AROS_MODIFIERS[i].code) {
++      return AROS_MODIFIERS[i].mod;
++    }
++  }
++  return 0;
++}
++#elif defined(__amigaos__)
++WORD amiga_key_mod = 0;
++
++static const struct {
++  WORD code;
++  WORD mod;
++} AMIGA_MODIFIERS[] = {
++    {RAWKEY_LSHIFT, GFX2_MOD_SHIFT},  {RAWKEY_RSHIFT, GFX2_MOD_SHIFT},
++    {RAWKEY_LCTRL, GFX2_MOD_CTRL},    {RAWKEY_LALT, GFX2_MOD_ALT},
++    {RAWKEY_RALT, GFX2_MOD_ALT},      {RAWKEY_LCOMMAND, GFX2_MOD_META},
++    {RAWKEY_RCOMMAND, GFX2_MOD_META}, {0, 0} // Terminator
++};
++
++WORD Handle_AMIGA_functionkeys(WORD rawkey) {
++  switch (rawkey) {
++  case RAWKEY_ESC:
++    return KEY_ESCAPE;
++  case RAWKEY_DEL:
++    return KEY_DELETE;
++  case RAWKEY_BACKSPACE:
++    return KEY_BACKSPACE;
++  case RAWKEY_TAB:
++    return KEY_TAB;
++  case RAWKEY_RETURN:
++    return KEY_RETURN;
++  case RAWKEY_CRSRUP:
++    return KEY_UP;
++  case RAWKEY_CRSRDOWN:
++    return KEY_DOWN;
++  case RAWKEY_CRSRLEFT:
++    return KEY_LEFT;
++  case RAWKEY_CRSRRIGHT:
++    return KEY_RIGHT;
++  case RAWKEY_HOME:
++    return KEY_HOME;
++  case RAWKEY_END:
++    return KEY_END;
++  case RAWKEY_PAGEUP:
++    return KEY_PAGEUP;
++  case RAWKEY_PAGEDOWN:
++    return KEY_PAGEDOWN;
++  case RAWKEY_F1:
++    return KEY_F1;
++  case RAWKEY_F2:
++    return KEY_F2;
++  case RAWKEY_F3:
++    return KEY_F3;
++  case RAWKEY_F4:
++    return KEY_F4;
++  case RAWKEY_F5:
++    return KEY_F5;
++  case RAWKEY_F6:
++    return KEY_F6;
++  case RAWKEY_F7:
++    return KEY_F7;
++  case RAWKEY_F8:
++    return KEY_F8;
++  case RAWKEY_F9:
++    return KEY_F9;
++  case RAWKEY_F10:
++    return KEY_F10;
++  case RAWKEY_F11:
++    return KEY_F11;
++  case RAWKEY_F12:
++    return KEY_F12;
++  case RAWKEY_HELP:
++    return KEY_HELP;
++  case RAWKEY_MENU:
++    return KEY_MENU;
++  case RAWKEY_SPACE:
++    return KEY_SPACE;
++  case RAWKEY_ENTER:
++    return KEY_RETURN;
++  case RAWKEY_INSERT:
++    return KEY_INSERT;
++  case RAWKEY_CAPSLOCK:
++    return KEY_CAPSLOCK;
++  default:
++    return KEY_UNKNOWN;
++  }
++}
++
++WORD Get_AMIGA_modifier(WORD code) {
++  for (int i = 0; AMIGA_MODIFIERS[i].code != 0; i++) {
++    if (code == AMIGA_MODIFIERS[i].code) {
++      return AMIGA_MODIFIERS[i].mod;
++    }
++  }
++  return 0;
+ }
+ #endif
+diff -ruN grafX2-v2.9/src/keyboard.h grafX2-v2.9.aros/src/keyboard.h
+--- grafX2-v2.9/src/keyboard.h	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/keyboard.h	2026-03-11 18:59:35
+@@ -70,6 +70,26 @@
+ word Keysym_to_keycode(SDL_Keysym keysym);
+ #endif
+ 
++#if defined(__AROS__)
++#include <exec/types.h>
++#include <proto/keymap.h>
++
++// State of modifier keys (shift, CTRL, ALT, Amiga)
++extern WORD aros_key_mod;
++
++WORD Handle_AROS_functionkeys(WORD rawkey);
++WORD Get_AROS_modifier(WORD code);
++#elif defined(__amigaos__)
++#include <exec/types.h>
++#include <proto/keymap.h>
++
++// State of modifier keys (shift, CTRL, ALT, Amiga)
++extern WORD amiga_key_mod;
++
++WORD Handle_AMIGA_functionkeys(WORD rawkey);
++WORD Get_AMIGA_modifier(WORD code);
++#endif
++
+ /*! Helper function to convert between SDL system and the old coding for PC keycodes.
+     This is only used to convert configuration files from the DOS version of
+     Grafx2, where keyboard codes are in in the IBM PC AT form.
+diff -ruN grafX2-v2.9/src/keycodes.h grafX2-v2.9.aros/src/keycodes.h
+--- grafX2-v2.9/src/keycodes.h	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/keycodes.h	2026-03-11 18:59:27
+@@ -27,6 +27,8 @@
+ #include <windows.h>
+ #elif defined(USE_X11)
+ #include <X11/keysym.h>
++#elif defined(__amigaos__)
++#include <proto/keymap.h>
+ #endif
+ 
+ #if defined(USE_SDL)
+@@ -37,6 +39,43 @@
+ #define K2K(x) ((x) & 0x0FFF)
+ #endif
+ 
++#if defined(__AROS__)
++// AROS keys rawcodes
++#define AROS_KEY_ESC 0x45    // 69
++#define AROS_KEY_DEL 0x46    // 70
++#define AROS_KEY_BS 0x41     // 65
++#define AROS_KEY_TAB 0x42    // 66
++#define AROS_KEY_RETURN 0x44 // 68
++#define AROS_KEY_SPACE 0x40  // 64
++#define AROS_KEY_UP 0x4C     // 76
++#define AROS_KEY_DOWN 0x4D   // 77
++#define AROS_KEY_LEFT 0x4F   // 79
++#define AROS_KEY_RIGHT 0x4E  // 78
++#define AROS_KEY_LSHIFT 0x60 // 96
++#define AROS_KEY_RSHIFT 0x61 // 97
++#define AROS_KEY_CTRL 0x63   // 99
++#define AROS_KEY_LALT 0x64   // 100
++#define AROS_KEY_RALT 0x65   // 101
++#define AROS_KEY_LAMIGA 0x66 // 102
++#define AROS_KEY_RAMIGA 0x67 // 103
++#define AROS_KEY_F1 0x50     // 80
++#define AROS_KEY_F2 0x51     // 81
++#define AROS_KEY_F3 0x52     // 82
++#define AROS_KEY_F4 0x53     // 83
++#define AROS_KEY_F5 0x54     // 84
++#define AROS_KEY_F6 0x55     // 85
++#define AROS_KEY_F7 0x56     // 86
++#define AROS_KEY_F8 0x57     // 87
++#define AROS_KEY_F9 0x58     // 88
++#define AROS_KEY_F10 0x59    // 89
++#define AROS_KEY_F11 0x4B    // 75
++#define AROS_KEY_F12 0x5F    // 95
++#define AROS_KEY_PGUP 0x48
++#define AROS_KEY_PGDN 0x49
++#define AROS_KEY_HOME 0x70
++#define AROS_KEY_END 0x71
++#endif
++
+ /* generated lists */
+ #if defined(USE_SDL) || defined(USE_SDL2)
+ // KEY definitions for SDL and SDL2
+@@ -358,6 +397,226 @@
+ #define KEY_F11          VK_F11
+ #define KEY_F12          VK_F12
+ // end of KEY definitions for win32
++#elif defined(__AROS__)
++// KEY definitions for aros
++#define KEY_UNKNOWN      0
++#define KEY_ESCAPE       100
++#define KEY_RETURN       101
++#define KEY_BACKSPACE    102
++#define KEY_TAB          103
++#define KEY_UP           104
++#define KEY_DOWN         105
++#define KEY_LEFT         106
++#define KEY_RIGHT        107
++#define KEY_LEFTBRACKET  108
++#define KEY_RIGHTBRACKET 109
++#define KEY_INSERT       110
++#define KEY_DELETE       111
++#define KEY_COMMA        112
++#define KEY_BACKQUOTE    113
++#define KEY_PAGEUP       114
++#define KEY_PAGEDOWN     115
++#define KEY_HOME         116
++#define KEY_END          117
++#define KEY_KP_PLUS      118
++#define KEY_KP_MINUS     119
++#define KEY_KP_MULTIPLY  120
++#define KEY_KP_ENTER     121
++#define KEY_KP_DIVIDE    122
++#define KEY_KP_PERIOD    123
++#define KEY_KP_EQUALS    124
++#define KEY_EQUALS       125
++#define KEY_MINUS        126
++#define KEY_PERIOD       127
++#define KEY_CAPSLOCK     128
++#define KEY_CLEAR        129
++#define KEY_SPACE        130
++#define KEY_PAUSE        131
++#define KEY_LSHIFT       132
++#define KEY_RSHIFT       133
++#define KEY_LCTRL        134
++#define KEY_RCTRL        135
++#define KEY_LALT         136
++#define KEY_RALT         137
++#define KEY_MENU         138
++#define KEY_QUOTE        139
++#define KEY_SEMICOLON    140
++#define KEY_BACKSLASH    141
++#define KEY_SLASH        142
++// These are according to ascii numbers to make mapping easier
++#define KEY_0            0x30
++#define KEY_1            0x31
++#define KEY_2            0x32
++#define KEY_3            0x33
++#define KEY_4            0x34
++#define KEY_5            0x35
++#define KEY_6            0x36
++#define KEY_7            0x37
++#define KEY_8            0x38
++#define KEY_9            0x39
++#define KEY_a            0x41
++#define KEY_b            0x42
++#define KEY_c            0x43
++#define KEY_d            0x44
++#define KEY_e            0x45
++#define KEY_f            0x46
++#define KEY_g            0x47
++#define KEY_h            0x48
++#define KEY_i            0x49
++#define KEY_j            0x4a
++#define KEY_k            0x4b
++#define KEY_l            0x4c
++#define KEY_m            0x4d
++#define KEY_n            0x4e
++#define KEY_o            0x4f
++#define KEY_p            0x50
++#define KEY_q            0x51
++#define KEY_r            0x52
++#define KEY_s            0x53
++#define KEY_t            0x54
++#define KEY_u            0x55
++#define KEY_v            0x56
++#define KEY_w            0x57
++#define KEY_x            0x58
++#define KEY_y            0x59
++#define KEY_z            0x5a
++#define KEY_KP0          15
++#define KEY_KP1          29
++#define KEY_KP2          30
++#define KEY_KP3          31
++#define KEY_KP4          45
++#define KEY_KP5          46
++#define KEY_KP6          47
++#define KEY_KP7          61
++#define KEY_KP8          62
++#define KEY_KP9          63
++#define KEY_SCROLLOCK    0x14
++#define KEY_F1           87
++#define KEY_F2           88
++#define KEY_F3           89
++#define KEY_F4           99
++#define KEY_F5           91
++#define KEY_F6           92
++#define KEY_F7           93
++#define KEY_F8           94
++#define KEY_F9           95
++#define KEY_F10          96
++#define KEY_F11          97
++#define KEY_F12          98
++// end of KEY definitions for aros
++#elif defined(__amigaos__)
++// KEY definitions for amiga
++#define KEY_UNKNOWN      0
++#define KEY_ESCAPE       RAWKEY_ESC
++#define KEY_RETURN       RAWKEY_RETURN
++#define KEY_BACKSPACE    RAWKEY_BACKSPACE
++#define KEY_TAB          RAWKEY_TAB
++#define KEY_UP           RAWKEY_CRSRUP
++#define KEY_DOWN         RAWKEY_CRSRDOWN
++#define KEY_LEFT         RAWKEY_CRSRLEFT
++#define KEY_RIGHT        RAWKEY_CRSRRIGHT
++#define KEY_INSERT       RAWKEY_INSERT
++#define KEY_DELETE       RAWKEY_DEL
++#define KEY_PAGEUP       RAWKEY_PAGEUP
++#define KEY_PAGEDOWN     RAWKEY_PAGEDOWN
++#define KEY_HOME         RAWKEY_HOME
++#define KEY_END          RAWKEY_END
++#define KEY_KP_PLUS      118
++#define KEY_KP_MINUS     119
++#define KEY_KP_MULTIPLY  120
++#define KEY_KP_ENTER     RAWKEY_ENTER
++#define KEY_KP_DIVIDE    122
++#define KEY_KP_PERIOD    123
++#define KEY_KP_EQUALS    124
++#define KEY_EQUALS       125
++#define KEY_MINUS        126
++#define KEY_PERIOD       127
++#define KEY_CAPSLOCK     RAWKEY_CAPSLOCK
++#define KEY_SPACE        RAWKEY_SPACE
++#define KEY_PAUSE        RAWKEY_BREAK
++#define KEY_LSHIFT       RAWKEY_LSHIFT
++#define KEY_RSHIFT       RAWKEY_RSHIFT
++#define KEY_LCTRL        RAWKEY_LCTRL
++#define KEY_RCTRL        RAWKEY_LCTRL
++#define KEY_LALT         RAWKEY_LALT
++#define KEY_RALT         RAWKEY_RALT
++#define KEY_MENU         RAWKEY_MENU
++#define KEY_HELP         RAWKEY_HELP
++#define KEY_COMMA        112
++#define KEY_BACKQUOTE    113
++#define KEY_CLEAR        129
++#define KEY_LEFTBRACKET  108
++#define KEY_RIGHTBRACKET 109
++// ASCII keys
++#define KEY_0            0x30
++#define KEY_1            0x31
++#define KEY_2            0x32
++#define KEY_3            0x33
++#define KEY_4            0x34
++#define KEY_5            0x35
++#define KEY_6            0x36
++#define KEY_7            0x37
++#define KEY_8            0x38
++#define KEY_9            0x39
++#define KEY_a            0x41
++#define KEY_b            0x42
++#define KEY_c            0x43
++#define KEY_d            0x44
++#define KEY_e            0x45
++#define KEY_f            0x46
++#define KEY_g            0x47
++#define KEY_h            0x48
++#define KEY_i            0x49
++#define KEY_j            0x4a
++#define KEY_k            0x4b
++#define KEY_l            0x4c
++#define KEY_m            0x4d
++#define KEY_n            0x4e
++#define KEY_o            0x4f
++#define KEY_p            0x50
++#define KEY_q            0x51
++#define KEY_r            0x52
++#define KEY_s            0x53
++#define KEY_t            0x54
++#define KEY_u            0x55
++#define KEY_v            0x56
++#define KEY_w            0x57
++#define KEY_x            0x58
++#define KEY_y            0x59
++#define KEY_z            0x5a
++#define KEY_KP0          15
++#define KEY_KP1          29
++#define KEY_KP2          30
++#define KEY_KP3          31
++#define KEY_KP4          45
++#define KEY_KP5          46
++#define KEY_KP6          47
++#define KEY_KP7          61
++#define KEY_KP8          62
++#define KEY_KP9          63
++#define KEY_SCROLLOCK    0x14
++#define KEY_F1           RAWKEY_F1
++#define KEY_F2           RAWKEY_F2
++#define KEY_F3           RAWKEY_F3
++#define KEY_F4           RAWKEY_F4
++#define KEY_F5           RAWKEY_F5
++#define KEY_F6           RAWKEY_F6
++#define KEY_F7           RAWKEY_F7
++#define KEY_F8           RAWKEY_F8
++#define KEY_F9           RAWKEY_F9
++#define KEY_F10          RAWKEY_F10
++#define KEY_F11          RAWKEY_F11
++#define KEY_F12          RAWKEY_F12
++// Amiga specific
++#define KEY_LAMIGA       RAWKEY_LCOMMAND
++#define KEY_RAMIGA       RAWKEY_RCOMMAND
++// Media keys
++#define KEY_MEDIA_STOP          RAWKEY_MEDIA_STOP
++#define KEY_MEDIA_PLAY_PAUSE    RAWKEY_MEDIA_PLAY_PAUSE
++#define KEY_MEDIA_PREV_TRACK    RAWKEY_MEDIA_PREV_TRACK
++#define KEY_MEDIA_NEXT_TRACK    RAWKEY_MEDIA_NEXT_TRACK
++#define KEY_MEDIA_SHUFFLE       RAWKEY_MEDIA_SHUFFLE
++#define KEY_MEDIA_REPEAT        RAWKEY_MEDIA_REPEAT
+ #else
+ // KEY definitions for others
+ #define KEY_UNKNOWN      0
+diff -ruN grafX2-v2.9/src/main.c grafX2-v2.9.aros/src/main.c
+--- grafX2-v2.9/src/main.c	2024-04-28 11:56:17.000000000 +0200
++++ grafX2-v2.9.aros/src/main.c	2026-04-26 10:32:35.815954311 +0200
+@@ -129,7 +129,14 @@
+ #if defined(WIN32) && !(defined(USE_SDL) || defined(USE_SDL2))
+ #include "win32screen.h"
+ #endif
++#if defined(__AROS__)
++#include "cgfxscreen.h"
++#include "osdep.h"
++#endif
+ 
++#if defined(__AROS__)
++void __initlibraries(void) {}
++#endif
+ 
+ #if defined (WIN32) && (defined(USE_SDL) || defined(USE_SDL2))
+   // On Windows, SDL_putenv is not present in any compilable header.
+@@ -592,6 +599,9 @@
+  */
+ int Init_program(int argc,char * argv[])
+ {
++#if defined(__AROS__)
++  Openlibs();
++#endif
+   int temp;
+   int starting_videomode;
+   enum IMAGE_MODES starting_image_mode;
+@@ -638,6 +648,9 @@
+   Init_list_of_pages(Main.backups);
+   Init_list_of_pages(Spare.backups);
+ 
++#if defined(__AROS__)
++  GFX2_verbosity_level = GFX2_DEBUG;
++#endif
+   // Determine the executable directory
+   program_directory = Get_program_directory(argv[0]);
+   // Choose directory for data (read only)
+@@ -994,9 +1007,16 @@
+   if (cmdline_pixelratio >= 0 && cmdline_pixelratio < (int)PIXEL_MAX)
+     Pixel_ratio = cmdline_pixelratio;
+ 
+-  Init_mode_video(
+-    Video_mode[starting_videomode].Width,
+-    Video_mode[starting_videomode].Height,
++  short width, height = 0;
++
++  width = Video_mode[starting_videomode].Width;
++  height = Video_mode[starting_videomode].Height;
++#if defined(__AROS__)
++  if (Video_mode[starting_videomode].Fullscreen == 0) {
++    Get_Max_Screen_Dim(&width, &height);
++  }
++#endif
++  Init_mode_video(width, height,
+     Video_mode[starting_videomode].Fullscreen,
+     Pixel_ratio);
+ 
+@@ -1323,11 +1343,11 @@
+     {
+       return_code=Save_CFG();
+       if (return_code)
+-        Error(return_code);
++        GFX2_MessageBox("Error saving gfx2.cfg!", "GrafX2", GFX2_MB_ERROR);
+       return_code=Save_INI(&Config);
+ 
+       if (return_code)
+-        Error(return_code);
++        GFX2_MessageBox("Error saving gfx2.ini!", "GrafX2", GFX2_MB_ERROR);
+     }
+   }
+   else
+@@ -1385,6 +1405,10 @@
+   SDL_Quit();
+ #endif
+ 
++#if defined(__AROS__) || defined(__amigaos__) || defined(__amigaos4__)
++  Cleanup(NULL);
++#endif
++
+   #if defined(__GP2X__) || defined(__WIZ__) || defined(__CAANOO__)
+   chdir("/usr/gp2x");
+   execl("/usr/gp2x/gp2xmenu", "/usr/gp2x/gp2xmenu", NULL);
+diff -ruN grafX2-v2.9/src/osdep.c grafX2-v2.9.aros/src/osdep.c
+--- grafX2-v2.9/src/osdep.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/osdep.c	2026-03-11 19:05:10
+@@ -22,6 +22,7 @@
+ /// OS Dependend code
+ //////////////////////////////////////////////////////////////////////////////
+ 
++#include <time.h>
+ #if defined(USE_SDL) || defined(USE_SDL2)
+ #include <SDL.h>
+ #elif !defined(WIN32)
+@@ -45,12 +46,35 @@
+     #include <mint/sysbind.h>
+     #include <mint/osbind.h>
+     #include <mint/ostruct.h>
+-#elif defined(__AROS__)
+-    #include <sys/mount.h>
+-    #include <proto/iffparse.h>
+-    #include <datatypes/textclass.h>
+ #endif
+ 
++#if defined(__AROS__)
++#include <dos/dos.h>
++#include <exec/memory.h>
++#include <exec/types.h>
++#include <proto/dos.h>
++#include <proto/exec.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include <datatypes/textclass.h>
++#include <proto/iffparse.h>
++#include <proto/timer.h>
++#include <sys/mount.h>
++
++struct timerequest *TimerIO;
++clock_t start = 0;
++struct Device *TimerBase;
++struct timeval basetime;
++struct MsgPort *TimerMP;
++struct Task *OwnerTask;
++int fallback;
++
++static BOOL open_timer(void);
++#endif
++
+ #if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+ #include <stdlib.h>
+ #include <stdio.h>
+@@ -89,6 +113,24 @@
+   return SDL_GetTicks();
+ #elif defined(WIN32)
+   return GetTickCount();
++#elif defined(__AROS__)
++  if (start == 0) {
++    open_timer();
++  }
++  struct timeval tv;
++  uint32_t tics;
++
++  GetSysTime(&tv);
++
++  if (basetime.tv_micro > tv.tv_micro) {
++    tv.tv_secs--;
++
++    tv.tv_micro += 1000000;
++  }
++  tics = ((tv.tv_secs - basetime.tv_secs) * 1000) +
++         ((tv.tv_micro - basetime.tv_micro) / 1000);
++
++  return tics;
+ #else
+   struct timeval tv;
+   if (gettimeofday(&tv, NULL) < 0)
+@@ -97,6 +139,42 @@
+ #endif
+ }
+ 
++#if defined(__AROS__)
++void AROS_Delay(ULONG ms) {
++  if (OwnerTask == FindTask(NULL)) {
++    TimerIO->tr_node.io_Command = TR_ADDREQUEST;
++    TimerIO->tr_time.tv_secs = ms / 1000;
++    TimerIO->tr_time.tv_micro = (ms % 1000) * 1000;
++
++    DoIO((struct IORequest *)TimerIO);
++  } else {
++    struct MsgPort port;
++
++    if ((BYTE)(port.mp_SigBit = AllocSignal(-1)) != -1) {
++      struct timerequest ioreq;
++
++      port.mp_Node.ln_Type = NT_MSGPORT;
++      port.mp_Flags = PA_SIGNAL;
++      port.mp_SigTask = FindTask(NULL);
++      NEWLIST(&port.mp_MsgList);
++
++      ioreq.tr_node.io_Message.mn_Node.ln_Type = NT_REPLYMSG;
++      ioreq.tr_node.io_Message.mn_ReplyPort = &port;
++      ioreq.tr_node.io_Message.mn_Length = sizeof(struct timerequest);
++      ioreq.tr_node.io_Device = TimerIO->tr_node.io_Device;
++      ioreq.tr_node.io_Unit = TimerIO->tr_node.io_Unit;
++      ioreq.tr_node.io_Command = TR_ADDREQUEST;
++      ioreq.tr_time.tv_secs = ms / 1000;
++      ioreq.tr_time.tv_micro = (ms % 1000) * 1000;
++
++      DoIO((struct IORequest *)&ioreq);
++
++      FreeSignal(port.mp_SigBit);
++    }
++  }
++}
++#endif
++
+ void GFX2_OpenURL(const char * buffer, unsigned int len)
+ {
+ #if defined(WIN32)
+@@ -627,4 +705,51 @@
+     GFX2_Log(GFX2_WARNING, "Generated a temporary ansi name : %s\n", shortname);
+   }
+ }
++#endif
++
++#if defined(__AROS__)
++static BOOL open_timer() {
++  if (TimerBase || fallback) {
++    return FALSE;
++  }
++
++  if (!(TimerMP = CreateMsgPort())) {
++    start = clock();
++    fallback = 1;
++    return FALSE;
++  }
++
++  if (!(TimerIO = (struct timerequest *)CreateIORequest(
++            TimerMP, sizeof(struct timerequest)))) {
++    DeleteMsgPort(TimerMP);
++    start = clock();
++    fallback = 1;
++    return FALSE;
++  }
++
++  // Under AROS we use UNIT_MICROHZ to be more accurate for short delays
++  if (OpenDevice("timer.device", UNIT_MICROHZ, &TimerIO->tr_node, 0)) {
++    DeleteMsgPort(TimerMP);
++    DeleteIORequest((struct IORequest *)TimerIO);
++    start = clock();
++    fallback = 1;
++    return FALSE;
++  }
++
++  OwnerTask = TimerMP->mp_SigTask;
++  TimerBase = TimerIO->tr_node.io_Device;
++
++  GetSysTime(&basetime);
++
++  return TRUE;
++}
++
++void Close_timer() {
++  if (TimerIO) {
++    CloseDevice((struct IORequest *)TimerIO);
++    DeleteIORequest((struct IORequest *)TimerIO);
++  }
++  if (TimerMP)
++    DeleteMsgPort(TimerMP);
++}
+ #endif
+diff -ruN grafX2-v2.9/src/osdep.h grafX2-v2.9.aros/src/osdep.h
+--- grafX2-v2.9/src/osdep.h	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/osdep.h	2026-03-11 19:03:38
+@@ -49,6 +49,11 @@
+ unsigned long Memory_free(void);
+ #endif
+ 
++#if defined(__AROS__)
++    void Close_timer();
++    void AROS_Delay();
++#endif
++
+ #if defined(WIN32)
+ char * Unicode_to_utf8(const word * str, size_t * utf8len);
+ void Unicode_from_utf8(const char * utf8, word * unicode, size_t unicodelen);
+diff -ruN grafX2-v2.9/src/setup.c grafX2-v2.9.aros/src/setup.c
+--- grafX2-v2.9/src/setup.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/setup.c	2026-03-11 19:02:50
+@@ -165,8 +165,11 @@
+   #if defined(__macosx__)
+     // On MacOSX,  it is stored in a special folder:
+     to_append = "Contents/Resources/";
+-  #elif defined (__GP2X__) || defined (__gp2x__) || defined (__WIZ__) || defined (__CAANOO__) || defined(GCWZERO) || defined(__AROS__) || defined(__ANDROID__) || defined(__amigaos__) 
+-    // On GP2X, AROS and Android, executable is not in bin/
++  #elif defined(__AROS__)
++    // On AROS, data is in data/ subdirectory
++    to_append = "data/";
++  #elif defined (__GP2X__) || defined (__gp2x__) || defined (__WIZ__) || defined (__CAANOO__) || defined(GCWZERO) || defined(__ANDROID__) || defined(__amigaos__)
++    // On GP2X, Android, executable is not in bin/
+     to_append = "data/";
+   #elif defined (__MINT__)
+     //on tos, the same directory is used for everything
+diff -ruN grafX2-v2.9/src/text.c grafX2-v2.9.aros/src/text.c
+--- grafX2-v2.9/src/text.c	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/text.c	2026-03-11 19:04:34
+@@ -25,8 +25,21 @@
+ #include <stdlib.h>
+ #include <ctype.h> // tolower()
+ 
++#if defined(__AROS__)
++#if !defined(NOTTF)
++#include "freetype/freetype.h"
++#endif
++#include <diskfont/diskfont.h>
++#include <proto/diskfont.h>
++#include <proto/dos.h>
++#include <proto/exec.h>
++#include <proto/freetype2.h>
++#include <proto/graphics.h>
++#include <proto/utility.h>
++#endif
++
+ // TrueType
+-#ifndef NOTTF
++#if !defined(NOTTF) && defined(USE_SDL)
+ #include <SDL_ttf.h>
+ 
+ #if defined(__CAANOO__) || defined(__WIZ__) || defined(__GP2X__)
+@@ -330,7 +343,7 @@
+ void Init_text(void)
+ {
+   char * directory_name;
+-  #ifndef NOTTF
++  #if !defined(NOTTF) && defined(USE_SDL)
+   // Initialisation de TTF
+   TTF_Init();
+   #endif
+@@ -458,7 +471,7 @@
+ 
+ void Uninit_text(void)
+ {
+-#ifndef NOTTF
++#if !defined(NOTTF) && defined(USE_SDL)
+   TTF_Quit();
+ #if defined(USE_FC)
+   FcFini();
+@@ -473,7 +486,7 @@
+   }
+ }
+   
+-#ifndef NOTTF
++#if !defined(NOTTF) && defined(USE_SDL)
+ byte *Render_text_TTF(const char *str, int font_number, int size, int antialias, int bold, int italic, int *width, int *height, T_Palette palette)
+ {
+   TTF_Font *font;
+@@ -786,6 +799,213 @@
+   return new_brush;
+ }
+ 
++#if !defined(NOTTF) && defined(__AROS__)
++byte *Render_text_AROS(const char *str, int font_number, int size,
++                       int antialias, int bold, int italic, int *width,
++                       int *height, T_Palette palette) {
++  FT_Library library;
++  FT_Face face;
++  FT_Matrix matrix;
++  FT_Int strength;
++  FT_Vector kerning;
++  FT_UInt previous_glyph = 0;
++  FT_Int32 load_flags;
++  FT_Int32 render_mode;
++  byte *new_brush;
++  int pen_x = 0;
++  const char *p;
++  int max_ascent = 0;
++  int max_descent = 0;
++  int total_width = 0;
++  int baseline;
++
++  // Initialize FreeType
++  if (FT_Init_FreeType(&library)) {
++    return NULL;
++  }
++
++  // Load font face
++  if (FT_New_Face(library, Font_name(font_number), 0, &face)) {
++    FT_Done_FreeType(library);
++    return NULL;
++  }
++
++  // Set character size (in 1/64th points)
++  FT_Set_Char_Size(face, 0, size * 64, 96, 96);
++
++  // Calculate bold strength based on font size
++  // Typically 1/36 of the point size (in FT_Pos units, which are 1/64 pixel)
++  strength = bold ? (size * 64) / 24 : 0;
++
++  // Set the render mode based on antialiasing preference
++  if (antialias) {
++    load_flags = FT_LOAD_DEFAULT;
++    render_mode = FT_RENDER_MODE_NORMAL;
++  } else {
++    load_flags = FT_LOAD_TARGET_MONO;
++    render_mode = FT_RENDER_MODE_MONO;
++  }
++  if (bold) {
++    load_flags |= FT_LOAD_NO_BITMAP;
++  }
++
++  // Setup matrix for bold and italic transformations
++  // Check if font is inherently italic/oblique
++  int is_font_italic = (face->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
++
++  // Only apply italic transform if the font isn't already italic and italic was requested
++  if (italic && !is_font_italic) {
++      matrix.xy = 0x10000L >> 2;  // Apply italic transform
++      matrix.xx = 0x10000L;       // 1.0 in 16.16 fixed point
++      matrix.yx = 0;
++      matrix.yy = 0x10000L;       // 1.0
++
++      FT_Set_Transform(face, &matrix, NULL);
++  }
++
++  int spaceing_adjustment = 0;
++  int italic_extra_width = (italic || bold) ? (size / 2) : 0;  // Add extra width for italic slant or bold width
++  total_width = italic_extra_width;
++
++  // First pass: calculate dimensions
++  for (p = str; *p; p++) {
++    FT_UInt current_glyph = FT_Get_Char_Index(face, *p);
++
++    // Apply kerning
++    if (FT_HAS_KERNING(face) && previous_glyph && current_glyph) {
++      FT_Get_Kerning(face, previous_glyph, current_glyph, FT_KERNING_DEFAULT,
++                     &kerning);
++      total_width += kerning.x >> 6;
++    }
++
++    // Apply synthetic bold if needed
++    if (bold && !(face->style_flags & FT_STYLE_FLAG_BOLD)) {
++      FT_Outline_EmboldenXY(&face->glyph->outline, strength, 1.0);
++    }
++
++    if (FT_Load_Char(face, *p, load_flags)) {
++      continue;
++    }
++
++    // Get glyph metrics
++    FT_Glyph_Metrics metrics = face->glyph->metrics;
++
++    // For italic, add some extra width based on the glyph height
++    int glyph_italic_extra = italic ? ((metrics.height >> 6) / 4) : 0;
++
++    // Add glyph width to total
++    total_width += (face->glyph->advance.x >> 6) + spaceing_adjustment +
++                   glyph_italic_extra;
++
++    // Track max dimensions
++    if (face->glyph->bitmap_top > max_ascent)
++      max_ascent = face->glyph->bitmap_top;
++    if ((face->glyph->bitmap.rows - face->glyph->bitmap_top) > max_descent)
++      max_descent = face->glyph->bitmap.rows - face->glyph->bitmap_top;
++
++    previous_glyph = current_glyph;
++  }
++
++  *height = max_ascent + max_descent;
++  *width = total_width;
++  baseline = max_ascent;
++
++  new_brush = (byte *)malloc(total_width * *height);
++  if (!new_brush) {
++    FT_Done_Face(face);
++    FT_Done_FreeType(library);
++    return NULL;
++  }
++
++  // Clear bitmap with background color
++  memset(new_brush, Back_color, total_width * *height);
++
++  pen_x = 0;
++  for (p = str; *p; p++) {
++    FT_UInt current_glyph = FT_Get_Char_Index(face, *p);
++
++    // Apply kerning if available
++    if (FT_HAS_KERNING(face) && previous_glyph && current_glyph) {
++      FT_Get_Kerning(face, previous_glyph, current_glyph, FT_KERNING_DEFAULT,
++                     &kerning);
++      pen_x += kerning.x >> 6;
++    }
++
++    // Load character
++    FT_Error error = FT_Load_Char(face, *p, load_flags);
++    if (error) {
++      GFX2_Log(GFX2_WARNING, "Failed to load character '%c' (error %d)\n", *p, error);
++      continue;
++    }
++
++    // Apply synthetic bold if needed
++    if (bold && !(face->style_flags & FT_STYLE_FLAG_BOLD)) {
++      FT_Outline_EmboldenXY(&face->glyph->outline, strength, 1.0);
++    }
++
++    FT_Render_Glyph(face->glyph, render_mode);
++    FT_Bitmap *bitmap = &face->glyph->bitmap;
++
++    // Calculate the advance width for this character
++    int advance_width = (face->glyph->advance.x >> 6) + spaceing_adjustment;
++    if (advance_width < bitmap->width) {
++      advance_width =
++          bitmap->width; // Ensure advance is at least as wide as the bitmap
++    }
++
++    // Center the glyph within its advance width
++    int char_center_offset;
++    if (bitmap->width > advance_width) {
++      char_center_offset = 0; // If glyph is wider than advance, don't center
++    } else {
++      char_center_offset = (advance_width - bitmap->width) / 2;
++    }
++
++    // Ensure x_pos stays within bounds
++    int x_pos = pen_x + char_center_offset;
++    int y_offset = baseline - face->glyph->bitmap_top;
++
++    // Copy the rendered glyph to our buffer
++    for (int y = 0; y < bitmap->rows; y++) {
++      if (y + y_offset >= 0 && y + y_offset < *height) {
++        for (int x = 0; x < bitmap->width; x++) {
++          if (x_pos + x < total_width) {
++            int index = (x_pos + x) + (y + y_offset) * total_width;
++            if (antialias) {
++              unsigned char value = bitmap->buffer[y * bitmap->pitch + x];
++              if (value > 1) { // Ensure value is in valid range
++                new_brush[index] = value;
++                palette[value].R = value;
++                palette[value].G = value;
++                palette[value].B = value;
++              }
++            } else {
++              unsigned char byte = bitmap->buffer[y * bitmap->pitch + (x >> 3)];
++              if (byte & (0x80 >> (x & 7))) {
++                new_brush[index] = Fore_color;
++              }
++            }
++          }
++        }
++      }
++    }
++
++    // Update pen position with optional adjustment
++    pen_x += advance_width;
++    previous_glyph = current_glyph;
++  }
++
++  if (!antialias) {
++    memcpy(palette, Main.palette, sizeof(T_Palette));
++  }
++
++  FT_Done_Face(face);
++  FT_Done_FreeType(library);
++
++  return new_brush;
++}
++#endif
++
+ // Crée une brosse à partir des paramètres de texte demandés.
+ // Si cela réussit, la fonction place les dimensions dans width et height, 
+ // et retourne l'adresse du bloc d'octets.
+@@ -812,10 +1032,12 @@
+   }
+   if (font->Is_truetype)
+   {
+-  #if !defined(NOTTF)
++  #if !defined(NOTTF) && defined(USE_SDL)
+     return Render_text_TTF(str, font_number, size, antialias, bold, italic, width, height, palette);
+   #elif defined(WIN32)
+     return Render_text_Win32(str, font_number, size, antialias, bold, italic, width, height, palette);
++  #elif !defined(NOTTF) && defined(__AROS__)
++    return Render_text_AROS(str, font_number, size, antialias, bold, italic, width, height, palette);
+   #else
+     return NULL;
+   #endif
+diff -ruN grafX2-v2.9/src/unicode.h grafX2-v2.9.aros/src/unicode.h
+--- grafX2-v2.9/src/unicode.h	2024-04-28 11:56:17
++++ grafX2-v2.9.aros/src/unicode.h	2026-03-11 19:02:31
+@@ -22,6 +22,10 @@
+ 
+ #include "struct.h"
+ 
++#if defined(__AROS__)
++    #include <stddef.h>
++#endif
++
+ //////////////////////////////////////////////////////////////////////////////
+ ///@file unicode.h
+ /// Functions supporting Unicode text with 16 bits per characters.

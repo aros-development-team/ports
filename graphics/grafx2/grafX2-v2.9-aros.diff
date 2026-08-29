@@ -782,7 +782,7 @@ diff -ruN grafX2-v2.9/src/input.c grafX2-v2.9.aros/src/input.c
  #if defined(WIN32) && !defined(USE_SDL) && !defined(USE_SDL2)
  int user_feedback_required = 0; // Flag qui indique si on doit arrêter de traiter les évènements ou si on peut enchainer
  #endif
-@@ -2001,6 +2130,131 @@
+@@ -2001,6 +2130,134 @@
        WaitMessage();
        KillTimer(NULL, timerId);
      }
@@ -880,8 +880,11 @@ diff -ruN grafX2-v2.9/src/input.c grafX2-v2.9.aros/src/input.c
 +    } break;
 +
 +    case IDCMP_NEWSIZE: {
-+      Resize_width = msg->IDCMPWindow->Width;
-+      Resize_height = msg->IDCMPWindow->Height;
++      Resize_width = msg->IDCMPWindow->GZZWidth;
++      Resize_height = msg->IDCMPWindow->GZZHeight;
++      // Return to the main loop at once, otherwise we block in WaitPort()
++      // below and the resize isn't applied until the next event arrives.
++      user_feedback_required = 1;
 +      break;
 +    }
 +

@@ -901,6 +901,23 @@ diff -ruN MilkyTracker-1.05.01/src/ppui/osinterface/PPPathFactory.cpp MilkyTrack
  
  #include "PPPath_POSIX.h"
  
+diff -ruN MilkyTracker-1.05.01/src/ppui/osinterface/posix/PPSystem_POSIX.cpp MilkyTracker-1.05.01.aros/src/ppui/osinterface/posix/PPSystem_POSIX.cpp
+--- MilkyTracker-1.05.01/src/ppui/osinterface/posix/PPSystem_POSIX.cpp	2024-11-28 10:44:05.000000000 +0100
++++ MilkyTracker-1.05.01.aros/src/ppui/osinterface/posix/PPSystem_POSIX.cpp	2026-09-10 19:33:38.000000000 +0200
+@@ -86,7 +86,12 @@
+ 
+ const SYSCHAR* System::getConfigFileName()
+ {
+-#ifdef __HAIKU__
++#ifdef __AROS__
++	// Fixed location: a relative name would follow the process' current
++	// directory, which differs between Workbench and Shell startup
++	strncpy(buffer, "PROGDIR:milkytracker_config", PATH_MAX);
++	return buffer;
++#elif defined(__HAIKU__)
+ 	BPath path;
+ 	find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+ 	path.Append("MilkyTracker");
 diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.cpp
 --- MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.cpp	1970-01-01 01:00:00.000000000 +0100
 +++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_KeyTranslation.cpp	2026-04-26 10:15:30.164569831 +0200
@@ -1199,7 +1216,7 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_KeyTranslation.h MilkyTrack
 diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_Main.cpp
 --- MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp	1970-01-01 01:00:00.000000000 +0100
 +++ MilkyTracker-1.05.01.aros/src/tracker/aros/AROS_Main.cpp	2026-04-26 10:15:30.165030552 +0200
-@@ -0,0 +1,366 @@
+@@ -0,0 +1,431 @@
 +#include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
@@ -1213,7 +1230,9 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +#include <proto/dos.h>
 +#include <devices/timer.h>
 +#include <devices/inputevent.h>
++#include <devices/rawkeycodes.h>
 +#include <intuition/intuition.h>
++#include <workbench/startup.h>
 +
 +#include "BasicTypes.h"
 +#include "Event.h"
@@ -1224,6 +1243,10 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +#include "PPSystem_AROS.h"
 +#include "AROS_KeyTranslation.h"
 +#include "AudioDriver_AHI.h"
++
++/* Suppress the stdio console window the C startup opens on Workbench start
++ * (see compiler/autoinit/stdiowin.c) */
++extern "C" int __nostdiowin = 1;
 +
 +static BPTR programDirLock = 0;
 +
@@ -1240,6 +1263,7 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +PPMutex                *globalMutex     = NULL;
 +AudioDriver_AHI *ahiDriver              = NULL;
 +static bool             running         = true;
++static bool             quitRequested   = false;
 +
 +static struct MsgPort      *timerPort = NULL;
 +static struct timerequest  *timerReq  = NULL;
@@ -1309,7 +1333,9 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +	if (globalMutex) globalMutex->unlock();
 +}
 +
-+void exitEventLoop() { running = false; }
++/* Tracker::handleQuit() ends up here; the actual shutdown (including the
++ * "save changes?" dialog and writing the config) is done by the event loop. */
++void exitEventLoop() { quitRequested = true; }
 +
 +void QueryKeyModifiers() { /* tracked via updateModifiers on each IDCMP event */ }
 +
@@ -1376,6 +1402,15 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +static void handleKeyDown(UWORD rawkey, UWORD qualifier)
 +{
 +	updateModifiers(qualifier);
++
++	// Alt+Return toggles fullscreen, as in the SDL frontend
++	if (rawkey == RAWKEY_RETURN && (qualifier & (IEQUALIFIER_LALT | IEQUALIFIER_RALT)))
++	{
++		PPEvent e(eFullScreen);
++		RaiseEventSerialized(e);
++		return;
++	}
++
 +	pp_uint16 vk = toVK(rawkey, qualifier);
 +	pp_uint16 sc = toSC(rawkey);
 +	pp_uint16 keyData[3] = { vk, sc, 0 };
@@ -1417,21 +1452,15 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +		ReplyMsg((struct Message *)msg);
 +
 +		pp_int32 sx = mx, sy = my;
-+		myDisplayDevice->adjust(sx, sy);
++		myDisplayDevice->adjustMouse(sx, sy);
 +
 +		switch (cls) {
-+		case IDCMP_CLOSEWINDOW: {
-+			PPEvent e(eAppQuit);
-+			RaiseEventSerialized(e);
-+			// eAppQuit alone is unhandled in the codebase.  The SDL port
-+			// follows up with myTracker->shutDown() which runs the
-+			// "save changes?" dialog and returns true if the user confirmed.
-+			if (globalMutex) globalMutex->lock();
-+			bool ok = myTracker->shutDown();
-+			if (globalMutex) globalMutex->unlock();
-+			if (ok) running = false;
++		case IDCMP_CLOSEWINDOW:
++			// eAppQuit alone is unhandled in the codebase; the event loop
++			// calls Tracker::shutDown() once quitRequested is set.
++			{ PPEvent e(eAppQuit); RaiseEventSerialized(e); }
++			quitRequested = true;
 +			break;
-+		}
 +		case IDCMP_MOUSEMOVE: if (sx >= 0 && sy >= 0) handleMouseMove(sx, sy); break;
 +		case IDCMP_MOUSEBUTTONS:
 +			switch (code) {
@@ -1456,6 +1485,10 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +			break;
 +		default: break;
 +		}
++
++		// A fullscreen toggle in the handler above closed this window and
++		// opened a new one; win->UserPort is gone, so stop draining it.
++		if (myDisplayDevice->getWindow() != win) return;
 +	}
 +}
 +
@@ -1485,14 +1518,17 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +/* Main event loop */
 +static void eventLoop()
 +{
-+	struct Window *win = myDisplayDevice->getWindow();
-+	if (!win) return;
 +	ULONG timerSig = 1L << timerPort->mp_SigBit;
-+	ULONG winSig = 1L << win->UserPort->mp_SigBit;
 +	ULONG ahiSig = ahiDriver ? ahiDriver->getSignalMask() : 0;
 +
 +	scheduleTimerTick();
 +	while (running) {
++		// Re-read every round: a fullscreen toggle replaces the window,
++		// and with it the UserPort signal bit
++		struct Window *win = myDisplayDevice->getWindow();
++		if (!win) break;
++		ULONG winSig = 1L << win->UserPort->mp_SigBit;
++
 +		ULONG sigs = Wait(timerSig | winSig | ahiSig | SIGBREAKF_CTRL_C);
 +		if (sigs & SIGBREAKF_CTRL_C) { running = false; break; }
 +		if (sigs & winSig) processIDCMPMessages();
@@ -1503,7 +1539,51 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +			checkMouseRepeat();
 +			if (running) scheduleTimerTick();
 +		}
++		if (quitRequested) {
++			quitRequested = false;
++			// Saves the config; returns false if the user cancelled
++			if (globalMutex) globalMutex->lock();
++			bool ok = myTracker->shutDown();
++			if (globalMutex) globalMutex->unlock();
++			if (ok) running = false;
++		}
 +	}
++}
++
++/* Load a module by absolute path (must be called after Tracker::startUp) */
++static void loadModule(const char *path)
++{
++	D(bug("[MT] loading '%s'\n", path));
++	PPSystemString fileName(path);
++	/* Tracker::handleEvent expects a PPSystemString** in the event data */
++	PPSystemString *strPtr = &fileName;
++	PPEvent e(eFileDragDropped, &strPtr, sizeof(PPSystemString *));
++	RaiseEventSerialized(e);
++}
++
++/* Workbench start: sm_ArgList[1] is the project icon that was double clicked
++ * (or dropped on our icon).  Only the first one is loaded. */
++static void loadModuleFromWBStartup(struct WBStartup *wbs)
++{
++	if (wbs->sm_NumArgs < 2 || !wbs->sm_ArgList)
++		return;
++
++	struct WBArg *arg = &wbs->sm_ArgList[1];
++	const char *name = (const char *)arg->wa_Name;
++	if (!name || !name[0])
++		return;
++
++	char path[512];
++	if (arg->wa_Lock) {
++		if (!NameFromLock(arg->wa_Lock, path, sizeof(path)))
++			return;
++		if (!AddPart(path, name, sizeof(path)))
++			return;
++	} else {
++		strncpy(path, name, sizeof(path) - 1);
++		path[sizeof(path) - 1] = 0;
++	}
++	loadModule(path);
 +}
 +
 +/* Init / shutdown */
@@ -1521,8 +1601,10 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +	PPSize windowSize = myTracker->getWindowSizeFromDatabase();
 +	D(bug("[MT] window size: %dx%d\n", windowSize.width, windowSize.height));
 +
-+	D(bug("[MT] creating DisplayDevice...\n"));
-+	myDisplayDevice = new PPDisplayDevice(windowSize.width, windowSize.height, 1, 32);
++	pp_int32 scaleFactor = myTracker->getScreenScaleFactorFromDatabase();
++	bool fullScreen = myTracker->getFullScreenFlagFromDatabase();
++	D(bug("[MT] creating DisplayDevice, scale x%d, fullscreen %d...\n", scaleFactor, (int)fullScreen));
++	myDisplayDevice = new PPDisplayDevice(windowSize.width, windowSize.height, scaleFactor, 32, fullScreen);
 +	D(bug("[MT] DisplayDevice created, window=%p\n", (void*)myDisplayDevice->getWindow()));
 +	if (!myDisplayDevice->getWindow()) { D(bug("Failed to create window\n")); return false; }
 +
@@ -1537,11 +1619,11 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AROS_Main.cpp MilkyTracker-1.05.
 +	myTracker->startUp(true);
 +	D(bug("[MT] startUp done\n"));
 +
-+	if (argc > 1) {
-+		PPSystemString fileName(argv[argc - 1]);
-+		PPEvent e(eFileDragDropped, &fileName, sizeof(PPSystemString));
-+		RaiseEventSerialized(e);
-+	}
++	if (argc == 0)
++		loadModuleFromWBStartup((struct WBStartup *)argv);
++	else if (argc > 1)
++		loadModule(argv[argc - 1]);
++
 +	return true;
 +}
 +
@@ -2018,7 +2100,7 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/AudioDriver_AHI.h MilkyTracker-1
 diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.cpp
 --- MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp	1970-01-01 01:00:00.000000000 +0100
 +++ MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.cpp	2026-04-26 10:15:30.164706406 +0200
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,311 @@
 +#include "DisplayDevice_AROS.h"
 +#include "Graphics.h"
 +#include <stdio.h>
@@ -2029,55 +2111,198 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTrac
 +#include <proto/exec.h>
 +#include <proto/cybergraphics.h>
 +#include <cybergraphx/cybergraphics.h>
++#include <graphics/modeid.h>
 +
 +extern void exitEventLoop();
 +
-+PPDisplayDevice::PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor, pp_int32 bpp) :
-+	PPDisplayDeviceBase(width, height, scaleFactor),
-+	window(NULL), screen(NULL),
-+	pixelBuffer(NULL), pitch(0), bpp(bpp), titleBuf(NULL)
++PPDisplayDevice::PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor,
++                                 pp_int32 bpp, bool fullScreen) :
++	PPDisplayDeviceBase(width, height, scaleFactor < 1 ? 1 : scaleFactor),
++	window(NULL), customScreen(NULL),
++	pixelBuffer(NULL), pitch(0), bpp(bpp), titleBuf(NULL),
++	realWidth(width), realHeight(height), scaledBuffer(NULL), scaledPitch(0),
++	originX(0), originY(0)
 +{
-+	D(bug("[DD] constructor start, %dx%d\n", width, height));
++	D(bug("[DD] constructor start, %dx%d x%d fs=%d\n", width, height, this->scaleFactor, (int)fullScreen));
 +
 +	D(bug("[DD] LockPubScreen...\n"));
-+	screen = LockPubScreen(NULL);
-+	if (!screen) { D(bug("[DD] FAILED LockPubScreen\n")); return; }
++	struct Screen *pub = LockPubScreen(NULL);
++	if (!pub) { D(bug("[DD] FAILED LockPubScreen\n")); return; }
 +
-+	if (width > screen->Width) size.width = screen->Width;
-+	if (height > screen->Height) size.height = screen->Height;
++	// Drop the magnification until the scaled framebuffer fits on the
++	// Workbench screen.  Fullscreen is bound by the same limit so that
++	// toggling back to a window never needs to reallocate.
++	while (this->scaleFactor > 1 &&
++	       (size.width * this->scaleFactor > pub->Width ||
++	        size.height * this->scaleFactor > pub->Height))
++		this->scaleFactor >>= 1;
 +
-+	WORD left = (screen->Width - size.width) / 2;
-+	WORD top = (screen->Height - size.height) / 2;
++	if (size.width * this->scaleFactor > pub->Width)
++		size.width = pub->Width / this->scaleFactor;
++	if (size.height * this->scaleFactor > pub->Height)
++		size.height = pub->Height / this->scaleFactor;
 +
-+	D(bug("[DD] OpenWindowTags %dx%d at %d,%d...\n", size.width, size.height, left, top));
-+	window = OpenWindowTags(NULL,
-+		WA_InnerWidth, size.width, WA_InnerHeight, size.height,
-+		WA_Left, left, WA_Top, top,
-+		WA_Title, (IPTR)"MilkyTracker",
-+		WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,
-+		WA_SizeGadget, FALSE, WA_Activate, TRUE,
-+		WA_GimmeZeroZero, TRUE, WA_ReportMouse, TRUE, WA_RMBTrap, TRUE,
-+		WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE |
-+		          IDCMP_RAWKEY | IDCMP_NEWSIZE | IDCMP_REFRESHWINDOW,
-+		WA_CustomScreen, (IPTR)screen,
-+		TAG_DONE);
++	UnlockPubScreen(NULL, pub);
 +
-+	UnlockPubScreen(NULL, screen);
-+	if (!window) { D(bug("[DD] FAILED OpenWindowTags\n")); return; }
-+	D(bug("[DD] window opened: %p\n", (void*)window));
++	realWidth = size.width * this->scaleFactor;
++	realHeight = size.height * this->scaleFactor;
 +
-+	pitch = size.width * 4;
-+	pixelBuffer = (pp_uint8 *)AllocVec(pitch * size.height, MEMF_ANY | MEMF_CLEAR);
-+	if (!pixelBuffer) { D(bug("[DD] FAILED AllocVec framebuffer\n")); return; }
++	if (!allocBuffers()) { D(bug("[DD] FAILED AllocVec framebuffer\n")); return; }
 +
-+	D(bug("[DD] constructor done\n"));
++	bFullScreen = fullScreen;
++	if (!openDisplay(bFullScreen) && bFullScreen)
++	{
++		// No usable RTG mode - come up as a window instead
++		D(bug("[DD] fullscreen failed, falling back to a window\n"));
++		bFullScreen = false;
++		openDisplay(false);
++	}
++
++	D(bug("[DD] constructor done, window=%p\n", (void*)window));
 +}
 +
 +PPDisplayDevice::~PPDisplayDevice()
 +{
-+	if (window) { SetWindowTitles(window, (CONST_STRPTR)-1, (CONST_STRPTR)-1); CloseWindow(window); }
-+	if (pixelBuffer) FreeVec(pixelBuffer);
++	closeDisplay();
++	freeBuffers();
 +	if (titleBuf) free(titleBuf);
++}
++
++bool PPDisplayDevice::openDisplay(bool fullScreen)
++{
++	pp_int32 winWidth = realWidth, winHeight = realHeight;
++
++	if (fullScreen)
++	{
++		ULONG modeID = BestCModeIDTags(
++			CYBRBIDTG_NominalWidth,  realWidth,
++			CYBRBIDTG_NominalHeight, realHeight,
++			CYBRBIDTG_Depth,         24,
++			TAG_DONE);
++
++		D(bug("[DD] OpenScreen %dx%d modeID 0x%08lx...\n", realWidth, realHeight, (unsigned long)modeID));
++		customScreen = OpenScreenTags(NULL,
++			SA_Type,      CUSTOMSCREEN,
++			modeID != (ULONG)INVALID_ID ? SA_DisplayID : TAG_IGNORE, modeID,
++			SA_Width,     realWidth,
++			SA_Height,    realHeight,
++			SA_Depth,     24,
++			SA_ShowTitle, FALSE,
++			SA_Quiet,     TRUE,
++			TAG_DONE);
++		if (!customScreen) { D(bug("[DD] FAILED OpenScreen\n")); return false; }
++
++		// The mode we got may be bigger than what we asked for
++		winWidth = customScreen->Width;
++		winHeight = customScreen->Height;
++
++		window = OpenWindowTags(NULL,
++			WA_Left, 0, WA_Top, 0,
++			WA_InnerWidth, winWidth, WA_InnerHeight, winHeight,
++			WA_Flags, WFLG_ACTIVATE | WFLG_BACKDROP | WFLG_BORDERLESS |
++			          WFLG_RMBTRAP | WFLG_REPORTMOUSE,
++			WA_IDCMP, IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE |
++			          IDCMP_RAWKEY | IDCMP_REFRESHWINDOW,
++			WA_CustomScreen, (IPTR)customScreen,
++			TAG_DONE);
++	}
++	else
++	{
++		struct Screen *pub = LockPubScreen(NULL);
++		if (!pub) { D(bug("[DD] FAILED LockPubScreen\n")); return false; }
++
++		WORD left = (pub->Width - realWidth) / 2;
++		WORD top = (pub->Height - realHeight) / 2;
++
++		D(bug("[DD] OpenWindowTags %dx%d at %d,%d...\n", realWidth, realHeight, left, top));
++		window = OpenWindowTags(NULL,
++			WA_InnerWidth, realWidth, WA_InnerHeight, realHeight,
++			WA_Left, left, WA_Top, top,
++			WA_Title, (IPTR)"MilkyTracker",
++			WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE,
++			WA_SizeGadget, FALSE, WA_Activate, TRUE,
++			WA_GimmeZeroZero, TRUE, WA_ReportMouse, TRUE, WA_RMBTrap, TRUE,
++			WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_MOUSEBUTTONS | IDCMP_MOUSEMOVE |
++			          IDCMP_RAWKEY | IDCMP_NEWSIZE | IDCMP_REFRESHWINDOW,
++			WA_CustomScreen, (IPTR)pub,
++			TAG_DONE);
++
++		UnlockPubScreen(NULL, pub);
++	}
++
++	if (!window)
++	{
++		D(bug("[DD] FAILED OpenWindowTags\n"));
++		if (customScreen) { CloseScreen(customScreen); customScreen = NULL; }
++		return false;
++	}
++
++	originX = (winWidth - realWidth) / 2;
++	originY = (winHeight - realHeight) / 2;
++	if (originX < 0) originX = 0;
++	if (originY < 0) originY = 0;
++
++	if (originX || originY)
++		FillPixelArray(window->RPort, 0, 0, winWidth, winHeight, 0x00000000);
++
++	if (titleBuf)
++		SetWindowTitles(window, (CONST_STRPTR)titleBuf, (CONST_STRPTR)-1);
++
++	D(bug("[DD] window opened: %p (%dx%d, origin %d,%d)\n", (void*)window, winWidth, winHeight, originX, originY));
++	return true;
++}
++
++void PPDisplayDevice::closeDisplay()
++{
++	if (window)
++	{
++		SetWindowTitles(window, (CONST_STRPTR)-1, (CONST_STRPTR)-1);
++		CloseWindow(window);
++		window = NULL;
++	}
++	if (customScreen) { CloseScreen(customScreen); customScreen = NULL; }
++}
++
++bool PPDisplayDevice::allocBuffers()
++{
++	// PPUI always renders at the unscaled size; scaledBuffer holds the
++	// blown-up copy that is blitted to the window.
++	pitch = size.width * 4;
++	pixelBuffer = (pp_uint8 *)AllocVec(pitch * size.height, MEMF_ANY | MEMF_CLEAR);
++	if (!pixelBuffer) return false;
++
++	if (scaleFactor == 1) return true;
++
++	scaledPitch = realWidth * 4;
++	scaledBuffer = (pp_uint8 *)AllocVec(scaledPitch * realHeight, MEMF_ANY | MEMF_CLEAR);
++	return scaledBuffer != NULL;
++}
++
++void PPDisplayDevice::freeBuffers()
++{
++	if (pixelBuffer) { FreeVec(pixelBuffer); pixelBuffer = NULL; }
++	if (scaledBuffer) { FreeVec(scaledBuffer); scaledBuffer = NULL; }
++}
++
++// Nearest-neighbour blow-up of an unscaled rect into scaledBuffer
++void PPDisplayDevice::scaleRect(pp_int32 x, pp_int32 y, pp_int32 w, pp_int32 h)
++{
++	const pp_int32 dstBytes = w * scaleFactor * 4;
++
++	for (pp_int32 sy = y; sy < y + h; sy++)
++	{
++		const pp_uint32 *src = (const pp_uint32 *)(pixelBuffer + sy * pitch) + x;
++		pp_uint8 *row = scaledBuffer + (sy * scaleFactor) * scaledPitch + x * scaleFactor * 4;
++		pp_uint32 *dst = (pp_uint32 *)row;
++
++		for (pp_int32 sx = 0; sx < w; sx++)
++		{
++			pp_uint32 c = src[sx];
++			for (pp_int32 i = 0; i < scaleFactor; i++) *dst++ = c;
++		}
++		for (pp_int32 i = 1; i < scaleFactor; i++)
++			CopyMem(row, row + i * scaledPitch, dstBytes);
++	}
 +}
 +
 +PPGraphicsAbstract* PPDisplayDevice::open()
@@ -2096,8 +2321,17 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTrac
 +void PPDisplayDevice::update()
 +{
 +	if (!pixelBuffer || !window) return;
++
++	if (scaleFactor > 1)
++	{
++		scaleRect(0, 0, size.width, size.height);
++		WritePixelArray(scaledBuffer, 0, 0, scaledPitch, window->RPort,
++			originX, originY, realWidth, realHeight, RECTFMT_ARGB);
++		return;
++	}
++
 +	WritePixelArray(pixelBuffer, 0, 0, pitch, window->RPort,
-+		0, 0, size.width, size.height, RECTFMT_ARGB);
++		originX, originY, size.width, size.height, RECTFMT_ARGB);
 +}
 +
 +void PPDisplayDevice::update(const PPRect& r)
@@ -2110,8 +2344,18 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTrac
 +	if (w <= 0 || h <= 0) return;
 +
 +	if (!pixelBuffer || !window) return;
++
++	if (scaleFactor > 1)
++	{
++		scaleRect(x, y, w, h);
++		WritePixelArray(scaledBuffer, x * scaleFactor, y * scaleFactor, scaledPitch,
++			window->RPort, originX + x * scaleFactor, originY + y * scaleFactor,
++			w * scaleFactor, h * scaleFactor, RECTFMT_ARGB);
++		return;
++	}
++
 +	WritePixelArray(pixelBuffer, x, y, pitch, window->RPort,
-+		x, y, w, h, RECTFMT_ARGB);
++		originX + x, originY + y, w, h, RECTFMT_ARGB);
 +}
 +
 +void PPDisplayDevice::setTitle(const PPSystemString& title)
@@ -2124,7 +2368,24 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTrac
 +	SetWindowTitles(window, titleBuf ? (CONST_STRPTR)titleBuf : (CONST_STRPTR)"MilkyTracker", (CONST_STRPTR)-1);
 +}
 +
-+bool PPDisplayDevice::goFullScreen(bool b) { return false; }
++bool PPDisplayDevice::goFullScreen(bool b)
++{
++	if (b == bFullScreen) return true;
++	if (!pixelBuffer) return false;
++
++	closeDisplay();
++
++	if (!openDisplay(b))
++	{
++		// Put the old display back; the caller pops up an error requester
++		openDisplay(bFullScreen);
++		return false;
++	}
++
++	bFullScreen = b;
++	update();
++	return true;
++}
 +
 +PPSize PPDisplayDevice::getDisplayResolution() const
 +{
@@ -2146,14 +2407,15 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.cpp MilkyTrac
 +{
 +	PPDisplayDeviceBase::setSize(newSize);
 +
-+	if (pixelBuffer) FreeVec(pixelBuffer);
-+	pitch = newSize.width * 4;
-+	pixelBuffer = (pp_uint8 *)AllocVec(pitch * newSize.height, MEMF_ANY | MEMF_CLEAR);
++	freeBuffers();
++	realWidth = newSize.width * scaleFactor;
++	realHeight = newSize.height * scaleFactor;
++	allocBuffers();
 +}
 diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.h
 --- MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h	1970-01-01 01:00:00.000000000 +0100
 +++ MilkyTracker-1.05.01.aros/src/tracker/aros/DisplayDevice_AROS.h	2026-04-26 10:15:30.164739488 +0200
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,58 @@
 +#ifndef __DISPLAYDEVICE_AROS_H__
 +#define __DISPLAYDEVICE_AROS_H__
 +
@@ -2166,14 +2428,29 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h MilkyTracke
 +{
 +private:
 +	struct Window *window;
-+	struct Screen *screen;
++	struct Screen *customScreen;	/* fullscreen only */
 +	pp_uint8 *pixelBuffer;
 +	pp_int32 pitch;
 +	pp_int32 bpp;
 +	char *titleBuf;
 +
++	// Window is scaleFactor times bigger than the PPUI framebuffer
++	pp_int32 realWidth, realHeight;
++	pp_uint8 *scaledBuffer;
++	pp_int32 scaledPitch;
++	// Framebuffer position inside the window; non-zero when the fullscreen
++	// screen mode came out larger than the UI
++	pp_int32 originX, originY;
++
++	bool allocBuffers();
++	void freeBuffers();
++	void scaleRect(pp_int32 x, pp_int32 y, pp_int32 w, pp_int32 h);
++	bool openDisplay(bool fullScreen);
++	void closeDisplay();
++
 +public:
-+	PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor = 1, pp_int32 bpp = 32);
++	PPDisplayDevice(pp_int32 width, pp_int32 height, pp_int32 scaleFactor = 1,
++	                pp_int32 bpp = 32, bool fullScreen = false);
 +	virtual ~PPDisplayDevice();
 +
 +	virtual PPGraphicsAbstract* open();
@@ -2187,10 +2464,13 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/aros/DisplayDevice_AROS.h MilkyTracke
 +	virtual void setMouseCursor(MouseCursorTypes type);
 +	virtual void signalWaitState(bool b, const PPColor& color);
 +	virtual void setSize(const PPSize& size);
-+	virtual bool supportsScaling() const { return false; }
++	virtual bool supportsScaling() const { return true; }
 +
 +	struct Window* getWindow() const { return window; }
-+	void adjust(pp_int32& x, pp_int32& y) { x /= scaleFactor; y /= scaleFactor; }
++
++	// Window coordinates -> framebuffer coordinates.  PPScreen divides by
++	// the scale factor afterwards, so only the centring offset goes here.
++	void adjustMouse(pp_int32& x, pp_int32& y) const { x -= originX; y -= originY; }
 +};
 +
 +#endif
@@ -2832,8 +3112,8 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/ModuleEditor.cpp MilkyTracker-1.05.01
  		// restore one shot looping flag
  		if (type == XModule::ModuleType_MOD)
 diff -ruN MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp MilkyTracker-1.05.01.aros/src/tracker/TrackerSettings.cpp
---- MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp	2024-11-28 10:44:05.000000000 +0100
-+++ MilkyTracker-1.05.01.aros/src/tracker/TrackerSettings.cpp	2026-04-26 10:15:30.171628652 +0200
+--- MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp	2024-11-28 10:44:05
++++ MilkyTracker-1.05.01.aros/src/tracker/TrackerSettings.cpp	2026-09-11 10:02:48
 @@ -683,7 +683,6 @@
  			pp_int32 i = str.getIntValue();
  			str = theKey->getStringValue();
@@ -2842,6 +3122,22 @@ diff -ruN MilkyTracker-1.05.01/src/tracker/TrackerSettings.cpp MilkyTracker-1.05
  		}
  	}
  	else if (theKey->getKey().startsWith("PREDEFENVELOPEPANNING_"))
+diff -ruN MilkyTracker-1.05.01/src/tracker/TrackerShutDown.cpp MilkyTracker-1.05.01.aros/src/tracker/TrackerShutDown.cpp
+--- MilkyTracker-1.05.01/src/tracker/TrackerShutDown.cpp	2024-11-28 10:44:05
++++ MilkyTracker-1.05.01.aros/src/tracker/TrackerShutDown.cpp	2026-09-11 10:02:48
+@@ -126,6 +126,12 @@
+ 	moduleEditor = currentEditor;
+ 
+ 	playerMaster->stop(true);
++
++#ifdef __AROS__
++	// Rewriting the file in place leaves it truncated to zero bytes on AROS,
++	// so delete it first and always write a fresh file
++	XMFile::remove(System::getConfigFileName());
++#endif
+ 
+ 	XMFile f(System::getConfigFileName(), true);
+ 
 diff -ruN MilkyTracker-1.05.01/src/tracker/version.h MilkyTracker-1.05.01.aros/src/tracker/version.h
 --- MilkyTracker-1.05.01/src/tracker/version.h	1970-01-01 01:00:00.000000000 +0100
 +++ MilkyTracker-1.05.01.aros/src/tracker/version.h	2026-04-26 10:15:30.171591903 +0200

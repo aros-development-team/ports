@@ -39,7 +39,7 @@ VBA_OPTIONS := \
 
 %build_with_cmake mmake=ports-emulation-vbam \
     srcdir=$(PORTSDIR)/vbam/$(ARCHBASE)/sources prefix=$(TARGETDIR) \
-    extraoptions=$(VBA_OPTIONS) installoptions=
+    extraoptions=$(VBA_OPTIONS)
 
 %fetch mmake=ports-emulation-vbam-fetch archive=$(ARCHBASE) destination=$(PORTSDIR)/vbam/$(ARCHBASE) \
     location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="zip" \

@@ -2,16 +2,16 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-REPOSITORIES := https://libmpeg2.sourceforge.io/files/
+REPOSITORIES := https://download.videolan.org/contrib/libmpeg2
 ARCHBASE := libmpeg2-0.5.1
-#PATCHSPEC := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
+PATCHSPEC := $(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
 
 NOWARN_FLAGS := $(NOWARN_FORMAT) $(NOWARN_ERROR)
 
 USER_CFLAGS := $(CFLAGS_GNU99) $(NOWARN_FLAGS)
 USER_INCLUDES := -I$(AROS_CONTRIB_INCLUDES)
 
-LIBMPEG_OPTIONS :=
+LIBMPEG_OPTIONS := --disable-sdl
 
 #MM- ports-libs : ports-libs-libmpeg
 

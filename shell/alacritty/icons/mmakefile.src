@@ -1,0 +1,13 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-shell-alacritty : ports-shell-alacritty-icons
+
+TARGETDIR := $(AROS_CONTRIB)/Utilities/Shell
+ICONS     := Alacritty
+
+%build_icons mmake=ports-shell-alacritty-icons \
+    icons=$(ICONS) dir=$(TARGETDIR)
+
+%common

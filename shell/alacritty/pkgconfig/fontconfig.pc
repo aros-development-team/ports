@@ -1,0 +1,12 @@
+# Lists FreeType and libxml2 as plain dependencies so they follow
+# -lfontconfig on a static link line.
+prefix=/Developer
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: Fontconfig
+Description: Font configuration and customization library
+Version: 2.16.0
+Requires: freetype2 >= 21.0.15, libxml-2.0
+Libs: -L${libdir} -lfontconfig
+Cflags: -I${includedir}

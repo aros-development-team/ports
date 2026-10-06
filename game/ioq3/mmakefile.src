@@ -1,0 +1,101 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game : ports-game-ioq3
+
+#MM  ports-game-ioq3 : \
+#MM    contrib-sdl2 \
+#MM    ports-game-ioq3-fetch \
+#MM    ports-game-ioq3-install-docs
+
+PACKAGE      := ioq3
+COMMIT       := 588393618dbc82e7207c21c6ddecca229944a03a
+ARCHBASE     := $(PACKAGE)-$(COMMIT)
+ARCHNAME     := $(COMMIT)
+PATCH        := $(PACKAGE)-aros.diff
+REPOSITORIES := https://github.com/ioquake/ioq3/archive
+
+TARGETDIR    := $(AROS_CONTRIB)/Games/FPS/ioquake3
+
+IOQ3_SRCDIR  := $(PORTSDIR)/$(PACKAGE)/$(ARCHBASE)
+IOQ3_BUILD   := $(GENDIR)/$(CURDIR)/build
+
+# SDL2: AROS ships no SDL2Config.cmake, and the AROS toolchain file leaves
+# CMAKE_FIND_ROOT_PATH_MODE_PACKAGE unset, so a bare find_package(SDL2) would
+# resolve the *host* SDL2 instead. cmake/aros-sdl2 supplies the target.
+IOQ3_SDL2_DIR := $(SRCDIR)/$(CURDIR)/cmake/aros-sdl2
+
+# UNIX=1 is a CMake variable, not a define: ioq3 gates its whole platform layer
+# on it (cmake/platforms/unix.cmake), and CMake's UNIX is false here because
+# Platform/AROS.cmake sets only AROS/AMIGA. Without it there is no sys layer at
+# all. It also pulls in linux.cmake, whose CPack/DEB settings are inert since we
+# never run install or cpack.
+#
+# What is turned off, and why:
+#   USE_RENDERER_DLOPEN   - no dlopen on AROS; the renderer is linked in.
+#   BUILD_RENDERER_GL2    - needs GLSL. GL1 is fixed-function and avoids the
+#                           shader path entirely.
+#   BUILD_GAME_LIBRARIES  - would need dlopen for qagame/cgame/ui.
+#   BUILD_GAME_QVMS       - not needed: retail pak0.pk3 already contains the
+#                           QVMs, and the engine's interpreter runs them. Also
+#                           saves cross-building q3lcc/q3asm as host tools.
+#   USE_HTTP              - wants libcurl, which is not built for this target.
+#   USE_OPENAL, VORBIS, OPUS, VOIP, MUMBLE - trimmed for a first working build;
+#                           worth revisiting once the port is known good.
+IOQ3_OPTIONS := \
+    -DCMAKE_TOOLCHAIN_FILE=$(GENDIR)/config/conf.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DUNIX=1 \
+    -DCMAKE_C_STANDARD_LIBRARIES="-lnet $(TARGET_C_LIBS)" \
+    -DSDL2_DIR=$(IOQ3_SDL2_DIR) \
+    -DAROS_SDL2_INCLUDE_DIR=$(AROS_DEVELOPER)/include/SDL2 \
+    -DAROS_SDL2_LIBRARY=$(AROS_DEVELOPER)/lib/libSDL2.a \
+    -DUSE_INTERNAL_SDL=OFF \
+    -DUSE_RENDERER_DLOPEN=OFF \
+    -DBUILD_RENDERER_GL1=ON \
+    -DBUILD_RENDERER_GL2=OFF \
+    -DBUILD_GAME_LIBRARIES=OFF \
+    -DBUILD_GAME_QVMS=OFF \
+    -DUSE_HTTP=OFF \
+    -DUSE_OPENAL=OFF \
+    -DUSE_CODEC_VORBIS=OFF \
+    -DUSE_CODEC_OPUS=OFF \
+    -DUSE_VOIP=OFF \
+    -DUSE_MUMBLE=OFF
+
+#MM
+ports-game-ioq3 :
+	$(MKDIR) $(IOQ3_BUILD)
+	cmake -S $(IOQ3_SRCDIR) -B $(IOQ3_BUILD) $(IOQ3_OPTIONS)
+	cmake --build $(IOQ3_BUILD)
+	$(MKDIR) $(TARGETDIR)
+	@# set_output_dirs() puts binaries in <build>/$(CMAKE_BUILD_TYPE).
+	$(CP) $(IOQ3_BUILD)/Release/ioquake3 $(TARGETDIR)/ioquake3
+	$(CP) $(IOQ3_BUILD)/Release/ioq3ded $(TARGETDIR)/ioq3ded
+	@# Quake III game data is commercial and cannot be shipped: the user drops
+	@# pak0.pk3 (and any patch paks) from a retail install in here.
+	$(MKDIR) $(TARGETDIR)/baseq3
+
+DOCS := COPYING.txt README.md
+%copy_files_q mmake=ports-game-ioq3-install-docs \
+    files="$(DOCS)" src=$(IOQ3_SRCDIR) dst=$(TARGETDIR)
+
+%fetch mmake=ports-game-ioq3-fetch archive=$(ARCHNAME) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) \
+    patches_specs=$(PATCH):$(ARCHBASE):-p1
+
+# Regenerate $(PATCH) after editing the unpacked source. Writes
+# $(ARCHNAME)-aros-new.diff here; compare it, then rename over $(PATCH).
+%create_patch mmake=ports-game-ioq3-create-patch archive=$(ARCHNAME) \
+    srcdir=$(ARCHBASE) suffixes="tar.gz" \
+    destination=$(PORTSDIR)/$(PACKAGE) location=$(PORTSSOURCEDIR) \
+    excludes="build *.o *.a"
+
+#MM
+ports-game-ioq3-clean :
+	$(RM) $(TARGETDIR)
+	$(RM) $(IOQ3_BUILD)
+
+%common

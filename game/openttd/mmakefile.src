@@ -1,0 +1,168 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game : ports-game-openttd
+
+#MM  ports-game-openttd : \
+#MM    contrib-sdl2 \
+#MM    development-SDL2_mixer \
+#MM    ports-audio-freepats \
+#MM    workbench-libs-z \
+#MM    workbench-libs-png \
+#MM    development-xz \
+#MM    ports-game-openttd-fetch \
+#MM    ports-game-openttd-opengfx-fetch \
+#MM    ports-game-openttd-opensfx-fetch \
+#MM    ports-game-openttd-openmsx-fetch
+
+PACKAGE      := openttd
+# Pinned to a commit: 16.0-beta2 predates fixes we build against, and upstream
+# has no newer release. The GitHub archive unpacks to OpenTTD-<commit>.
+COMMIT       := 1b71d4c883ce548efff82fdca9e0ffe4e56c2a48
+ARCHBASE     := OpenTTD-$(COMMIT)
+ARCHNAME     := $(COMMIT)
+PATCH        := $(PACKAGE)-16.0-beta2-aros.diff
+REPOSITORIES := https://github.com/OpenTTD/OpenTTD/archive
+
+# OpenGFX, the free graphics set (GPL2). OpenTTD ships no graphics of its own -
+# only baseset definitions pointing at the original Transport Tycoon Deluxe
+# files - so without this it refuses to start.
+OPENGFX_VER  := 8.0
+OPENGFX_ARCH := opengfx-$(OPENGFX_VER)-all
+OPENGFX_REPO := https://cdn.openttd.org/opengfx-releases/$(OPENGFX_VER)
+# The .zip holds a single .tar, which %fetch does not unpack in turn.
+OPENGFX_TAR  := $(PORTSDIR)/$(PACKAGE)/opengfx-$(OPENGFX_VER).tar
+
+# OpenSFX, the free sound set (CC BY-NC-SA 3.0). Same story as OpenGFX: the
+# shipped baseset definition only points at the original TTD sample files, so
+# without this the game runs silent. Packaged as a .tar inside the .zip too.
+OPENSFX_VER  := 1.0.3
+OPENSFX_ARCH := opensfx-$(OPENSFX_VER)-all
+OPENSFX_REPO := https://cdn.openttd.org/opensfx-releases/$(OPENSFX_VER)
+OPENSFX_TAR  := $(PORTSDIR)/$(PACKAGE)/opensfx-$(OPENSFX_VER).tar
+
+# OpenMSX, the free music set (GPL2) - a set of .mid files plus an .obm
+# definition. Needs a working MIDI driver at runtime to be heard.
+OPENMSX_VER  := 0.4.2
+OPENMSX_ARCH := openmsx-$(OPENMSX_VER)-all
+OPENMSX_REPO := https://cdn.openttd.org/openmsx-releases/$(OPENMSX_VER)
+OPENMSX_TAR  := $(PORTSDIR)/$(PACKAGE)/openmsx-$(OPENMSX_VER).tar
+
+TARGETDIR    := $(AROS_CONTRIB)/Games/Strategy/OpenTTD
+
+OTTD_SRCDIR    := $(PORTSDIR)/$(PACKAGE)/$(ARCHBASE)
+# strgen and settingsgen generate the language and settings tables during the
+# build, so they must run on the build host, not the target. Upstream supports
+# this with a separate OPTION_TOOLS_ONLY pass handed over via HOST_BINARY_DIR.
+OTTD_HOSTBUILD := $(HOSTGENDIR)/$(CURDIR)/tools
+OTTD_BUILD     := $(GENDIR)/$(CURDIR)/build
+
+# SDL2: AROS ships no SDL2Config.cmake, and the AROS toolchain file leaves
+# CMAKE_FIND_ROOT_PATH_MODE_PACKAGE unset, so a bare find_package(SDL2) happily
+# resolves the *host* SDL2 instead. cmake/aros-sdl2 supplies the target.
+OTTD_SDL2_DIR := $(SRCDIR)/$(CURDIR)/cmake/aros-sdl2
+
+# MIDI music. AROS has no fork() for extmidi and no fluidsynth port, so the
+# src/music/sdlmixer_m.cpp driver drives SDL2_mixer's built-in timidity
+# instead. Listed in link order: the static libSDL2_mixer.a has the mod and
+# vorbis decoders compiled in, so their libraries must follow it. Semicolons
+# because cmake has to see this as a list, not as one filename.
+OTTD_MIXER_LIB_DIR   := $(AROS_DEVELOPER)/lib
+OTTD_SDL2_MIXER_LIBS := $(OTTD_MIXER_LIB_DIR)/libSDL2_mixer.a;$(OTTD_MIXER_LIB_DIR)/libmikmod.a;$(OTTD_MIXER_LIB_DIR)/libvorbisfile.a;$(OTTD_MIXER_LIB_DIR)/libvorbis.a;$(OTTD_MIXER_LIB_DIR)/libogg.a
+
+# Every dependency is pinned explicitly for the same reason: anything left to
+# find_package() may escape the sysroot. What AROS lacks is disabled outright -
+# LZO, Fluidsynth, Freetype/Fontconfig/Harfbuzz/ICU (the built-in sprite font
+# is used instead), OpusFile, Soxr, Allegro, CURL and Grfcodec.
+OTTD_OPTIONS := \
+    -DCMAKE_TOOLCHAIN_FILE=$(GENDIR)/config/conf.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DHOST_BINARY_DIR=$(OTTD_HOSTBUILD) \
+    -DUNIX=1 \
+    -DOPTION_USE_ASSERTS=OFF \
+    -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
+    -DCMAKE_CXX_FLAGS="-DBSDSOCKET_NOLIBDEFINES" \
+    -DCMAKE_CXX_STANDARD_LIBRARIES="-lnet $(TARGET_C_LIBS)" \
+    -DSDL2_DIR=$(OTTD_SDL2_DIR) \
+    -DAROS_SDL2_INCLUDE_DIR=$(AROS_DEVELOPER)/include/SDL2 \
+    -DAROS_SDL2_LIBRARY=$(AROS_DEVELOPER)/lib/libSDL2.a \
+    -DAROS_SDL2_MIXER_LIBRARIES="$(OTTD_SDL2_MIXER_LIBS)" \
+    -DZLIB_LIBRARY=$(AROS_DEVELOPER)/lib/libz.a \
+    -DZLIB_INCLUDE_DIR=$(AROS_DEVELOPER)/include \
+    -DLIBLZMA_LIBRARY=$(AROS_DEVELOPER)/lib/liblzma.a \
+    -DLIBLZMA_INCLUDE_DIR=$(AROS_DEVELOPER)/include \
+    -DPNG_LIBRARY=$(AROS_DEVELOPER)/lib/libpng.a \
+    -DPNG_PNG_INCLUDE_DIR=$(AROS_DEVELOPER)/include \
+    -DCMAKE_DISABLE_FIND_PACKAGE_LZO=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Fluidsynth=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Freetype=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Harfbuzz=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_ICU=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_OpusFile=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Soxr=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Allegro=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_CURL=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON
+
+#MM
+ports-game-openttd :
+	@# One recipe on purpose: the stages must run in order, and #MM- lines are
+	@# directives to metamake rather than make dependencies, so splitting them
+	@# into separate targets here would let the install run on a stale build.
+	@echo "===> building host tools (strgen, settingsgen)"
+	$(MKDIR) $(OTTD_HOSTBUILD)
+	cmake -S $(OTTD_SRCDIR) -B $(OTTD_HOSTBUILD) \
+	    -DOPTION_TOOLS_ONLY=ON -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(OTTD_HOSTBUILD)
+	@echo "===> building OpenTTD for AROS"
+	$(MKDIR) $(OTTD_BUILD)
+	cmake -S $(OTTD_SRCDIR) -B $(OTTD_BUILD) $(OTTD_OPTIONS)
+	@# Named targets rather than "all": openttd_test needs sigaltstack(), which
+	@# AROS lacks, and a target test binary could not run on the build host
+	@# anyway. The three data targets are not dependencies of openttd, so they
+	@# have to be asked for by name.
+	cmake --build $(OTTD_BUILD) --target openttd \
+	    language_files baseset_files media_files
+	$(MKDIR) $(TARGETDIR)
+	@# Installed under the icon's name, not the lowercase cmake target.
+	$(CP) $(OTTD_BUILD)/openttd $(TARGETDIR)/OpenTTD
+	$(CP) $(OTTD_SRCDIR)/COPYING.md $(OTTD_SRCDIR)/README.md $(TARGETDIR)
+	@# Same set as upstream's install(): lang, baseset, ai and game come from the
+	@# build tree - which is also the version without the stray CMakeLists.txt -
+	@# and only scripts is taken from the source tree.
+	$(CP) -r $(OTTD_BUILD)/lang $(OTTD_BUILD)/baseset \
+	    $(OTTD_BUILD)/ai $(OTTD_BUILD)/game $(TARGETDIR)
+	$(CP) -r $(OTTD_SRCDIR)/bin/scripts $(TARGETDIR)
+	@# baseset is scanned recursively, so OpenGFX can keep its own drawer.
+	tar xf $(OPENGFX_TAR) -C $(TARGETDIR)/baseset
+	tar xf $(OPENSFX_TAR) -C $(TARGETDIR)/baseset
+	tar xf $(OPENMSX_TAR) -C $(TARGETDIR)/baseset
+	@# SDL2_mixer's timidity looks for its config in PROGDIR: on AROS.
+	$(CP) $(SRCDIR)/$(CURDIR)/timidity.cfg $(TARGETDIR)
+
+%fetch mmake=ports-game-openttd-fetch archive=$(ARCHNAME) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) \
+    patches_specs=$(PATCH):$(ARCHBASE):-p1
+
+%fetch mmake=ports-game-openttd-opengfx-fetch archive=$(OPENGFX_ARCH) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="zip" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(OPENGFX_REPO)
+
+%fetch mmake=ports-game-openttd-opensfx-fetch archive=$(OPENSFX_ARCH) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="zip" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(OPENSFX_REPO)
+
+%fetch mmake=ports-game-openttd-openmsx-fetch archive=$(OPENMSX_ARCH) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="zip" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(OPENMSX_REPO)
+
+#MM
+ports-game-openttd-clean :
+	$(RM) $(TARGETDIR)
+	$(RM) $(OTTD_BUILD)
+	$(RM) $(OTTD_HOSTBUILD)
+
+%common

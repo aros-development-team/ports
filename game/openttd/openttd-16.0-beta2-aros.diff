@@ -1,0 +1,1285 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c8212806d1..42e001e85c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -293,7 +293,11 @@ if(ANDROID)
+ endif()
+ 
+ include(Catch)
+-catch_discover_tests(openttd_test)
++# Test discovery runs the freshly built openttd_test to enumerate its cases,
++# which cannot work when that binary is for another platform.
++if(NOT CMAKE_CROSSCOMPILING)
++    catch_discover_tests(openttd_test)
++endif()
+ 
+ if(HAIKU)
+     target_link_libraries(openttd_lib "be" "network" "midi")
+@@ -314,7 +318,10 @@ link_package(LZO)
+ 
+ if(NOT WIN32 AND NOT EMSCRIPTEN)
+     link_package(CURL ENCOURAGED)
+-    target_link_libraries(openttd_lib ${CMAKE_DL_LIBS})
++    # AROS has no libdl; LibraryLoader is stubbed out there anyway.
++    if(NOT AROS)
++        target_link_libraries(openttd_lib ${CMAKE_DL_LIBS})
++    endif()
+ endif()
+ 
+ if(NOT EMSCRIPTEN)
+@@ -323,6 +330,12 @@ endif()
+ 
+ if(NOT OPTION_DEDICATED)
+     link_package(Fluidsynth)
++    # Before SDL2, so the static libSDL2_mixer.a precedes its dependencies in
++    # the link line. SDL_mixer.h sits in the same include dir as SDL.h, which
++    # SDL2::SDL2 already supplies.
++    if(AROS AND AROS_SDL2_MIXER_LIBRARIES)
++        target_link_libraries(openttd_lib ${AROS_SDL2_MIXER_LIBRARIES})
++    endif()
+     link_package(SDL2 TARGET SDL2::SDL2)
+     link_package(Allegro)
+     link_package(FREETYPE TARGET Freetype::Freetype)
+diff --git a/src/debug.h b/src/debug.h
+index 183c084c6a..441b45df1a 100644
+--- a/src/debug.h
++++ b/src/debug.h
+@@ -95,7 +95,22 @@ struct TicToc {
+ 
+ 		static States &GetStates()
+ 		{
++#ifdef __AROS__
++			/* AROS' executable loader implements no TLS relocations at all -
++			 * rom/dos/internalloadseg_elf.c handles no R_AARCH64_TLS* type - so
++			 * a thread_local anywhere makes the whole binary unloadable:
++			 *   [ELF Loader] Unknown relocation type 549
++			 * (R_AARCH64_TLSLE_ADD_TPREL_HI12, emitted for this very object).
++			 *
++			 * TicToc is a developer profiling aid and nothing in the shipped
++			 * code declares a State, so this container stays empty and Tick()
++			 * iterates nothing. Sharing one instance across threads would only
++			 * start to matter if a State were added to code running on more
++			 * than one thread. */
++			static States s_states;
++#else
+ 			thread_local static States s_states;
++#endif
+ 			return s_states;
+ 		}
+ 
+diff --git a/src/dedicated.cpp b/src/dedicated.cpp
+index cb63acd339..e600859cde 100644
+--- a/src/dedicated.cpp
++++ b/src/dedicated.cpp
+@@ -14,7 +14,9 @@
+ std::string _log_file; ///< Filename to reroute output of a forked OpenTTD to
+ std::optional<FileHandle> _log_fd; ///< File to reroute output of a forked OpenTTD to
+ 
+-#if defined(UNIX)
++/* AROS has no fork(), so it cannot detach a dedicated server this way. The call
++ * site in openttd.cpp is excluded to match. */
++#if defined(UNIX) && !defined(__AROS__)
+ 
+ #include <unistd.h>
+ 
+diff --git a/src/intro_gui.cpp b/src/intro_gui.cpp
+index fd5a942016..abeab68450 100644
+--- a/src/intro_gui.cpp
++++ b/src/intro_gui.cpp
+@@ -103,9 +103,19 @@ struct SelectGameWindow : public Window {
+ 	{
+ 		intro_viewport_commands.clear();
+ 
+-		/* Regular expression matching the commands: T, spaces, integer, spaces, flags, spaces, integer */
+-		static const std::string sign_language = "^T\\s*([0-9]+)\\s*([-+A-Z0-9]+)\\s*([0-9]+)";
+-		std::regex re(sign_language, std::regex_constants::icase);
++		/* Regular expression matching the commands: T, spaces, integer, spaces, flags, spaces, integer
++		 *
++		 * Case tolerance is spelled out in the pattern rather than requested
++		 * with std::regex_constants::icase: icase makes libc++ fold every
++		 * character through std::ctype<char>::tolower(), which on this platform
++		 * goes through a locale_t obtained from newlocale(). AROS' newlocale()
++		 * is an unimplemented stub returning NULL, so the fold dereferences a
++		 * null locale and the process dies with a bus error before the intro
++		 * screen draws. The only letters involved are ASCII, and the flag
++		 * characters are normalised with toupper() below, so matching both
++		 * cases here is equivalent. */
++		static const std::string sign_language = "^[Tt]\\s*([0-9]+)\\s*([-+A-Za-z0-9]+)\\s*([0-9]+)";
++		std::regex re(sign_language);
+ 
+ 		/* List of signs successfully parsed to delete afterwards. */
+ 		std::vector<SignID> signs_to_delete;
+diff --git a/src/linkgraph/demands.cpp b/src/linkgraph/demands.cpp
+index 7306e97928..67b2d51000 100644
+--- a/src/linkgraph/demands.cpp
++++ b/src/linkgraph/demands.cpp
+@@ -42,7 +42,7 @@ public:
+ 	 * Count a node's supply into the sum of supplies.
+ 	 * @param node Node.
+ 	 */
+-	inline void AddNode(const Node &node)
++	inline void AddNode(const LinkNode &node)
+ 	{
+ 		this->supply_sum += node.base.supply;
+ 	}
+@@ -63,7 +63,7 @@ public:
+ 	 * @param to The receiving node.
+ 	 * @return Effective supply.
+ 	 */
+-	inline uint EffectiveSupply(const Node &from, const Node &to)
++	inline uint EffectiveSupply(const LinkNode &from, const LinkNode &to)
+ 	{
+ 		return std::max(from.base.supply * std::max(1U, to.base.supply) * this->mod_size / 100 / this->demand_per_node, 1U);
+ 	}
+@@ -75,7 +75,7 @@ public:
+ 	 * @param to Node to be checked.
+ 	 * @return \c true iff demand is left.
+ 	 */
+-	inline bool HasDemandLeft(const Node &to)
++	inline bool HasDemandLeft(const LinkNode &to)
+ 	{
+ 		return (to.base.supply == 0 || to.undelivered_supply > 0) && to.base.demand > 0;
+ 	}
+@@ -96,7 +96,7 @@ public:
+ 	/**
+ 	 * Nothing to do here.
+ 	 */
+-	inline void AddNode(const Node &)
++	inline void AddNode(const LinkNode &)
+ 	{
+ 	}
+ 
+@@ -112,7 +112,7 @@ public:
+ 	 * @param from The supplying node.
+ 	 * @return Effective supply.
+ 	 */
+-	inline uint EffectiveSupply(const Node &from, const Node &)
++	inline uint EffectiveSupply(const LinkNode &from, const LinkNode &)
+ 	{
+ 		return from.base.supply;
+ 	}
+@@ -123,7 +123,7 @@ public:
+ 	 * @param to The node to be checked.
+ 	 * @return \c true iff demand is left.
+ 	 */
+-	inline bool HasDemandLeft(const Node &to) { return to.base.demand > 0; }
++	inline bool HasDemandLeft(const LinkNode &to) { return to.base.demand > 0; }
+ };
+ 
+ /**
+diff --git a/src/linkgraph/flowmapper.cpp b/src/linkgraph/flowmapper.cpp
+index 6bd096bbb5..3e43581edd 100644
+--- a/src/linkgraph/flowmapper.cpp
++++ b/src/linkgraph/flowmapper.cpp
+@@ -19,12 +19,12 @@
+ void FlowMapper::Run(LinkGraphJob &job) const
+ {
+ 	for (NodeID node_id = 0; node_id < job.Size(); ++node_id) {
+-		Node &prev_node = job[node_id];
++		LinkNode &prev_node = job[node_id];
+ 		StationID prev = prev_node.base.station;
+ 		for (const Path *path : prev_node.paths) {
+ 			uint flow = path->GetFlow();
+ 			if (flow == 0) break;
+-			Node &node = job[path->GetNode()];
++			LinkNode &node = job[path->GetNode()];
+ 			StationID via = node.base.station;
+ 			StationID origin = job[path->GetOrigin()].base.station;
+ 			assert(prev != via && via != origin);
+@@ -43,7 +43,7 @@ void FlowMapper::Run(LinkGraphJob &job) const
+ 
+ 	for (NodeID node_id = 0; node_id < job.Size(); ++node_id) {
+ 		/* Remove local consumption shares marked as invalid. */
+-		Node &node = job[node_id];
++		LinkNode &node = job[node_id];
+ 		FlowStatMap &flows = node.flows;
+ 		flows.FinalizeLocalConsumption(node.base.station);
+ 		if (this->scale) {
+diff --git a/src/linkgraph/linkgraph_base.h b/src/linkgraph/linkgraph_base.h
+index 2f316723a1..e9d304ed3a 100644
+--- a/src/linkgraph/linkgraph_base.h
++++ b/src/linkgraph/linkgraph_base.h
+@@ -13,11 +13,14 @@
+ #include "linkgraph.h"
+ #include "linkgraphschedule.h"
+ 
+-typedef LinkGraph::BaseNode Node;
+-typedef LinkGraph::BaseEdge Edge;
++/* Not plain Node/Edge: AROS' <exec/nodes.h> declares a global struct Node, and
++ * it reaches every translation unit that uses threads via <pthread.h>, so a
++ * global typedef of that name is a redefinition. */
++typedef LinkGraph::BaseNode LinkNode;
++typedef LinkGraph::BaseEdge LinkEdge;
+ 
+-typedef const LinkGraph::BaseNode ConstNode;
+-typedef const LinkGraph::BaseEdge ConstEdge;
++typedef const LinkGraph::BaseNode ConstLinkNode;
++typedef const LinkGraph::BaseEdge ConstLinkEdge;
+ 
+ 
+ #endif /* LINKGRAPH_BASE_H */
+diff --git a/src/linkgraph/linkgraph_gui.cpp b/src/linkgraph/linkgraph_gui.cpp
+index e1a672a878..ff2d7fa16f 100644
+--- a/src/linkgraph/linkgraph_gui.cpp
++++ b/src/linkgraph/linkgraph_gui.cpp
+@@ -91,9 +91,9 @@ void LinkGraphOverlay::RebuildCache()
+ 			if (!LinkGraph::IsValidID(sta->goods[cargo].link_graph)) continue;
+ 			const LinkGraph &lg = *LinkGraph::Get(sta->goods[cargo].link_graph);
+ 
+-			ConstNode &from_node = lg[sta->goods[cargo].node];
++			ConstLinkNode &from_node = lg[sta->goods[cargo].node];
+ 			supply += lg.Monthly(from_node.supply);
+-			for (const Edge &edge : from_node.edges) {
++			for (const LinkEdge &edge : from_node.edges) {
+ 				StationID to = lg[edge.dest_node].station;
+ 				assert(from != to);
+ 				if (!Station::IsValidID(to) || seen_links.find(to) != seen_links.end()) {
+@@ -221,7 +221,7 @@ void LinkGraphOverlay::AddLinks(const Station *from, const Station *to)
+ 		}
+ 		const LinkGraph &lg = *LinkGraph::Get(ge.link_graph);
+ 		if (lg[ge.node].HasEdgeTo(to->goods[cargo].node)) {
+-			ConstEdge &edge = lg[ge.node][to->goods[cargo].node];
++			ConstLinkEdge &edge = lg[ge.node][to->goods[cargo].node];
+ 			this->AddStats(cargo, lg.Monthly(edge.capacity), lg.Monthly(edge.usage),
+ 					ge.HasData() ? ge.GetData().flows.GetFlowVia(to->index) : 0,
+ 					edge.TravelTime() / Ticks::DAY_TICKS,
+diff --git a/src/linkgraph/linkgraphjob_base.h b/src/linkgraph/linkgraphjob_base.h
+index cecf088e8a..48f538367e 100644
+--- a/src/linkgraph/linkgraphjob_base.h
++++ b/src/linkgraph/linkgraphjob_base.h
+@@ -14,7 +14,8 @@
+ #include "linkgraphjob.h"
+ #include "linkgraphschedule.h"
+ 
+-typedef LinkGraphJob::NodeAnnotation Node;
+-typedef LinkGraphJob::EdgeAnnotation Edge;
++/* See linkgraph_base.h for why these are not called Node/Edge. */
++typedef LinkGraphJob::NodeAnnotation LinkNode;
++typedef LinkGraphJob::EdgeAnnotation LinkEdge;
+ 
+ #endif /* LINKGRAPHJOB_BASE_H */
+diff --git a/src/linkgraph/mcf.cpp b/src/linkgraph/mcf.cpp
+index 7cca3afece..e3e94d712b 100644
+--- a/src/linkgraph/mcf.cpp
++++ b/src/linkgraph/mcf.cpp
+@@ -283,7 +283,7 @@ void MultiCommodityFlow::Dijkstra(NodeID source_node, PathVector &paths)
+ 		iter.SetNode(source_node, from);
+ 		for (NodeID to = iter.Next(); to != INVALID_NODE; to = iter.Next()) {
+ 			if (to == from) continue; // Not a real edge but a consumption sign.
+-			const Edge &edge = this->job[from][to];
++			const LinkEdge &edge = this->job[from][to];
+ 			uint capacity = edge.base.capacity;
+ 			if (this->max_saturation != UINT_MAX) {
+ 				capacity *= this->max_saturation;
+@@ -350,7 +350,7 @@ void MultiCommodityFlow::CleanupPaths(NodeID source_id, PathVector &paths)
+  *                       saturation, otherwise the path can be "overloaded".
+  * @return The new flow.
+  */
+-uint MultiCommodityFlow::PushFlow(Node &node, NodeID to, Path *path, uint accuracy,
++uint MultiCommodityFlow::PushFlow(LinkNode &node, NodeID to, Path *path, uint accuracy,
+ 		uint max_saturation)
+ {
+ 	assert(node.UnsatisfiedDemandTo(to) > 0);
+@@ -400,7 +400,7 @@ void MCF1stPass::EliminateCycle(PathVector &path, Path *cycle_begin, uint flow)
+ 			}
+ 		}
+ 		cycle_begin = path[prev];
+-		Edge &edge = this->job[prev][cycle_begin->GetNode()];
++		LinkEdge &edge = this->job[prev][cycle_begin->GetNode()];
+ 		edge.RemoveFlow(flow);
+ 	} while (cycle_begin != cycle_end);
+ }
+@@ -521,7 +521,7 @@ MCF1stPass::MCF1stPass(LinkGraphJob &job) : MultiCommodityFlow(job)
+ 			/* First saturate the shortest paths. */
+ 			this->Dijkstra<DistanceAnnotation, GraphEdgeIterator>(source, paths);
+ 
+-			Node &src_node = job[source];
++			LinkNode &src_node = job[source];
+ 			bool source_demand_left = false;
+ 			for (NodeID dest = 0; dest < size; ++dest) {
+ 				if (src_node.UnsatisfiedDemandTo(dest) > 0) {
+@@ -568,7 +568,7 @@ MCF2ndPass::MCF2ndPass(LinkGraphJob &job) : MultiCommodityFlow(job)
+ 
+ 			this->Dijkstra<CapacityAnnotation, FlowEdgeIterator>(source, paths);
+ 
+-			Node &src_node = job[source];
++			LinkNode &src_node = job[source];
+ 			bool source_demand_left = false;
+ 			for (NodeID dest = 0; dest < size; ++dest) {
+ 				Path *path = paths[dest];
+diff --git a/src/linkgraph/mcf.h b/src/linkgraph/mcf.h
+index bdfa0b3305..5e5eed4801 100644
+--- a/src/linkgraph/mcf.h
++++ b/src/linkgraph/mcf.h
+@@ -30,7 +30,7 @@ protected:
+ 	template <class Tannotation, class Tedge_iterator>
+ 	void Dijkstra(NodeID from, PathVector &paths);
+ 
+-	uint PushFlow(Node &node, NodeID to, Path *path, uint accuracy, uint max_saturation);
++	uint PushFlow(LinkNode &node, NodeID to, Path *path, uint accuracy, uint max_saturation);
+ 
+ 	void CleanupPaths(NodeID source, PathVector &paths);
+ 
+diff --git a/src/music/CMakeLists.txt b/src/music/CMakeLists.txt
+index cf60e78669..9e79c7f530 100644
+--- a/src/music/CMakeLists.txt
++++ b/src/music/CMakeLists.txt
+@@ -25,10 +25,19 @@ if(NOT OPTION_DEDICATED)
+         CONDITION WIN32
+     )
+ 
++    # Plays MIDI by forking an external player, and AROS has no fork().
+     add_files(
+         extmidi.cpp
+         extmidi.h
+-        CONDITION UNIX
++        CONDITION UNIX AND NOT AROS
++    )
++
++    # AROS has neither fork() nor fluidsynth; SDL2_mixer's built-in timidity
++    # is the only MIDI synth available.
++    add_files(
++        sdlmixer_m.cpp
++        sdlmixer_m.h
++        CONDITION AROS
+     )
+ 
+     add_files(
+diff --git a/src/music/sdlmixer_m.cpp b/src/music/sdlmixer_m.cpp
+new file mode 100644
+index 0000000000..c20ea9a46e
+--- /dev/null
++++ b/src/music/sdlmixer_m.cpp
+@@ -0,0 +1,98 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file sdlmixer_m.cpp Playing music via SDL2_mixer.
++ *
++ * On AROS neither of the usual MIDI backends is available: there is no
++ * fork() for extmidi and no fluidsynth port. SDL2_mixer is ported and
++ * carries its own timidity, which renders MIDI with the patch set from
++ * the freepats package.
++ *
++ * SDL2 allows only one output device on AROS, so the sound driver goes
++ * through SDL2_mixer as well (see sound/sdlmixer_s.cpp) and the
++ * Mix_OpenAudio() below joins that same device by refcount.
++ */
++
++#include "../stdafx.h"
++
++#include "sdlmixer_m.h"
++
++#include <SDL.h>
++#include <SDL_mixer.h>
++
++#include "../debug.h"
++#include "midifile.hpp"
++
++#include "../safeguards.h"
++
++/** Factory for the SDL2_mixer driver. */
++static FMusicDriver_SdlMixer iFMusicDriver_SdlMixer;
++
++std::optional<std::string_view> MusicDriver_SdlMixer::Start(const StringList &param)
++{
++	/* The sound driver normally got here first. Only quit in Stop() what was
++	 * started here, or the refcount drops below what the sound driver holds
++	 * and the audio subsystem goes down under its still-open device. */
++	if (SDL_WasInit(SDL_INIT_AUDIO) == 0) {
++		int ret_code = (SDL_WasInit(SDL_INIT_EVERYTHING) == 0) ? SDL_Init(SDL_INIT_AUDIO) : SDL_InitSubSystem(SDL_INIT_AUDIO);
++		if (ret_code == -1) return SDL_GetError();
++		this->inited_audio = true;
++	}
++
++	int hz = GetDriverParamInt(param, "hz", 44100);
++	int samples = GetDriverParamInt(param, "samples", 1024);
++	if (Mix_OpenAudio(hz, MIX_DEFAULT_FORMAT, 2, samples) == -1) return Mix_GetError();
++
++	return std::nullopt;
++}
++
++void MusicDriver_SdlMixer::Stop()
++{
++	this->StopSong();
++	Mix_CloseAudio();
++	if (this->inited_audio) SDL_QuitSubSystem(SDL_INIT_AUDIO);
++}
++
++void MusicDriver_SdlMixer::PlaySong(const MusicSongInfo &song)
++{
++	std::string filename = MidiFile::GetSMFFile(song);
++
++	this->StopSong();
++
++	if (filename.empty()) return;
++
++	this->music = Mix_LoadMUS(filename.c_str());
++	if (this->music == nullptr) {
++		Debug(driver, 0, "sdlmixer: could not load '{}': {}", filename, Mix_GetError());
++		return;
++	}
++
++	if (Mix_PlayMusic(this->music, 1) == -1) {
++		Debug(driver, 0, "sdlmixer: could not play '{}': {}", filename, Mix_GetError());
++		this->StopSong();
++	}
++}
++
++void MusicDriver_SdlMixer::StopSong()
++{
++	if (this->music == nullptr) return;
++
++	Mix_HaltMusic();
++	Mix_FreeMusic(this->music);
++	this->music = nullptr;
++}
++
++bool MusicDriver_SdlMixer::IsSongPlaying()
++{
++	return Mix_PlayingMusic() != 0;
++}
++
++void MusicDriver_SdlMixer::SetVolume(uint8_t vol)
++{
++	/* OpenTTD's volume is 0-127, which MIX_MAX_VOLUME (128) covers directly. */
++	Mix_VolumeMusic(vol);
++}
+diff --git a/src/music/sdlmixer_m.h b/src/music/sdlmixer_m.h
+new file mode 100644
+index 0000000000..5e8b0cb725
+--- /dev/null
++++ b/src/music/sdlmixer_m.h
+@@ -0,0 +1,43 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file sdlmixer_m.h Base for playing music via SDL2_mixer. */
++
++#ifndef MUSIC_SDLMIXER_H
++#define MUSIC_SDLMIXER_H
++
++#include "music_driver.hpp"
++
++struct Mix_Music;
++
++class MusicDriver_SdlMixer : public MusicDriver {
++private:
++	Mix_Music *music = nullptr;
++	bool inited_audio = false; ///< Whether this driver is the one that brought SDL's audio subsystem up.
++
++public:
++	std::optional<std::string_view> Start(const StringList &param) override;
++
++	void Stop() override;
++
++	void PlaySong(const MusicSongInfo &song) override;
++
++	void StopSong() override;
++
++	bool IsSongPlaying() override;
++
++	void SetVolume(uint8_t vol) override;
++	std::string_view GetName() const override { return "sdlmixer"; }
++};
++
++class FMusicDriver_SdlMixer : public DriverFactoryBase {
++public:
++	FMusicDriver_SdlMixer() : DriverFactoryBase(Driver::Type::Music, 10, "sdlmixer", "SDL2_mixer MIDI Driver") {}
++	std::unique_ptr<Driver> CreateInstance() const override { return std::make_unique<MusicDriver_SdlMixer>(); }
++};
++
++#endif /* MUSIC_SDLMIXER_H */
+diff --git a/src/network/core/CMakeLists.txt b/src/network/core/CMakeLists.txt
+index b547b6fa95..8b391a5bd7 100644
+--- a/src/network/core/CMakeLists.txt
++++ b/src/network/core/CMakeLists.txt
+@@ -35,6 +35,10 @@ add_files(
+     udp.h
+ )
+ 
++add_files(
++    os_abstraction_aros.cpp
++    CONDITION AROS
++)
+ add_files(
+     http_curl.cpp
+     CONDITION CURL_FOUND
+diff --git a/src/network/core/host.cpp b/src/network/core/host.cpp
+index 3574aa72ae..3a2c796809 100644
+--- a/src/network/core/host.cpp
++++ b/src/network/core/host.cpp
+@@ -57,6 +57,56 @@ static void NetworkFindBroadcastIPsInternal(NetworkAddressList *broadcast) // Wi
+ 	closesocket(sock);
+ }
+ 
++#elif defined(__AROS__)
++static void NetworkFindBroadcastIPsInternal(NetworkAddressList *broadcast) // AROS implementation
++{
++	/* AROS' bsdsocket has no getifaddrs(), so walk the interface list the
++	 * classic way: SIOCGIFCONF for the names, then query each one. */
++	SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
++	if (sock == INVALID_SOCKET) return;
++
++	std::vector<char> buffer(sizeof(struct ifreq) * 16);
++	struct ifconf ifc{};
++
++	for (;;) {
++		ifc.ifc_len = static_cast<int>(buffer.size());
++		ifc.ifc_buf = buffer.data();
++		if (ioctl(sock, SIOCGIFCONF, &ifc) != 0) {
++			closesocket(sock);
++			return;
++		}
++		/* A full buffer means the list was probably truncated - retry bigger. */
++		if (static_cast<size_t>(ifc.ifc_len) < buffer.size()) break;
++		buffer.resize(buffer.size() * 2);
++	}
++
++	const char *end = buffer.data() + ifc.ifc_len;
++	for (const char *pos = buffer.data(); pos < end; ) {
++		const struct ifreq *entry = reinterpret_cast<const struct ifreq *>(pos);
++		/* Entries are variable length: the trailing sockaddr may be longer
++		 * than the one embedded in struct ifreq. */
++		size_t addr_len = std::max<size_t>(sizeof(struct sockaddr), entry->ifr_addr.sa_len);
++		pos += offsetof(struct ifreq, ifr_addr) + addr_len;
++
++		if (entry->ifr_addr.sa_family != AF_INET) continue;
++
++		struct ifreq request{};
++		strecpy(request.ifr_name, entry->ifr_name);
++
++		if (ioctl(sock, SIOCGIFFLAGS, &request) != 0) continue;
++		if (request.ifr_flags & IFF_LOOPBACK) continue;
++		if (!(request.ifr_flags & IFF_BROADCAST)) continue;
++
++		if (ioctl(sock, SIOCGIFBRDADDR, &request) != 0) continue;
++		if (request.ifr_broadaddr.sa_family != AF_INET) continue;
++
++		NetworkAddress addr(&request.ifr_broadaddr, sizeof(sockaddr));
++		if (std::none_of(broadcast->begin(), broadcast->end(), [&addr](NetworkAddress const &elem) -> bool { return elem == addr; })) broadcast->push_back(std::move(addr));
++	}
++
++	closesocket(sock);
++}
++
+ #else /* not WIN32 */
+ static void NetworkFindBroadcastIPsInternal(NetworkAddressList *broadcast)
+ {
+diff --git a/src/network/core/os_abstraction.h b/src/network/core/os_abstraction.h
+index 7f33b8ab6a..6edcb80637 100644
+--- a/src/network/core/os_abstraction.h
++++ b/src/network/core/os_abstraction.h
+@@ -74,7 +74,58 @@ typedef unsigned long in_addr_t;
+ #	include <netinet/tcp.h>
+ #	include <arpa/inet.h>
+ #	include <net/if.h>
+-#	include <ifaddrs.h>
++#	if defined(__AROS__)
++/* AROS has no getifaddrs(); host.cpp enumerates interfaces with SIOCGIFCONF. */
++#		include <sys/ioctl.h>
++/* Built with -DBSDSOCKET_NOLIBDEFINES, so <defines/bsdsocket.h> does not turn
++ * the socket API into function-like macros - see os_abstraction_aros.cpp for
++ * why. This still declares them (as plain prototypes) and brings in SocketBase;
++ * the definitions come from os_abstraction_aros.cpp. */
++#		include <proto/bsdsocket.h>
++/* <pthread.h> defines its own cancellation-point macros for ten of the socket
++ * names, but only once the bsdsocket prototypes above have been seen. Include
++ * it here so that happens under our control, then drop the macros again: the
++ * real functions in os_abstraction_aros.cpp make them redundant, and leaving
++ * them in place would rewrite unrelated C++ declarations - notably OpenTTD's
++ * own TCPConnection::CloseSocket(). Its PTHREAD_H guard stops any later
++ * include from putting them back. */
++#		include <pthread.h>
++#		undef accept
++#		undef connect
++#		undef CloseSocket
++#		undef recv
++#		undef recvfrom
++#		undef recvmsg
++#		undef select
++#		undef send
++#		undef sendmsg
++#		undef sendto
++/* The resolver entries are exported under RS_ names and <netdb.h> declares
++ * nothing, so these are the only declarations OpenTTD gets. */
++int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
++void freeaddrinfo(struct addrinfo *res);
++int getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags);
++const char *gai_strerror(int errcode);
++#		undef closesocket
++/* Qualified: NetworkTCPSocketHandler has a CloseSocket() member of its own,
++ * which unqualified lookup would find first inside its member functions. */
++#		define closesocket ::CloseSocket
++/* AROS spells FD_ZERO with memset(), and safeguards.h poisons that name, so
++ * every use below it fails to compile. Value-initialise instead. */
++static inline void aros_fd_zero(fd_set *set) { *set = fd_set{}; }
++#		undef FD_ZERO
++#		define FD_ZERO(p) aros_fd_zero(p)
++/* IoctlSocket() takes its argument as char *, while every caller passes a
++ * pointer to a struct or a long, so route through a cast rather than renaming
++ * ioctl outright. */
++static inline int aros_ioctl_socket(int s, unsigned long request, void *argp)
++{
++	return IoctlSocket(s, request, reinterpret_cast<char *>(argp));
++}
++#		define ioctl aros_ioctl_socket
++#	else
++#		include <ifaddrs.h>
++#	endif
+ #	if !defined(INADDR_NONE)
+ #		define INADDR_NONE 0xffffffff
+ #	endif
+diff --git a/src/network/core/os_abstraction_aros.cpp b/src/network/core/os_abstraction_aros.cpp
+new file mode 100644
+index 0000000000..b035e83db5
+--- /dev/null
++++ b/src/network/core/os_abstraction_aros.cpp
+@@ -0,0 +1,174 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/**
++ * @file os_abstraction_aros.cpp Real socket functions for AROS.
++ *
++ * AROS reaches bsdsocket.library through ~184 function-like macros in
++ * <defines/bsdsocket.h>; libnet.a contains no socket symbols at all, only
++ * helpers such as select() and inet_ntoa(). Those macros are therefore
++ * load-bearing - but a function-like macro rewrites *every* occurrence of its
++ * name, not just calls. The names include both the POSIX spellings and the
++ * AmigaOS ones (CloseSocket, IoctlSocket, ...), and they collide with ordinary
++ * C++ all over the codebase: nlohmann/json has a member accept(), gfxinit.cpp
++ * uses std::bind, and OpenTTD's own TCPConnection has a CloseSocket() method.
++ *
++ * Patching each collision is a losing game, because <pthread.h> independently
++ * defines its own cancellation-point wrappers for ten of the same names, so
++ * whether a given file breaks comes down to include order.
++ *
++ * Instead the whole port is built with -DBSDSOCKET_NOLIBDEFINES, which stops
++ * <proto/bsdsocket.h> from pulling the macro block in, and os_abstraction.h
++ * includes <pthread.h> itself and drops its ten macros again, so include order
++ * stops mattering. The C++ side is then completely free of socket macros - at
++ * the cost of the functions no longer being defined anywhere, since
++ * <clib/bsdsocket_protos.h> only declares them.
++ *
++ * This file supplies those definitions. It deliberately re-enables the macros
++ * to get at the __<name>_WB() library-call constructs, then undefines the plain
++ * names so the definitions below are real functions rather than macro
++ * expansions. Signatures follow <clib/bsdsocket_protos.h>, which the compiler
++ * checks for us - note that send()/recv() take int lengths here, not size_t.
++ */
++
++#include "../../stdafx.h"
++
++/* Undo the project-wide suppression: this is the one place that wants them.
++ * The resolver entries (getaddrinfo and friends) come from the Roadshow API, so
++ * their __*_WB macros sit behind __CONFIG_ROADSHOW__. */
++#undef BSDSOCKET_NOLIBDEFINES
++#define __CONFIG_ROADSHOW__
++#include <proto/bsdsocket.h>
++
++#include "../../safeguards.h"
++
++/* Keep __<name>_WB, drop the plain names so we can define them below. */
++#undef socket
++#undef bind
++#undef connect
++#undef listen
++#undef accept
++#undef send
++#undef sendto
++#undef recv
++#undef recvfrom
++#undef setsockopt
++#undef getsockopt
++#undef getsockname
++#undef getpeername
++#undef shutdown
++#undef CloseSocket
++#undef IoctlSocket
++#undef getaddrinfo
++#undef freeaddrinfo
++#undef getnameinfo
++#undef gai_strerror
++
++int socket(int domain, int type, int protocol)
++{
++	return __socket_WB(SocketBase, domain, type, protocol);
++}
++
++int bind(int s, const struct sockaddr *name, socklen_t namelen)
++{
++	return __bind_WB(SocketBase, s, name, namelen);
++}
++
++int connect(int s, const struct sockaddr *name, socklen_t namelen)
++{
++	return __connect_WB(SocketBase, s, name, namelen);
++}
++
++int listen(int s, int backlog)
++{
++	return __listen_WB(SocketBase, s, backlog);
++}
++
++int accept(int s, struct sockaddr *addr, socklen_t *addrlen)
++{
++	return __accept_WB(SocketBase, s, addr, addrlen);
++}
++
++int send(int s, const void *msg, int len, int flags)
++{
++	return __send_WB(SocketBase, s, msg, len, flags);
++}
++
++int sendto(int s, const void *msg, int len, int flags, const struct sockaddr *to, socklen_t tolen)
++{
++	return __sendto_WB(SocketBase, s, msg, len, flags, to, tolen);
++}
++
++int recv(int s, void *buf, int len, int flags)
++{
++	return __recv_WB(SocketBase, s, buf, len, flags);
++}
++
++int recvfrom(int s, void *buf, int len, int flags, struct sockaddr *from, socklen_t *fromlen)
++{
++	return __recvfrom_WB(SocketBase, s, buf, len, flags, from, fromlen);
++}
++
++int setsockopt(int s, int level, int optname, const void *optval, socklen_t optlen)
++{
++	return __setsockopt_WB(SocketBase, s, level, optname, optval, optlen);
++}
++
++int getsockopt(int s, int level, int optname, void *optval, socklen_t *optlen)
++{
++	return __getsockopt_WB(SocketBase, s, level, optname, optval, optlen);
++}
++
++int getsockname(int s, struct sockaddr *name, socklen_t *namelen)
++{
++	return __getsockname_WB(SocketBase, s, name, namelen);
++}
++
++int getpeername(int s, struct sockaddr *name, socklen_t *namelen)
++{
++	return __getpeername_WB(SocketBase, s, name, namelen);
++}
++
++int shutdown(int s, int how)
++{
++	return __shutdown_WB(SocketBase, s, how);
++}
++
++int CloseSocket(int s)
++{
++	return __CloseSocket_WB(SocketBase, s);
++}
++
++int IoctlSocket(int s, unsigned long request, char *argp)
++{
++	return __IoctlSocket_WB(SocketBase, s, request, argp);
++}
++
++/* The resolver entries are exported under RS_ names and are not declared by
++ * <netdb.h> at all, so these are the only declarations OpenTTD ever sees;
++ * os_abstraction.h declares them with the POSIX signatures used here. */
++int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res)
++{
++	return __getaddrinfo_WB(SocketBase, node, service, hints, res);
++}
++
++void freeaddrinfo(struct addrinfo *res)
++{
++	__freeaddrinfo_WB(SocketBase, res);
++}
++
++int getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
++{
++	/* AROS takes a non-const sockaddr and LONG lengths. */
++	return __getnameinfo_WB(SocketBase, const_cast<struct sockaddr *>(sa), salen, host, hostlen, serv, servlen, flags);
++}
++
++const char *gai_strerror(int errcode)
++{
++	return reinterpret_cast<const char *>(__gai_strerror_WB(SocketBase, errcode));
++}
++
+diff --git a/src/openttd.cpp b/src/openttd.cpp
+index 7325b4c49e..a7ba71efcd 100644
+--- a/src/openttd.cpp
++++ b/src/openttd.cpp
+@@ -669,7 +669,7 @@ int openttd_main(std::span<std::string_view> arguments)
+ 	if (dedicated) Debug(net, 3, "Starting dedicated server, version {}", _openttd_revision);
+ 	if (_dedicated_forks && !dedicated) _dedicated_forks = false;
+ 
+-#if defined(UNIX)
++#if defined(UNIX) && !defined(__AROS__)
+ 	/* We must fork here, or we'll end up without some resources we need (like sockets) */
+ 	if (_dedicated_forks) DedicatedFork();
+ #endif
+diff --git a/src/os/unix/crashlog_unix.cpp b/src/os/unix/crashlog_unix.cpp
+index 0bd7163591..f6df21176e 100644
+--- a/src/os/unix/crashlog_unix.cpp
++++ b/src/os/unix/crashlog_unix.cpp
+@@ -50,7 +50,12 @@ class CrashLogUnix : public CrashLog {
+ 	void SurveyCrash(nlohmann::json &survey) const override
+ 	{
+ 		survey["id"] = signum;
++#ifdef __AROS__
++		/* No strsignal(); the number in "id" is all we can report. */
++		survey["reason"] = fmt::format("signal {}", signum);
++#else
+ 		survey["reason"] = strsignal(signum);
++#endif
+ 	}
+ 
+ 	void SurveyStacktrace([[maybe_unused]] nlohmann::json &survey) const override
+diff --git a/src/os/unix/library_loader_unix.cpp b/src/os/unix/library_loader_unix.cpp
+index 2033af41dd..325e282bad 100644
+--- a/src/os/unix/library_loader_unix.cpp
++++ b/src/os/unix/library_loader_unix.cpp
+@@ -9,14 +9,17 @@
+ 
+ #include "../../stdafx.h"
+ 
++#if !defined(__EMSCRIPTEN__) && !defined(__AROS__)
+ #include <dlfcn.h>
++#endif
+ 
+ #include "../../library_loader.h"
+ 
+ #include "../../safeguards.h"
+ 
+-/* Emscripten cannot dynamically load other files. */
+-#if defined(__EMSCRIPTEN__)
++/* Emscripten cannot dynamically load other files, and AROS' elf.library has no
++ * dlopen() equivalent available to us. */
++#if defined(__EMSCRIPTEN__) || defined(__AROS__)
+ 
+ void *LibraryLoader::OpenLibrary(const std::string &)
+ {
+diff --git a/src/os/unix/survey_unix.cpp b/src/os/unix/survey_unix.cpp
+index eac85c7fb8..4db299ff77 100644
+--- a/src/os/unix/survey_unix.cpp
++++ b/src/os/unix/survey_unix.cpp
+@@ -29,8 +29,15 @@ void SurveyOS(nlohmann::json &json)
+ 	json["machine"] = name.machine;
+ 	json["version"] = name.version;
+ 
++#ifdef __AROS__
++	/* AROS' sysconf() has no _SC_PHYS_PAGES; reporting total RAM would mean
++	 * pulling in <proto/exec.h> for AvailMem(), whose struct Node collides with
++	 * this file's nlohmann/json include. Leave it unreported. */
++	json["memory"] = "unknown";
++#else
+ 	long pages = sysconf(_SC_PHYS_PAGES);
+ 	long page_size = sysconf(_SC_PAGE_SIZE);
+ 	json["memory"] = SurveyMemoryToText(pages * page_size);
++#endif
+ 	json["hardware_concurrency"] = std::thread::hardware_concurrency();
+ }
+diff --git a/src/os/unix/unix.cpp b/src/os/unix/unix.cpp
+index 6032756ac2..503533cb9b 100644
+--- a/src/os/unix/unix.cpp
++++ b/src/os/unix/unix.cpp
+@@ -226,6 +226,12 @@ void OSOpenBrowser(const std::string &url)
+ 	/* Implementation in pre.js */
+ 	EM_ASM({ if (window["openttd_open_url"]) window.openttd_open_url($0, $1) }, url.data(), url.size());
+ }
++#elif defined(__AROS__)
++void OSOpenBrowser(const std::string &url)
++{
++	/* No fork()/execvp() here, and no xdg-open to hand off to either. */
++	Debug(misc, 0, "Opening a browser is not supported on AROS: {}", url);
++}
+ #elif !defined( __APPLE__)
+ void OSOpenBrowser(const std::string &url)
+ {
+diff --git a/src/os/unix/unix_main.cpp b/src/os/unix/unix_main.cpp
+index 93b57fac8b..287cc97bd5 100644
+--- a/src/os/unix/unix_main.cpp
++++ b/src/os/unix/unix_main.cpp
+@@ -16,6 +16,41 @@
+ #include <time.h>
+ #include <signal.h>
+ 
++#ifdef __AROS__
++#include "../../debug.h"
++
++#include <resources/entropy.h>
++#include <proto/exec.h>
++#include <proto/entropy.h>
++
++/**
++ * Get a seed from AROS' entropy.resource.
++ *
++ * Worth the detour because the wall clock is a poor seed here: a Raspberry Pi
++ * has no battery-backed clock, so time() reads much the same at every boot and
++ * every run would generate the same world.
++ *
++ * The resource is addressed directly rather than through arc4random(), which
++ * also draws on it: arc4random() cannot report failure, so when the resource
++ * is absent it quietly degrades to a xorshift seeded from that same clock.
++ * Going through GetEntropy() keeps that case visible.
++ *
++ * EntropyBase is deliberately a local - the inline stubs pick the base out of
++ * whatever scope they are called from, which avoids having to define the
++ * global the proto header declares. The resource is never closed.
++ */
++static uint32_t AROSGetRandomSeed()
++{
++	struct Library *EntropyBase = (struct Library *)OpenResource(ENTROPYNAME);
++	uint32_t seed;
++
++	if (EntropyBase != nullptr && GetEntropy(&seed, sizeof(seed)) == (LONG)sizeof(seed)) return seed;
++
++	Debug(misc, 0, "entropy.resource unavailable, falling back to the clock for the random seed");
++	return (uint32_t)time(nullptr);
++}
++#endif
++
+ #include "../../safeguards.h"
+ 
+ int CDECL main(int argc, char *argv[])
+@@ -27,9 +62,23 @@ int CDECL main(int argc, char *argv[])
+ 		params.emplace_back(argv[i]);
+ 	}
+ 
++#ifdef __AROS__
++	/* AmigaOS convention, which AROS follows: a program started from Workbench
++	 * is handed argc == 0, with argv pointing at the WBStartup message instead
++	 * of an argument vector. openttd_main() drops the first entry as the
++	 * program name (arguments.subspan(1)), and subspan(1) on an empty span is
++	 * undefined behaviour - the size underflows to SIZE_MAX and the option
++	 * parser then walks wild memory until it faults. Give it a name to drop. */
++	if (params.empty()) params.emplace_back("OpenTTD");
++#endif
++
+ 	CrashLog::InitialiseCrashLog();
+ 
++#ifdef __AROS__
++	SetRandomSeed(AROSGetRandomSeed());
++#else
+ 	SetRandomSeed(time(nullptr));
++#endif
+ 
+ 	signal(SIGPIPE, SIG_IGN);
+ 
+diff --git a/src/saveload/linkgraph_sl.cpp b/src/saveload/linkgraph_sl.cpp
+index 91e6fa851f..91d0cb934a 100644
+--- a/src/saveload/linkgraph_sl.cpp
++++ b/src/saveload/linkgraph_sl.cpp
+@@ -21,39 +21,39 @@
+ 
+ #include "../safeguards.h"
+ 
+-typedef LinkGraph::BaseNode Node;
+-typedef LinkGraph::BaseEdge Edge;
++typedef LinkGraph::BaseNode LinkNode;
++typedef LinkGraph::BaseEdge LinkEdge;
+ 
+ static uint16_t _num_nodes;
+ static LinkGraph *_linkgraph; ///< Contains the current linkgraph being saved/loaded.
+ static NodeID _linkgraph_from; ///< Contains the current "from" node being saved/loaded.
+ 
+-class SlLinkgraphEdge : public DefaultSaveLoadHandler<SlLinkgraphEdge, Node> {
++class SlLinkgraphEdge : public DefaultSaveLoadHandler<SlLinkgraphEdge, LinkNode> {
+ public:
+ 	static inline const SaveLoad description[] = {
+-		    SLE_VAR(Edge, capacity,                 VarTypes::U32),
+-		    SLE_VAR(Edge, usage,                    VarTypes::U32),
+-		SLE_CONDVAR(Edge, travel_time_sum, VarTypes::U64, SaveLoadVersion::LinkgraphTravelTime, SaveLoadVersion::MaxVersion),
+-		    SLE_VAR(Edge, last_unrestricted_update, VarTypes::I32),
+-		SLE_CONDVAR(Edge, last_restricted_update, VarTypes::I32, SaveLoadVersion::LinkgraphRestrictedFlow, SaveLoadVersion::MaxVersion),
+-		    SLE_VAR(Edge, dest_node,                VarTypes::U16),
+-		SLE_CONDVARNAME(Edge, dest_node, "next_edge", VarTypes::U16, SaveLoadVersion::MinVersion, SaveLoadVersion::LinkgraphEdges),
++		    SLE_VAR(LinkEdge, capacity,                 VarTypes::U32),
++		    SLE_VAR(LinkEdge, usage,                    VarTypes::U32),
++		SLE_CONDVAR(LinkEdge, travel_time_sum, VarTypes::U64, SaveLoadVersion::LinkgraphTravelTime, SaveLoadVersion::MaxVersion),
++		    SLE_VAR(LinkEdge, last_unrestricted_update, VarTypes::I32),
++		SLE_CONDVAR(LinkEdge, last_restricted_update, VarTypes::I32, SaveLoadVersion::LinkgraphRestrictedFlow, SaveLoadVersion::MaxVersion),
++		    SLE_VAR(LinkEdge, dest_node,                VarTypes::U16),
++		SLE_CONDVARNAME(LinkEdge, dest_node, "next_edge", VarTypes::U16, SaveLoadVersion::MinVersion, SaveLoadVersion::LinkgraphEdges),
+ 	};
+ 	static inline const SaveLoadCompatTable compat_description = _linkgraph_edge_sl_compat;
+ 
+-	void Save(Node *bn) const override
++	void Save(LinkNode *bn) const override
+ 	{
+ 		SlSetStructListLength(bn->edges.size());
+-		for (Edge &e : bn->edges) {
++		for (LinkEdge &e : bn->edges) {
+ 			SlObject(&e, this->GetDescription());
+ 		}
+ 	}
+ 
+-	void Load(Node *bn) const override
++	void Load(LinkNode *bn) const override
+ 	{
+ 		if (IsSavegameVersionBefore(SaveLoadVersion::LinkgraphEdges)) {
+ 			uint16_t max_size = _linkgraph->Size();
+-			std::vector<Edge> edges(max_size);
++			std::vector<LinkEdge> edges(max_size);
+ 
+ 			if (IsSavegameVersionBefore(SaveLoadVersion::LinkgraphLocationDisasterStore)) {
+ 				/* We used to save the full matrix ... */
+@@ -96,11 +96,11 @@ public:
+ class SlLinkgraphNode : public DefaultSaveLoadHandler<SlLinkgraphNode, LinkGraph> {
+ public:
+ 	static inline const SaveLoad description[] = {
+-		SLE_CONDVAR(Node, xy, VarTypes::U32, SaveLoadVersion::LinkgraphLocationDisasterStore, SaveLoadVersion::MaxVersion),
+-		    SLE_VAR(Node, supply,      VarTypes::U32),
+-		    SLE_VAR(Node, demand,      VarTypes::U32),
+-		    SLE_VAR(Node, station,     VarTypes::U16),
+-		    SLE_VAR(Node, last_update, VarTypes::I32),
++		SLE_CONDVAR(LinkNode, xy, VarTypes::U32, SaveLoadVersion::LinkgraphLocationDisasterStore, SaveLoadVersion::MaxVersion),
++		    SLE_VAR(LinkNode, supply,      VarTypes::U32),
++		    SLE_VAR(LinkNode, demand,      VarTypes::U32),
++		    SLE_VAR(LinkNode, station,     VarTypes::U16),
++		    SLE_VAR(LinkNode, last_update, VarTypes::I32),
+ 		SLEG_STRUCTLIST("edges", SlLinkgraphEdge),
+ 	};
+ 	static inline const SaveLoadCompatTable compat_description = _linkgraph_node_sl_compat;
+diff --git a/src/sound/CMakeLists.txt b/src/sound/CMakeLists.txt
+index 0abd7c014b..909ddf8a31 100644
+--- a/src/sound/CMakeLists.txt
++++ b/src/sound/CMakeLists.txt
+@@ -5,10 +5,17 @@ if(NOT OPTION_DEDICATED)
+         CONDITION Allegro_FOUND
+     )
+ 
++    # On AROS the device belongs to SDL2_mixer instead; see sdlmixer_s.cpp.
+     add_files(
+         sdl2_s.cpp
+         sdl_s.h
+-        CONDITION SDL2_FOUND
++        CONDITION SDL2_FOUND AND NOT AROS
++    )
++
++    add_files(
++        sdlmixer_s.cpp
++        sdlmixer_s.h
++        CONDITION AROS
+     )
+ 
+     add_files(
+diff --git a/src/sound/sdlmixer_s.cpp b/src/sound/sdlmixer_s.cpp
+new file mode 100644
+index 0000000000..6f3b7190ed
+--- /dev/null
++++ b/src/sound/sdlmixer_s.cpp
+@@ -0,0 +1,82 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file sdlmixer_s.cpp Playing sound via SDL2_mixer.
++ *
++ * AROS' SDL2 audio backend sets OnlyHasDefaultOutputDevice, and SDL2 refuses
++ * a second output device outright when that is set ("Audio device already
++ * open"). The music driver needs SDL2_mixer, which opens a device of its own,
++ * so the two cannot each hold one. Instead SDL2_mixer owns the single device
++ * and this driver adds OpenTTD's effects to the finished mix from a post-mix
++ * hook. Mix_OpenAudio() refcounts, so whichever driver starts first opens the
++ * device and the other just joins it.
++ */
++
++#include "../stdafx.h"
++
++#include "sdlmixer_s.h"
++
++#include <SDL.h>
++#include <SDL_mixer.h>
++
++#include "../mixer.h"
++
++#include "../safeguards.h"
++
++/** Factory for the SDL2_mixer sound driver. */
++static FSoundDriver_SdlMixer iFSoundDriver_SdlMixer;
++
++/** Scratch buffer for OpenTTD's own mix, sized in Start(). */
++static std::vector<uint8_t> _mix_buffer;
++
++/**
++ * Add OpenTTD's effects to what SDL2_mixer has already mixed.
++ * @param stream The finished mix, to be modified in place.
++ * @param len    Length of \a stream in bytes.
++ */
++static void CDECL AddSoundToMix(void *, Uint8 *stream, int len)
++{
++	/* MxMixSamples() clears its buffer before filling it, so it cannot write
++	 * straight into the stream without dropping the music that is already
++	 * there. Mix into scratch, then add. */
++	if (_mix_buffer.size() < (size_t)len) _mix_buffer.resize(len);
++
++	MxMixSamples(_mix_buffer.data(), len / 4);
++	SDL_MixAudioFormat(stream, _mix_buffer.data(), AUDIO_S16SYS, len, SDL_MIX_MAXVOLUME);
++}
++
++std::optional<std::string_view> SoundDriver_SdlMixer::Start(const StringList &parm)
++{
++	/* Only quit in Stop() what was started here; the music driver may already
++	 * hold the audio subsystem. */
++	if (SDL_WasInit(SDL_INIT_AUDIO) == 0) {
++		int ret_code = (SDL_WasInit(SDL_INIT_EVERYTHING) == 0) ? SDL_Init(SDL_INIT_AUDIO) : SDL_InitSubSystem(SDL_INIT_AUDIO);
++		if (ret_code == -1) return SDL_GetError();
++		this->inited_audio = true;
++	}
++
++	int hz = GetDriverParamInt(parm, "hz", 44100);
++	int samples = GetDriverParamInt(parm, "samples", 1024);
++	if (Mix_OpenAudio(hz, MIX_DEFAULT_FORMAT, 2, samples) == -1) return Mix_GetError();
++
++	int got_hz = 0, got_ch = 0;
++	Uint16 got_fmt = 0;
++	if (Mix_QuerySpec(&got_hz, &got_fmt, &got_ch) == 0) return Mix_GetError();
++
++	_mix_buffer.resize(samples * 4);
++	MxInitialize(got_hz);
++	Mix_SetPostMix(AddSoundToMix, nullptr);
++
++	return std::nullopt;
++}
++
++void SoundDriver_SdlMixer::Stop()
++{
++	Mix_SetPostMix(nullptr, nullptr);
++	Mix_CloseAudio();
++	if (this->inited_audio) SDL_QuitSubSystem(SDL_INIT_AUDIO);
++}
+diff --git a/src/sound/sdlmixer_s.h b/src/sound/sdlmixer_s.h
+new file mode 100644
+index 0000000000..0429e5a51a
+--- /dev/null
++++ b/src/sound/sdlmixer_s.h
+@@ -0,0 +1,35 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file sdlmixer_s.h Base for playing sound through SDL2_mixer. */
++
++#ifndef SOUND_SDLMIXER_H
++#define SOUND_SDLMIXER_H
++
++#include "sound_driver.hpp"
++
++/** Implementation of the SDL2_mixer sound driver. */
++class SoundDriver_SdlMixer : public SoundDriver {
++private:
++	bool inited_audio = false; ///< Whether this driver is the one that brought SDL's audio subsystem up.
++
++public:
++	std::optional<std::string_view> Start(const StringList &param) override;
++
++	void Stop() override;
++	std::string_view GetName() const override { return "sdl"; }
++};
++
++/** Factory for the SDL2_mixer sound driver. */
++class FSoundDriver_SdlMixer : public DriverFactoryBase {
++public:
++	/** Create the factory. Registered as "sdl" so an existing sounddriver setting keeps working. */
++	FSoundDriver_SdlMixer() : DriverFactoryBase(Driver::Type::Sound, 5, "sdl", "SDL Sound Driver via SDL2_mixer (param hz,samples)") {}
++	std::unique_ptr<Driver> CreateInstance() const override { return std::make_unique<SoundDriver_SdlMixer>(); }
++};
++
++#endif /* SOUND_SDLMIXER_H */
+diff --git a/src/station_cmd.cpp b/src/station_cmd.cpp
+index 28e42905db..7dfe5f05a3 100644
+--- a/src/station_cmd.cpp
++++ b/src/station_cmd.cpp
+@@ -4175,7 +4175,7 @@ void DeleteStaleLinks(Station *from)
+ 		LinkGraph *lg = LinkGraph::GetIfValid(ge.link_graph);
+ 		if (lg == nullptr) continue;
+ 		std::vector<NodeID> to_remove{};
+-		for (Edge &edge : (*lg)[ge.node].edges) {
++		for (LinkEdge &edge : (*lg)[ge.node].edges) {
+ 			Station *to = Station::Get((*lg)[edge.dest_node].station);
+ 			assert(to->goods[cargo].node == edge.dest_node);
+ 			assert(TimerGameEconomy::date >= edge.LastUpdate());
+diff --git a/src/strgen/strgen_base.cpp b/src/strgen/strgen_base.cpp
+index df96c72e56..67f6db5eea 100644
+--- a/src/strgen/strgen_base.cpp
++++ b/src/strgen/strgen_base.cpp
+@@ -402,7 +402,9 @@ ParsedCommandStruct ExtractCommandString(std::string_view s, bool)
+ 
+ 			p.consuming_commands[argidx++] = cs.cmd;
+ 		} else if (!cs.cmd->flags.Test(CmdFlag::DontCount)) { // Ignore some of them
+-			p.non_consuming_commands.emplace_back(cs.cmd, std::move(cs.param));
++			/* CmdPair is an aggregate, so emplace_back needs P0960 parenthesized
++			 * aggregate initialisation, which Apple clang's libc++ lacks. */
++			p.non_consuming_commands.push_back(CmdPair{cs.cmd, std::move(cs.param)});
+ 		}
+ 	}
+ 
+diff --git a/src/video/video_driver.cpp b/src/video/video_driver.cpp
+index 349c832b60..4430fa99ad 100644
+--- a/src/video/video_driver.cpp
++++ b/src/video/video_driver.cpp
+@@ -44,6 +44,8 @@ void VideoDriver::GameLoop()
+ 
+ void VideoDriver::GameThread()
+ {
++	this->game_thread_started = true;
++
+ 	while (!_exit_game) {
+ 		this->GameLoop();
+ 
+@@ -67,7 +69,10 @@ void VideoDriver::GameThread()
+  */
+ void VideoDriver::GameLoopPause()
+ {
+-	/* If we are not called from the game-thread, ignore this request. */
++	/* If we are not called from the game-thread, ignore this request. The
++	 * started flag has to be checked too - see its declaration for why the
++	 * thread id comparison alone lets the main thread through. */
++	if (!this->game_thread_started) return;
+ 	if (std::this_thread::get_id() != this->game_thread.get_id()) return;
+ 
+ 	this->game_state_mutex.unlock();
+diff --git a/src/video/video_driver.hpp b/src/video/video_driver.hpp
+index d846498222..d07c60a433 100644
+--- a/src/video/video_driver.hpp
++++ b/src/video/video_driver.hpp
+@@ -363,6 +363,19 @@ protected:
+ 
+ 	bool is_game_threaded;
+ 	std::thread game_thread;
++	/**
++	 * Set by the game-thread itself once it is actually running.
++	 *
++	 * GameLoopPause() cannot decide "am I the game-thread?" from the thread id
++	 * alone: the id of a not-yet-started std::thread is a value-initialised
++	 * pthread_t, i.e. 0, and on AROS pthread_self() also returns 0 for the main
++	 * task, because that task was never created through pthread_create(). The
++	 * two therefore compare equal until this thread starts, and the main thread
++	 * would unlock a game_state_mutex it never took - which AROS turns into
++	 * ReleaseSemaphore() on a semaphore it does not own, alerting with
++	 * 0x01000008 "Semaphore in an illegal state".
++	 */
++	std::atomic<bool> game_thread_started{false};
+ 	std::mutex game_state_mutex;
+ 	std::mutex game_thread_wait_mutex;
+ 

@@ -1,0 +1,429 @@
+diff --git a/cmake/client.cmake b/cmake/client.cmake
+index 41dc9360..c1081458 100644
+--- a/cmake/client.cmake
++++ b/cmake/client.cmake
+@@ -20,7 +20,9 @@ set(CLIENT_SOURCES
+     ${SOURCE_DIR}/client/cl_scrn.c
+     ${SOURCE_DIR}/client/cl_ui.c
+     ${SOURCE_DIR}/client/cl_avi.c
+-    ${SOURCE_DIR}/client/libmumblelink.c
++    # libmumblelink.c is added below, but only when USE_MUMBLE is set. Listing
++    # it here as well compiled it regardless, and its includes are not guarded -
++    # so on platforms without <sys/mman.h> the build failed even with Mumble off.
+     ${SOURCE_DIR}/client/snd_altivec.c
+     ${SOURCE_DIR}/client/snd_adpcm.c
+     ${SOURCE_DIR}/client/snd_dma.c
+diff --git a/cmake/platforms/unix.cmake b/cmake/platforms/unix.cmake
+index c7f81dbc..094dc5db 100644
+--- a/cmake/platforms/unix.cmake
++++ b/cmake/platforms/unix.cmake
+@@ -17,6 +17,12 @@ if(USE_HTTP)
+ endif()
+ 
+ list(APPEND COMMON_LIBRARIES
+-    ${CMAKE_DL_LIBS}    # Dynamic loader
+     m                   # Math library
+ )
++
++# AROS has no libdl; Sys_LoadLibrary() is stubbed out there (see sys_loadlib.h).
++if(NOT AROS)
++    list(APPEND COMMON_LIBRARIES
++        ${CMAKE_DL_LIBS}    # Dynamic loader
++    )
++endif()
+diff --git a/code/qcommon/net_ip.c b/code/qcommon/net_ip.c
+index 294e4c03..f6d59c64 100644
+--- a/code/qcommon/net_ip.c
++++ b/code/qcommon/net_ip.c
+@@ -20,6 +20,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ ===========================================================================
+ */
+ 
++#ifdef __AROS__
++/* Must be set before anything can reach <proto/bsdsocket.h>: the resolver
++ * entries (getaddrinfo and friends) are only declared when it is, and that
++ * header has an include guard, so defining it further down would come too
++ * late - <sys/socket.h> pulls it in first. See the AROS block below. */
++#	define __CONFIG_ROADSHOW__
++#endif
++
+ #include "../qcommon/q_shared.h"
+ #include "../qcommon/qcommon.h"
+ 
+@@ -80,10 +88,33 @@ static qboolean	winsockInitialized = qfalse;
+ #	include <sys/types.h>
+ #	include <sys/time.h>
+ #	include <unistd.h>
+-#	if !defined(__sun) && !defined(__sgi)
++#	if !defined(__sun) && !defined(__sgi) && !defined(__AROS__)
+ #		include <ifaddrs.h>
+ #	endif
+ 
++#	ifdef __AROS__
++/* AROS reaches bsdsocket.library through the macros in <defines/bsdsocket.h>;
++ * __CONFIG_ROADSHOW__ (set at the top of this file) is what exposes the
++ * resolver entries, since <netdb.h> declares none of them. Harmless in C - the
++ * macros are the supported interface here; it is only C++ that trips over them
++ * rewriting unrelated identifiers. */
++#		include <proto/bsdsocket.h>
++
++/* AROS defines the AF_* families but not the PF_* aliases for IP. */
++#		ifndef PF_INET
++#			define PF_INET AF_INET
++#		endif
++#		ifndef PF_INET6
++#			define PF_INET6 AF_INET6
++#		endif
++
++/* No if_nametoindex(): AROS has struct if_nameindex but no lookup for it.
++ * Returning 0 means "unspecified scope", which is what ioq3 falls back to
++ * when a scope id cannot be resolved - IPv6 link-local addressing is the only
++ * thing affected. */
++#		define if_nametoindex(name) ((unsigned int)0)
++#	endif
++
+ #	ifdef __sun
+ #		include <sys/filio.h>
+ #	endif
+diff --git a/code/qcommon/q_platform.h b/code/qcommon/q_platform.h
+index 960f844e..4ac18516 100644
+--- a/code/qcommon/q_platform.h
++++ b/code/qcommon/q_platform.h
+@@ -167,6 +167,45 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ 
+ #endif
+ 
++//================================================================== AROS ===
++
++#if defined(__AROS__)
++
++#define OS_STRING "aros"
++#define ID_INLINE inline
++
++/* AmigaDOS separates directories with '/' as well; a volume is "Name:", which
++ * the C library translates on the way through. */
++#define PATH_SEP '/'
++
++#if defined(__aarch64__)
++# define ARCH_STRING "arm64"
++#elif defined(__arm__)
++# define ARCH_STRING "arm"
++#elif defined(__x86_64__)
++# define ARCH_STRING "x86_64"
++# undef idx64
++# define idx64 1
++#elif defined(__i386__)
++# define ARCH_STRING "x86"
++#endif
++
++/* No HAVE_VM_COMPILED for any of these: ioq3 ships JITs for x86, armv7l, ppc
++ * and sparc only, so AROS targets run game code through vm_interpreted.c.
++ * Deliberately not claiming the x86 JIT either - it wants executable pages
++ * arranged the way Linux/BSD do it, which is untested here. */
++
++/* Determined from the compiler rather than <endian.h>, which AROS lacks. */
++#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++#define Q3_BIG_ENDIAN
++#else
++#define Q3_LITTLE_ENDIAN
++#endif
++
++#define DLL_EXT ".so"
++
++#endif
++
+ //================================================================= LINUX ===
+ 
+ #if defined(__linux__) || defined(__FreeBSD_kernel__) || defined(__GNU__)
+diff --git a/code/sys/con_tty.c b/code/sys/con_tty.c
+index d780f55c..da476964 100644
+--- a/code/sys/con_tty.c
++++ b/code/sys/con_tty.c
+@@ -34,6 +34,42 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #include <fcntl.h>
+ #include <sys/time.h>
+ 
++#ifdef __AROS__
++#	include <proto/dos.h>
++
++/* AROS' <termios.h> marks tcflush() as NOTIMPL and provides no symbol for it.
++ * It is only used here to discard the tail of an escape sequence after an
++ * arrow key has been handled, so dropping it costs at most a stray keystroke
++ * from a sequence the console did not recognise. */
++#	define tcflush(fd, queue) ((void)(fd), (void)(queue), 0)
++
++/*
++==================
++CON_AROSCharAvailable
++
++Is there a keystroke waiting on the console?
++
++CON_Init() asks for a non-blocking stdin with fcntl(O_NONBLOCK), and on AROS
++that silently does nothing useful: fcntl() records the flag, but read()
++dispatches straight to DOS Read() and never consults it
++(compiler/crt/posixc/read.c). The one-byte read in CON_Input() therefore blocks
++on a console handle until a key arrives - and CON_Input() runs once per frame,
++so the whole game stalls. The window opens and nothing is ever rendered into it;
++each keystroke lets exactly one frame through.
++
++WaitForChar() polls the handle with a zero timeout instead, which keeps the tty
++console usable without blocking. Input() is NULL when there is no console (a
++Workbench launch), and WaitForChar() must not be handed that.
++==================
++*/
++static qboolean CON_AROSCharAvailable( void )
++{
++	BPTR in = Input();
++
++	return ( in && WaitForChar( in, 0 ) ) ? qtrue : qfalse;
++}
++#endif
++
+ /*
+ =============================================================
+ tty console routines
+@@ -341,6 +377,10 @@ char *CON_Input( void )
+ 
+ 	if(ttycon_on)
+ 	{
++#ifdef __AROS__
++		if (!CON_AROSCharAvailable())
++			return NULL;
++#endif
+ 		avail = read(STDIN_FILENO, &key, 1);
+ 		if (avail != -1)
+ 		{
+diff --git a/code/sys/sys_loadlib.h b/code/sys/sys_loadlib.h
+index eac0f2c7..99448be0 100644
+--- a/code/sys/sys_loadlib.h
++++ b/code/sys/sys_loadlib.h
+@@ -27,6 +27,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #		define Sys_UnloadLibrary(h) FreeLibrary((HMODULE)h)
+ #		define Sys_LoadFunction(h,fn) (void*)GetProcAddress((HMODULE)h,fn)
+ #		define Sys_LibraryError() "unknown"
++#	elif defined(__AROS__)
++/* AROS has no dlopen(): elf.library exposes no equivalent we can use. Nothing
++ * in this build loads code dynamically anyway - the renderer is linked in
++ * (USE_RENDERER_DLOPEN off) and game modules run as QVM bytecode - so fail
++ * honestly rather than pretend to load something. */
++#		define Sys_LoadLibrary(f) ((void *)0)
++#		define Sys_UnloadLibrary(h) ((void)(h))
++#		define Sys_LoadFunction(h,fn) ((void *)0)
++#		define Sys_LibraryError() "dynamic loading is not supported on AROS"
+ #	else
+ #	include <dlfcn.h>
+ #		define Sys_LoadLibrary(f) dlopen(f,RTLD_NOW)
+diff --git a/code/sys/sys_local.h b/code/sys/sys_local.h
+index 168d7e6d..e15ea80a 100644
+--- a/code/sys/sys_local.h
++++ b/code/sys/sys_local.h
+@@ -52,6 +52,11 @@ unsigned int CON_LogRead( char *out, unsigned int outSize );
+ 
+ char *Sys_BinaryPath( void );
+ char *Sys_BinaryPathRelative( const char *relative );
++#ifdef __AROS__
++/* Implemented in sys_unix.c; see the comment there for why argv[0] cannot be
++ * used to locate the program on AROS. */
++char *Sys_AROSProgramDir( void );
++#endif
+ 
+ #ifdef __APPLE__
+ char *Sys_StripAppBundle( char *pwd );
+diff --git a/code/sys/sys_main.c b/code/sys/sys_main.c
+index e3b63cb5..ff65fef4 100644
+--- a/code/sys/sys_main.c
++++ b/code/sys/sys_main.c
+@@ -835,7 +835,17 @@ int main( int argc, char **argv )
+ #endif
+ 
+ 	Sys_ParseArgs( argc, argv );
++#ifdef __AROS__
++	/* argv[0] is not a usable program path here. A Workbench launch passes
++	 * argc == 0 with argv pointing at the WBStartup message rather than an
++	 * argument vector, so argv[0] is not even a string; a shell launch passes
++	 * whatever the user typed, which often carries no directory at all. Since
++	 * DEFAULT_BASEDIR is Sys_BinaryPath(), getting this wrong is what makes the
++	 * engine fail to find baseq3. Ask DOS for the program's own drawer. */
++	Sys_SetBinaryPath( Sys_AROSProgramDir( ) );
++#else
+ 	Sys_SetBinaryPath( Sys_Dirname( argv[ 0 ] ) );
++#endif
+ 	Sys_SetDefaultInstallPath( DEFAULT_BASEDIR );
+ 
+ 	// Concatenate the command line for passing to Com_Init
+diff --git a/code/sys/sys_unix.c b/code/sys/sys_unix.c
+index 2ed5f1b0..90d1289d 100644
+--- a/code/sys/sys_unix.c
++++ b/code/sys/sys_unix.c
+@@ -32,8 +32,30 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ #include <stdlib.h>
+ #include <dirent.h>
+ #include <unistd.h>
++#ifndef __AROS__
++/* Nothing in this file uses mmap(); AROS simply has no <sys/mman.h>. */
+ #include <sys/mman.h>
++#endif
+ #include <sys/time.h>
++
++#ifdef __AROS__
++/* setenv()/unsetenv() live in posixc.library and are declared only through its
++ * own proto header - neither <stdlib.h> nor <unistd.h> exposes them. */
++#	include <proto/posixc.h>
++
++/* No fork() on AROS. Sys_Exec()'s three callers are the XDG config migration
++ * script, the zenity/kdialog error dialogs and xdg-open for URLs - none of
++ * which exist here - so reporting failure is the honest answer. The rest of
++ * Sys_Exec() still compiles: execvp(), waitpid() and _exit() are all present. */
++#	define fork() (-1)
++
++/* No mkfifo(): AROS has no named pipes. Sys_Mkfifo() checks the result and
++ * returns NULL on failure, which disables the pipe console - a dedicated
++ * server convenience, not something the client needs. */
++#	define mkfifo(path, mode) ((void)(path), (void)(mode), -1)
++
++#	include <proto/dos.h>
++#endif
+ #include <pwd.h>
+ #include <libgen.h>
+ #include <fcntl.h>
+@@ -44,6 +66,36 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ 
+ qboolean stdinIsATTY;
+ 
++#ifdef __AROS__
++/*
++==================
++Sys_AROSProgramDir
++
++The drawer the executable lives in, as an absolute "Volume:dir" path.
++
++Resolved through NameFromLock() rather than handed out as the literal
++"PROGDIR:", because the engine joins paths with PATH_SEP: "PROGDIR:" + '/' +
++"baseq3" is not a valid AmigaDOS path, while "SYS:Games/ioquake3" + '/' +
++"baseq3" is.
++==================
++*/
++char *Sys_AROSProgramDir( void )
++{
++	static char progDir[ MAX_OSPATH ] = { 0 };
++
++	if( !*progDir )
++	{
++		BPTR lock = GetProgramDir();
++
++		/* GetProgramDir() hands out the process' own lock - do not UnLock it. */
++		if( !lock || !NameFromLock( lock, progDir, sizeof( progDir ) ) )
++			Q_strncpyz( progDir, "PROGDIR:", sizeof( progDir ) );
++	}
++
++	return progDir;
++}
++#endif
++
+ static char execBuffer[ 1024 ];
+ static char *execBufferPointer;
+ static char *execArgv[ 16 ];
+@@ -155,6 +207,12 @@ Sys_HomeConfigPath
+ */
+ char *Sys_HomeConfigPath(void)
+ {
++#ifdef __AROS__
++	/* AROS sets neither XDG_* nor HOME, so the generic code below would leave
++	 * this empty and the engine would have nowhere to write. Keep everything in
++	 * the program's own drawer, the way an Amiga application is expected to. */
++	return Sys_AROSProgramDir();
++#else
+ 	static char homeConfigPath[ MAX_OSPATH ] = { 0 };
+ 	char *p;
+ 
+@@ -175,6 +233,7 @@ char *Sys_HomeConfigPath(void)
+ 	}
+ 
+ 	return homeConfigPath;
++#endif
+ }
+ 
+ /*
+@@ -184,6 +243,12 @@ Sys_HomeDataPath
+ */
+ char *Sys_HomeDataPath(void)
+ {
++#ifdef __AROS__
++	/* AROS sets neither XDG_* nor HOME, so the generic code below would leave
++	 * this empty and the engine would have nowhere to write. Keep everything in
++	 * the program's own drawer, the way an Amiga application is expected to. */
++	return Sys_AROSProgramDir();
++#else
+ 	static char homeDataPath[ MAX_OSPATH ] = { 0 };
+ 	char *p;
+ 
+@@ -204,6 +269,7 @@ char *Sys_HomeDataPath(void)
+ 	}
+ 
+ 	return homeDataPath;
++#endif
+ }
+ 
+ /*
+@@ -213,6 +279,12 @@ Sys_HomeStatePath
+ */
+ char *Sys_HomeStatePath(void)
+ {
++#ifdef __AROS__
++	/* AROS sets neither XDG_* nor HOME, so the generic code below would leave
++	 * this empty and the engine would have nowhere to write. Keep everything in
++	 * the program's own drawer, the way an Amiga application is expected to. */
++	return Sys_AROSProgramDir();
++#else
+ 	static char homeStatePath[ MAX_OSPATH ] = { 0 };
+ 	char *p;
+ 
+@@ -233,6 +305,7 @@ char *Sys_HomeStatePath(void)
+ 	}
+ 
+ 	return homeStatePath;
++#endif
+ }
+ 
+ /*
+@@ -640,12 +713,40 @@ Sys_Mkdir
+ */
+ qboolean Sys_Mkdir( const char *path )
+ {
++#ifdef __AROS__
++	/* Do not go through mkdir()/errno here.
++	 *
++	 * FS_CreatePath() walks a path and calls this for every component, so it
++	 * runs into directories that already exist constantly - and it treats
++	 * anything but EEXIST as fatal. Whether an existing directory surfaces as
++	 * EEXIST depends on which DOS error the filesystem handler picks and on
++	 * __stdc_ioerr2errno()'s mapping of it; a handler that reports, say, a
++	 * write-protected volume before it even checks for existence gets the
++	 * engine killed with "FS_CreatePath: failed to create path" on a directory
++	 * that is plainly there. That is what "AROS:Extras/Games" did.
++	 *
++	 * Ask the filesystem instead of the errno translation: if it can be
++	 * locked, it exists, and that is all the caller wants to know. */
++	BPTR lock = Lock( (CONST_STRPTR)path, SHARED_LOCK );
++
++	if( !lock )
++		lock = CreateDir( (CONST_STRPTR)path );
++
++	if( lock )
++	{
++		UnLock( lock );
++		return qtrue;
++	}
++
++	return qfalse;
++#else
+ 	int result = mkdir( path, 0750 );
+ 
+ 	if( result != 0 )
+ 		return errno == EEXIST;
+ 
+ 	return qtrue;
++#endif
+ }
+ 
+ /*

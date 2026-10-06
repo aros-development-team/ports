@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-libloading
+
+LIBLOADING_VERSION := 0.8.9
+
+%fetch mmake=ports-library-rust-libloading archive=libloading-$(LIBLOADING_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/libloading" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=libloading-$(LIBLOADING_VERSION)-aros.diff:libloading-$(LIBLOADING_VERSION):-p1
+
+#MM- ports-library-rust-libloading : ports-library-rust-libloading-refresh
+
+#MM
+ports-library-rust-libloading-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),libloading-$(LIBLOADING_VERSION).crate,libloading-$(LIBLOADING_VERSION),libloading-$(LIBLOADING_VERSION)-aros.diff)

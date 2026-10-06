@@ -1,0 +1,101 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+-include $(SRCDIR)/tools/crosstools/rust.cfg
+include $(SRCDIR)/ports/library/rust/rust-crates.cfg
+
+# Alacritty, built with cargo and the AROS Rust crosstool. The AROS parts of
+# its dependencies (winit, glutin, polling, libc, ...) come from
+# ports/library/rust through the [patch.crates-io] section written below.
+
+#MM- ports-shell : ports-shell-alacritty-$(TARGET_RUST)
+#MM- ports-shell-alacritty-yes : ports-shell-alacritty
+
+#MM ports-shell-alacritty : includes linklibs tools-crosstools-rust \
+#MM     linklibs-gl workbench-libs-freetype-linklibs workbench-libs-png workbench-libs-z \
+#MM     development-fontconfig development-libxml2 \
+#MM     ports-library-rust ports-shell-alacritty-fetch
+
+ALACRITTY_VERSION   := 0.17.0
+ALACRITTY_SRCDIR    := $(PORTSDIR)/alacritty/alacritty-$(ALACRITTY_VERSION)
+ALACRITTY_GENDIR    := $(GENDIR)/$(CURDIR)
+ALACRITTY_TARGETDIR := $(AROS_CONTRIB)/Utilities/Shell/Alacritty
+ALACRITTY_CONFIG    := $(ALACRITTY_GENDIR)/cargo-aros.toml
+ALACRITTY_PKGCONFIG := $(ALACRITTY_GENDIR)/pkg-config
+ALACRITTY_BINARY    := $(ALACRITTY_GENDIR)/target/$(RUST_TARGET_TRIPLE)/release/alacritty
+
+# cc and pkg-config take per-target settings, named after the triple.
+ALACRITTY_TRIPLE    := $(subst -,_,$(RUST_TARGET_TRIPLE))
+ifeq ($(AROS_TOOLCHAIN),llvm)
+    ALACRITTY_AR    := $(CROSSTOOLSDIR)/bin/llvm-ar
+else
+    ALACRITTY_AR    := $(CROSSTOOLSDIR)/$(AROS_TARGET_CPU)-aros-ar
+endif
+
+%fetch mmake=ports-shell-alacritty-fetch archive=v$(ALACRITTY_VERSION) suffixes="tar.gz" \
+    archive_origins=https://github.com/alacritty/alacritty/archive/refs/tags \
+    location=$(PORTSSOURCEDIR) destination=$(PORTSDIR)/alacritty \
+    patches_specs=alacritty-$(ALACRITTY_VERSION)-aros.diff:alacritty-$(ALACRITTY_VERSION):-p1
+
+#MM- ports-shell-alacritty-fetch : ports-shell-alacritty-refresh
+
+#MM
+ports-shell-alacritty-refresh :
+	@$(call RUST_REFRESH,$(PORTSDIR)/alacritty,v$(ALACRITTY_VERSION).tar.gz,alacritty-$(ALACRITTY_VERSION),alacritty-$(ALACRITTY_VERSION)-aros.diff)
+
+# The crate versions this port's Cargo.lock uses.
+$(ALACRITTY_CONFIG) : $(TOP)/$(CURDIR)/mmakefile $(SRCDIR)/ports/library/rust/rust-crates.cfg
+	%mkdirs_q $(ALACRITTY_GENDIR)
+	@$(ECHO) "Writing    $(subst $(TOP)/,,$@)"
+	@( \
+	    $(ECHO) '[build]' ; \
+	    $(ECHO) 'target = "$(RUST_TARGET_TRIPLE)"' ; \
+	    $(ECHO) 'target-dir = "$(ALACRITTY_GENDIR)/target"' ; \
+	    $(ECHO) 'rustc = "$(TARGET_RUSTC)"' ; \
+	    $(ECHO) '' ; \
+	    $(ECHO) '[target.$(RUST_TARGET_TRIPLE)]' ; \
+	    $(ECHO) 'linker = "$(TARGET_RUST_LINKER)"' ; \
+	    $(ECHO) '' ; \
+	    $(ECHO) '[env]' ; \
+	    $(ECHO) 'CC_$(ALACRITTY_TRIPLE) = "$(TARGET_RUST_LINKER)"' ; \
+	    $(ECHO) 'AR_$(ALACRITTY_TRIPLE) = "$(ALACRITTY_AR)"' ; \
+	    $(ECHO) 'PKG_CONFIG_$(ALACRITTY_TRIPLE) = "$(ALACRITTY_PKGCONFIG)"' ; \
+	    $(ECHO) 'PKG_CONFIG_ALLOW_CROSS = "1"' ; \
+	    $(ECHO) '' ; \
+	    $(ECHO) '[profile.release]' ; \
+	    $(ECHO) 'lto = false' ; \
+	    $(ECHO) 'debug = 0' ; \
+	    $(ECHO) '' ; \
+	    $(ECHO) '[patch.crates-io]' ; \
+	    $(ECHO) 'libc = { path = "$(RUST_CRATES_DIR)/libc-0.2.185" }' ; \
+	    $(ECHO) 'libloading = { path = "$(RUST_CRATES_DIR)/libloading-0.8.9" }' ; \
+	    $(ECHO) 'polling = { path = "$(RUST_CRATES_DIR)/polling-3.11.0" }' ; \
+	    $(ECHO) 'raw-window-handle = { path = "$(RUST_CRATES_DIR)/raw-window-handle-0.6.2" }' ; \
+	    $(ECHO) 'winit = { path = "$(RUST_CRATES_DIR)/winit-0.30.13" }' ; \
+	    $(ECHO) 'glutin = { path = "$(RUST_CRATES_DIR)/glutin-0.32.3" }' ; \
+	    $(ECHO) 'aros-gui-sys = { path = "$(RUST_CRATES_SRCDIR)/aros-gui-sys" }' ; \
+	    $(ECHO) 'aros-pty-sys = { path = "$(RUST_CRATES_SRCDIR)/aros-pty-sys" }' ; \
+	) > $@
+
+# FreeType and fontconfig from the port's own .pc files, which link the
+# static libraries; everything else from the SDK.
+$(ALACRITTY_PKGCONFIG) : $(TOP)/$(CURDIR)/mmakefile
+	%mkdirs_q $(ALACRITTY_GENDIR)
+	@$(ECHO) "Writing    $(subst $(TOP)/,,$@)"
+	@( \
+	    $(ECHO) '#!/bin/sh' ; \
+	    $(ECHO) 'export PKG_CONFIG_LIBDIR="$(SRCDIR)/$(CURDIR)/pkgconfig:$(AROS_LIB)/pkgconfig"' ; \
+	    $(ECHO) 'export PKG_CONFIG_SYSROOT_DIR="$(AROSDIR)"' ; \
+	    $(ECHO) 'exec pkg-config "$$@"' ; \
+	) > $@
+	@chmod +x $@
+
+#MM
+ports-shell-alacritty : $(ALACRITTY_CONFIG) $(ALACRITTY_PKGCONFIG)
+	@$(ECHO) "Building   alacritty $(ALACRITTY_VERSION)"
+	+@cd $(ALACRITTY_SRCDIR) && $(HOST_CARGO) build --release --locked \
+	    --config $(ALACRITTY_CONFIG) -p alacritty --no-default-features
+	%mkdirs_q $(ALACRITTY_TARGETDIR)
+	@$(CP) $(ALACRITTY_BINARY) $(ALACRITTY_TARGETDIR)/Alacritty
+
+%common

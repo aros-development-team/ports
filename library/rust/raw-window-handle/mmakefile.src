@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-raw-window-handle
+
+RAW_WINDOW_HANDLE_VERSION := 0.6.2
+
+%fetch mmake=ports-library-rust-raw-window-handle archive=raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/raw-window-handle" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION)-aros.diff:raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION):-p1
+
+#MM- ports-library-rust-raw-window-handle : ports-library-rust-raw-window-handle-refresh
+
+#MM
+ports-library-rust-raw-window-handle-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION).crate,raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION),raw-window-handle-$(RAW_WINDOW_HANDLE_VERSION)-aros.diff)

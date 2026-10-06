@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-libc
+
+LIBC_VERSION := 0.2.185
+
+%fetch mmake=ports-library-rust-libc archive=libc-$(LIBC_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/libc" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=libc-$(LIBC_VERSION)-aros.diff:libc-$(LIBC_VERSION):-p1
+
+#MM- ports-library-rust-libc : ports-library-rust-libc-refresh
+
+#MM
+ports-library-rust-libc-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),libc-$(LIBC_VERSION).crate,libc-$(LIBC_VERSION),libc-$(LIBC_VERSION)-aros.diff)

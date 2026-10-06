@@ -1,0 +1,1286 @@
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/Cargo.lock alacritty-0.17.0/Cargo.lock
+--- alacritty-0.17.0.orig/Cargo.lock	2026-04-06 21:19:11
++++ alacritty-0.17.0/Cargo.lock	2026-10-04 09:23:41
+@@ -38,6 +38,7 @@
+  "alacritty_config",
+  "alacritty_config_derive",
+  "alacritty_terminal",
++ "aros-gui-sys",
+  "bitflags 2.9.4",
+  "clap",
+  "clap_complete",
+@@ -97,6 +98,7 @@
+ name = "alacritty_terminal"
+ version = "0.26.0"
+ dependencies = [
++ "aros-pty-sys",
+  "base64",
+  "bitflags 2.9.4",
+  "home",
+@@ -195,6 +197,20 @@
+ ]
+ 
+ [[package]]
++name = "aros-gui-sys"
++version = "0.1.0"
++dependencies = [
++ "cc",
++]
++
++[[package]]
++name = "aros-pty-sys"
++version = "0.1.0"
++dependencies = [
++ "cc",
++]
++
++[[package]]
+ name = "arrayref"
+ version = "0.3.9"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -790,9 +806,8 @@
+ [[package]]
+ name = "glutin"
+ version = "0.32.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "12124de845cacfebedff80e877bb37b5b75c34c5a4c89e47e1cdd67fb6041325"
+ dependencies = [
++ "aros-gui-sys",
+  "bitflags 2.9.4",
+  "cfg_aliases",
+  "cgl",
+@@ -986,15 +1001,11 @@
+ 
+ [[package]]
+ name = "libc"
+-version = "0.2.176"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174"
++version = "0.2.185"
+ 
+ [[package]]
+ name = "libloading"
+ version = "0.8.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+ dependencies = [
+  "cfg-if",
+  "windows-link",
+@@ -1524,8 +1535,6 @@
+ [[package]]
+ name = "polling"
+ version = "3.11.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5d0e4f59085d47d8241c88ead0f274e8a0cb551f3625263c05eb8dd897c34218"
+ dependencies = [
+  "cfg-if",
+  "concurrent-queue",
+@@ -1580,8 +1589,6 @@
+ [[package]]
+ name = "raw-window-handle"
+ version = "0.6.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
+ 
+ [[package]]
+ name = "redox_syscall"
+@@ -2636,11 +2643,10 @@
+ [[package]]
+ name = "winit"
+ version = "0.30.13"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a6755fa58a9f8350bd1e472d4c3fcc25f824ec358933bba33306d0b63df5978d"
+ dependencies = [
+  "ahash",
+  "android-activity",
++ "aros-gui-sys",
+  "atomic-waker",
+  "bitflags 2.9.4",
+  "block2",
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/Cargo.toml alacritty-0.17.0/Cargo.toml
+--- alacritty-0.17.0.orig/Cargo.toml	2026-04-06 21:19:11
++++ alacritty-0.17.0/Cargo.toml	2026-10-04 08:49:14
+@@ -16,6 +16,10 @@
+ debug = 1
+ incremental = false
+ 
++# AROS is a target of the AROS rustc only, not of upstream's.
++[workspace.lints.rust]
++unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("aros"))'] }
++
+ [workspace.dependencies]
+ toml = "0.9.11"
+ toml_edit = "0.24.0"
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/Cargo.toml alacritty-0.17.0/alacritty/Cargo.toml
+--- alacritty-0.17.0.orig/alacritty/Cargo.toml	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/Cargo.toml	2026-10-04 09:23:14
+@@ -10,6 +10,9 @@
+ edition.workspace = true
+ rust-version.workspace = true
+ 
++[lints]
++workspace = true
++
+ [dependencies.alacritty_terminal]
+ path = "../alacritty_terminal"
+ version = "0.26.0"
+@@ -23,7 +26,6 @@
+ version = "0.2.3"
+ 
+ [dependencies]
+-ahash = { version = "0.8.6", features = ["no-rng"] }
+ bitflags = "2.2.1"
+ clap = { version = "4.2.7", features = ["derive", "env"] }
+ copypasta = { version = "0.10.1", default-features = false }
+@@ -38,8 +40,6 @@
+ serde_json = "1"
+ serde = { version = "1", features = ["derive"] }
+ serde_yaml = "0.9.25"
+-signal-hook = { version = "0.4.3", default-features = false }
+-tempfile = "3.12.0"
+ toml.workspace = true
+ toml_edit.workspace = true
+ unicode-width = "0.2.0"
+@@ -53,6 +53,16 @@
+ 
+ [target.'cfg(not(windows))'.dependencies]
+ xdg = "3.0.0"
++
++[target.'cfg(not(target_os = "aros"))'.dependencies]
++ahash = { version = "0.8.6", features = ["no-rng"] }
++signal-hook = { version = "0.4.3", default-features = false }
++tempfile = "3.12.0"
++
++# Fixed hash seeds: getrandom has no AROS backend.
++[target.'cfg(target_os = "aros")'.dependencies]
++ahash = { version = "0.8.6", default-features = false, features = ["std", "no-rng"] }
++aros-gui-sys = "0.1"
+ 
+ [target.'cfg(not(target_os = "macos"))'.dependencies]
+ png = { version = "0.17.5", default-features = false, optional = true }
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/cli.rs alacritty-0.17.0/alacritty/src/cli.rs
+--- alacritty-0.17.0.orig/alacritty/src/cli.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/cli.rs	2026-10-04 08:49:14
+@@ -50,7 +50,7 @@
+     pub config_file: Option<PathBuf>,
+ 
+     /// Path for IPC socket creation.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     #[clap(long, value_hint = ValueHint::FilePath)]
+     pub socket: Option<PathBuf>,
+ 
+@@ -91,7 +91,7 @@
+ 
+     /// Override configuration file with options from the CLI.
+     pub fn override_config(&mut self, config: &mut UiConfig) {
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         if self.socket.is_some() {
+             config.ipc_socket = Some(true);
+         }
+@@ -233,13 +233,13 @@
+ /// Available CLI subcommands.
+ #[derive(Subcommand, Debug)]
+ pub enum Subcommands {
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     Msg(MessageOptions),
+     Migrate(MigrateOptions),
+ }
+ 
+ /// Send a message to the Alacritty socket.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ #[derive(Args, Debug)]
+ pub struct MessageOptions {
+     /// IPC socket connection path override.
+@@ -252,7 +252,7 @@
+ }
+ 
+ /// Available socket messages.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ #[derive(Subcommand, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+ pub enum SocketMessage {
+     /// Create a new window in the same Alacritty process.
+@@ -306,7 +306,7 @@
+     pub window_tabbing_id: Option<String>,
+ 
+     #[clap(skip)]
+-    #[cfg(not(any(target_os = "macos", windows)))]
++    #[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+     /// `ActivationToken` that we pass to winit.
+     pub activation_token: Option<String>,
+ 
+@@ -323,7 +323,7 @@
+ }
+ 
+ /// Parameters to the `config` IPC subcommand.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ #[derive(Args, Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+ pub struct IpcConfig {
+     /// Configuration file options [example: 'cursor.style="Beam"'].
+@@ -342,7 +342,7 @@
+ }
+ 
+ /// Parameters to the `get-config` IPC subcommand.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ #[derive(Args, Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+ pub struct IpcGetConfig {
+     /// Window ID for the config request.
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/clipboard.rs alacritty-0.17.0/alacritty/src/clipboard.rs
+--- alacritty-0.17.0.orig/alacritty/src/clipboard.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/clipboard.rs	2026-10-04 09:40:55
+@@ -43,13 +43,16 @@
+         #[cfg(any(target_os = "macos", windows))]
+         return Self { clipboard: Box::new(ClipboardContext::new().unwrap()), selection: None };
+ 
++        #[cfg(target_os = "aros")]
++        return Self { clipboard: Box::new(aros::Clipboard), selection: None };
++
+         #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
+         return Self {
+             clipboard: Box::new(ClipboardContext::new().unwrap()),
+             selection: Some(Box::new(X11ClipboardContext::<X11SelectionClipboard>::new().unwrap())),
+         };
+ 
+-        #[cfg(not(any(feature = "x11", target_os = "macos", windows)))]
++        #[cfg(not(any(feature = "x11", target_os = "macos", target_os = "aros", windows)))]
+         return Self::new_nop();
+     }
+ }
+@@ -79,6 +82,39 @@
+                 String::new()
+             },
+             Ok(text) => text,
++        }
++    }
++}
++
++/// The AROS clipboard: unit 0 through clipboard.device, as IFF FTXT text in
++/// ISO-8859-1.
++#[cfg(target_os = "aros")]
++mod aros {
++    use copypasta::ClipboardProvider;
++
++    pub struct Clipboard;
++
++    impl ClipboardProvider for Clipboard {
++        fn get_contents(&mut self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
++            let mut len = 0;
++            let text = unsafe { aros_gui_sys::aros_gui_clip_read(&mut len) };
++            if text.is_null() {
++                return Ok(String::new());
++            }
++            let latin1 = unsafe { std::slice::from_raw_parts(text, len as usize) };
++            let contents = latin1.iter().map(|&byte| char::from(byte)).collect();
++            unsafe { aros_gui_sys::aros_gui_clip_free(text) };
++            Ok(contents)
++        }
++
++        fn set_contents(&mut self, text: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
++            let latin1: Vec<u8> =
++                text.chars().map(|c| u8::try_from(u32::from(c)).unwrap_or(b'?')).collect();
++            let len = i32::try_from(latin1.len())?;
++            if unsafe { aros_gui_sys::aros_gui_clip_write(latin1.as_ptr(), len) } != 0 {
++                return Err("could not write to the clipboard".into());
++            }
++            Ok(())
+         }
+     }
+ }
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/config/bindings.rs alacritty-0.17.0/alacritty/src/config/bindings.rs
+--- alacritty-0.17.0.orig/alacritty/src/config/bindings.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/config/bindings.rs	2026-10-04 09:40:55
+@@ -561,9 +561,23 @@
+     )
+ }
+ 
+-#[cfg(not(any(target_os = "macos", target_os = "windows", test)))]
++#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "aros", test)))]
+ pub fn platform_key_bindings() -> Vec<KeyBinding> {
+     common_keybindings()
++}
++
++/// Amiga+C and Amiga+V, as everywhere else on AROS.
++#[cfg(all(target_os = "aros", not(test)))]
++pub fn platform_key_bindings() -> Vec<KeyBinding> {
++    let mut bindings = bindings!(
++        KeyBinding;
++        "v", ModifiersState::SUPER, ~BindingMode::VI;                       Action::Paste;
++        "v", ModifiersState::SUPER, +BindingMode::VI, +BindingMode::SEARCH; Action::Paste;
++        "c", ModifiersState::SUPER;                                         Action::Copy;
++        "c", ModifiersState::SUPER, +BindingMode::VI, ~BindingMode::SEARCH; Action::ClearSelection;
++    );
++    bindings.extend(common_keybindings());
++    bindings
+ }
+ 
+ #[cfg(all(target_os = "windows", not(test)))]
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/config/color.rs alacritty-0.17.0/alacritty/src/config/color.rs
+--- alacritty-0.17.0.orig/alacritty/src/config/color.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/config/color.rs	2026-10-04 09:23:14
+@@ -5,6 +5,20 @@
+ 
+ use crate::display::color::{CellRgb, Rgb};
+ 
++/// The first eight pens of the Workbench screen. AROS consoles take their
++/// colours from them: 0 is the background, 1 the text, and colour n is pen n.
++#[cfg(target_os = "aros")]
++fn workbench_pens() -> Option<[Rgb; 8]> {
++    use std::sync::OnceLock;
++
++    static PENS: OnceLock<Option<[Rgb; 8]>> = OnceLock::new();
++    *PENS.get_or_init(|| {
++        let mut rgb = [0u32; 8];
++        let pens = unsafe { aros_gui_sys::aros_gui_screen_palette(rgb.as_mut_ptr(), 8) };
++        (pens == 8).then(|| rgb.map(|c| Rgb::new((c >> 16) as u8, (c >> 8) as u8, c as u8)))
++    })
++}
++
+ #[derive(ConfigDeserialize, Serialize, Clone, Debug, Default, PartialEq, Eq)]
+ pub struct Colors {
+     pub primary: PrimaryColors,
+@@ -177,6 +191,16 @@
+ 
+ impl Default for PrimaryColors {
+     fn default() -> Self {
++        #[cfg(target_os = "aros")]
++        if let Some(pens) = workbench_pens() {
++            return PrimaryColors {
++                background: pens[0],
++                foreground: pens[1],
++                bright_foreground: Default::default(),
++                dim_foreground: Default::default(),
++            };
++        }
++
+         PrimaryColors {
+             background: Rgb::new(0x18, 0x18, 0x18),
+             foreground: Rgb::new(0xd8, 0xd8, 0xd8),
+@@ -200,6 +224,11 @@
+ 
+ impl Default for NormalColors {
+     fn default() -> Self {
++        #[cfg(target_os = "aros")]
++        if let Some([black, red, green, yellow, blue, magenta, cyan, white]) = workbench_pens() {
++            return NormalColors { black, red, green, yellow, blue, magenta, cyan, white };
++        }
++
+         NormalColors {
+             black: Rgb::new(0x18, 0x18, 0x18),
+             red: Rgb::new(0xac, 0x42, 0x42),
+@@ -227,6 +256,12 @@
+ 
+ impl Default for BrightColors {
+     fn default() -> Self {
++        // The Amiga console has eight pens, bold or not.
++        #[cfg(target_os = "aros")]
++        if let Some([black, red, green, yellow, blue, magenta, cyan, white]) = workbench_pens() {
++            return BrightColors { black, red, green, yellow, blue, magenta, cyan, white };
++        }
++
+         // Generated with oklab by multiplying brightness by 1.12 and then adjusting numbers
+         // to make them look "nicer". Yellow color was generated the same way, however the first
+         // srgb representable color was picked.
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/config/mod.rs alacritty-0.17.0/alacritty/src/config/mod.rs
+--- alacritty-0.17.0.orig/alacritty/src/config/mod.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/config/mod.rs	2026-10-05 11:02:34
+@@ -369,9 +369,20 @@
+ /// 3. $HOME/.config/alacritty/alacritty.toml
+ /// 4. $HOME/.alacritty.toml
+ /// 5. /etc/alacritty/alacritty.toml
++///
++/// On AROS, ENV:alacritty/alacritty.toml and then PROGDIR:alacritty.toml
++/// next to the program come first.
+ #[cfg(not(windows))]
+ pub fn installed_config(suffix: &str) -> Option<PathBuf> {
+     let file_name = format!("alacritty.{suffix}");
++
++    #[cfg(target_os = "aros")]
++    for dir in ["ENV:alacritty/", "PROGDIR:"] {
++        let path = PathBuf::from(format!("{dir}{file_name}"));
++        if path.exists() {
++            return Some(path);
++        }
++    }
+ 
+     // Try using XDG location by default.
+     xdg::BaseDirectories::with_prefix("alacritty")
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/config/ui_config.rs alacritty-0.17.0/alacritty/src/config/ui_config.rs
+--- alacritty-0.17.0.orig/alacritty/src/config/ui_config.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/config/ui_config.rs	2026-10-04 08:49:14
+@@ -109,7 +109,7 @@
+     live_config_reload: Option<bool>,
+ 
+     /// Offer IPC through a unix socket.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     #[config(deprecated = "use general.ipc_socket instead")]
+     pub ipc_socket: Option<bool>,
+ }
+@@ -162,7 +162,7 @@
+         self.live_config_reload.unwrap_or(self.general.live_config_reload)
+     }
+ 
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     #[inline]
+     pub fn ipc_socket(&self) -> bool {
+         self.ipc_socket.unwrap_or(self.general.ipc_socket)
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/daemon.rs alacritty-0.17.0/alacritty/src/daemon.rs
+--- alacritty-0.17.0.orig/alacritty/src/daemon.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/daemon.rs	2026-10-04 08:49:14
+@@ -1,12 +1,12 @@
+ #[cfg(target_os = "openbsd")]
+ use std::ffi::CStr;
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use std::ffi::CString;
+ use std::ffi::OsStr;
+-#[cfg(not(any(target_os = "macos", target_os = "openbsd", windows)))]
++#[cfg(not(any(target_os = "macos", target_os = "openbsd", target_os = "aros", windows)))]
+ use std::fs;
+ use std::io;
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use std::os::unix::ffi::OsStringExt;
+ #[cfg(windows)]
+ use std::os::windows::process::CommandExt;
+@@ -15,7 +15,7 @@
+ use std::ptr;
+ 
+ #[rustfmt::skip]
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use {
+     std::error::Error,
+     std::os::unix::process::CommandExt,
+@@ -23,7 +23,7 @@
+     std::path::PathBuf,
+ };
+ 
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use libc::pid_t;
+ #[cfg(windows)]
+ use windows_sys::Win32::System::Threading::{CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW};
+@@ -53,7 +53,23 @@
+ }
+ 
+ /// Start a new process in the background.
+-#[cfg(not(windows))]
++#[cfg(target_os = "aros")]
++pub fn spawn_daemon<I, S>(program: &str, args: I) -> io::Result<()>
++where
++    I: IntoIterator<Item = S> + Copy,
++    S: AsRef<OsStr>,
++{
++    Command::new(program)
++        .args(args)
++        .stdin(Stdio::null())
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .spawn()
++        .map(|_| ())
++}
++
++/// Start a new process in the background.
++#[cfg(not(any(windows, target_os = "aros")))]
+ pub fn spawn_daemon<I, S>(
+     program: &str,
+     args: I,
+@@ -113,7 +129,7 @@
+ }
+ 
+ /// Get working directory of controlling process.
+-#[cfg(not(any(windows, target_os = "openbsd")))]
++#[cfg(not(any(windows, target_os = "openbsd", target_os = "aros")))]
+ pub fn foreground_process_path(
+     master_fd: RawFd,
+     shell_pid: u32,
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/display/mod.rs alacritty-0.17.0/alacritty/src/display/mod.rs
+--- alacritty-0.17.0.orig/alacritty/src/display/mod.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/display/mod.rs	2026-10-04 08:49:14
+@@ -607,7 +607,7 @@
+     fn swap_buffers(&self) {
+         #[allow(clippy::single_match)]
+         let res = match (self.surface.deref(), &self.context.deref()) {
+-            #[cfg(not(any(target_os = "macos", windows)))]
++            #[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+             (Surface::Egl(surface), PossiblyCurrentContext::Egl(context))
+                 if matches!(self.raw_window_handle, RawWindowHandle::Wayland(_))
+                     && !self.damage_tracker.debug =>
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/display/window.rs alacritty-0.17.0/alacritty/src/display/window.rs
+--- alacritty-0.17.0.orig/alacritty/src/display/window.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/display/window.rs	2026-10-04 08:49:14
+@@ -1,11 +1,11 @@
+-#[cfg(not(any(target_os = "macos", windows)))]
++#[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+ use winit::platform::startup_notify::{
+     self, EventLoopExtStartupNotify, WindowAttributesExtStartupNotify,
+ };
+-#[cfg(not(any(target_os = "macos", windows)))]
++#[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+ use winit::window::ActivationToken;
+ 
+-#[cfg(all(not(feature = "x11"), not(any(target_os = "macos", windows))))]
++#[cfg(all(not(feature = "x11"), not(any(target_os = "macos", target_os = "aros", windows))))]
+ use winit::platform::wayland::WindowAttributesExtWayland;
+ 
+ #[rustfmt::skip]
+@@ -152,7 +152,7 @@
+                 .with_position(PhysicalPosition::<i32>::from((position.x, position.y)));
+         }
+ 
+-        #[cfg(not(any(target_os = "macos", windows)))]
++        #[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+         if let Some(token) = options
+             .activation_token
+             .take()
+@@ -285,7 +285,7 @@
+         self.mouse_visible
+     }
+ 
+-    #[cfg(not(any(target_os = "macos", windows)))]
++    #[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+     pub fn get_platform_window(
+         identity: &Identity,
+         window_config: &WindowConfig,
+@@ -318,6 +318,12 @@
+         };
+ 
+         builder
++    }
++
++    #[cfg(target_os = "aros")]
++    pub fn get_platform_window(_: &Identity, window_config: &WindowConfig) -> WindowAttributes {
++        WinitWindow::default_attributes()
++            .with_decorations(window_config.decorations != Decorations::None)
+     }
+ 
+     #[cfg(windows)]
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/event.rs alacritty-0.17.0/alacritty/src/event.rs
+--- alacritty-0.17.0.orig/alacritty/src/event.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/event.rs	2026-10-04 08:49:14
+@@ -9,13 +9,13 @@
+ use std::error::Error;
+ use std::ffi::OsStr;
+ use std::fmt::Debug;
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use std::os::unix::io::RawFd;
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use std::os::unix::net::UnixStream;
+ use std::path::PathBuf;
+ use std::rc::Rc;
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use std::sync::Arc;
+ use std::time::{Duration, Instant};
+ use std::{env, f32, mem};
+@@ -44,13 +44,13 @@
+ use alacritty_terminal::term::{self, ClipboardType, Term, TermMode};
+ use alacritty_terminal::vte::ansi::NamedColor;
+ 
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use crate::cli::{IpcConfig, ParsedOptions};
+ use crate::cli::{Options as CliOptions, WindowOptions};
+ use crate::clipboard::Clipboard;
+ use crate::config::ui_config::{HintAction, HintInternalAction};
+ use crate::config::{self, UiConfig};
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use crate::daemon::foreground_process_path;
+ use crate::daemon::spawn_daemon;
+ use crate::display::color::Rgb;
+@@ -60,7 +60,7 @@
+ use crate::input::{self, ActionContext as _, FONT_SIZE_STEP};
+ use crate::logging::{LOG_TARGET_CONFIG, LOG_TARGET_WINIT};
+ use crate::message_bar::{Message, MessageBuffer};
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use crate::polling::ipc::{self, SocketReply};
+ use crate::scheduler::{Scheduler, TimerId, Topic};
+ use crate::window_context::WindowContext;
+@@ -94,7 +94,7 @@
+     windows: HashMap<WindowId, WindowContext, RandomState>,
+     proxy: EventLoopProxy<Event>,
+     gl_config: Option<GlutinConfig>,
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     global_ipc_options: ParsedOptions,
+     cli_options: CliOptions,
+     config: Rc<UiConfig>,
+@@ -138,7 +138,7 @@
+             config: Rc::new(config),
+             clipboard,
+             windows: Default::default(),
+-            #[cfg(unix)]
++            #[cfg(all(unix, not(target_os = "aros")))]
+             global_ipc_options: Default::default(),
+             config_monitor,
+         }
+@@ -176,7 +176,7 @@
+ 
+         // Override config with CLI/IPC options.
+         let mut config_overrides = options.config_overrides();
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         config_overrides.extend_from_slice(&self.global_ipc_options);
+         let mut config = self.config.clone();
+         config = config_overrides.override_config_rc(config);
+@@ -290,7 +290,7 @@
+         // Handle events which don't mandate the WindowId.
+         match (event.payload, event.window_id.as_ref()) {
+             // Process IPC config update.
+-            #[cfg(unix)]
++            #[cfg(all(unix, not(target_os = "aros")))]
+             (EventType::IpcConfig(ipc_config), window_id) => {
+                 // Try and parse options as toml.
+                 let mut options = ParsedOptions::from_options(&ipc_config.options);
+@@ -318,7 +318,7 @@
+                 }
+             },
+             // Process IPC config requests.
+-            #[cfg(unix)]
++            #[cfg(all(unix, not(target_os = "aros")))]
+             (EventType::IpcGetConfig(stream), window_id) => {
+                 // Get the config for the requested window ID.
+                 let config = match self.windows.iter().find(|(id, _)| window_id == Some(*id)) {
+@@ -390,7 +390,7 @@
+                 }
+             },
+             // Shutdown all windows.
+-            #[cfg(unix)]
++            #[cfg(all(unix, not(target_os = "aros")))]
+             (EventType::Shutdown, _) => event_loop.exit(),
+             // Process events affecting all windows.
+             (payload, None) => {
+@@ -495,7 +495,7 @@
+         }
+ 
+         match self.gl_config.take().map(|config| config.display()) {
+-            #[cfg(not(target_os = "macos"))]
++            #[cfg(not(any(target_os = "macos", target_os = "aros")))]
+             Some(glutin::display::Display::Egl(display)) => {
+                 // Ensure that all the windows are dropped, so the destructors for
+                 // Renderer and contexts ran.
+@@ -546,14 +546,14 @@
+     Message(Message),
+     Scroll(Scroll),
+     CreateWindow(WindowOptions),
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     IpcConfig(IpcConfig),
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     IpcGetConfig(Arc<UnixStream>),
+     BlinkCursor,
+     BlinkCursorTimeout,
+     SearchNext,
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     Shutdown,
+     Frame,
+ }
+@@ -681,9 +681,9 @@
+     pub dirty: &'a mut bool,
+     pub occluded: &'a mut bool,
+     pub preserve_title: bool,
+-    #[cfg(not(windows))]
++    #[cfg(not(any(windows, target_os = "aros")))]
+     pub master_fd: RawFd,
+-    #[cfg(not(windows))]
++    #[cfg(not(any(windows, target_os = "aros")))]
+     pub shell_pid: u32,
+ }
+ 
+@@ -869,7 +869,7 @@
+             }
+ 
+             // On unix, the working directory of the foreground shell is used by `start_daemon`.
+-            #[cfg(not(windows))]
++            #[cfg(not(any(windows, target_os = "aros")))]
+             if arg == "--working-directory" {
+                 let _ = env_args.next();
+                 continue;
+@@ -881,7 +881,7 @@
+         self.spawn_daemon(&alacritty, &args);
+     }
+ 
+-    #[cfg(not(windows))]
++    #[cfg(not(any(windows, target_os = "aros")))]
+     fn create_new_window(&mut self, #[cfg(target_os = "macos")] tabbing_id: Option<String>) {
+         let mut options = WindowOptions::default();
+         options.terminal_options.working_directory =
+@@ -895,7 +895,7 @@
+         let _ = self.event_proxy.send_event(Event::new(EventType::CreateWindow(options), None));
+     }
+ 
+-    #[cfg(windows)]
++    #[cfg(any(windows, target_os = "aros"))]
+     fn create_new_window(&mut self) {
+         let _ = self
+             .event_proxy
+@@ -907,9 +907,9 @@
+         I: IntoIterator<Item = S> + Debug + Copy,
+         S: AsRef<OsStr>,
+     {
+-        #[cfg(not(windows))]
++        #[cfg(not(any(windows, target_os = "aros")))]
+         let result = spawn_daemon(program, args, self.master_fd, self.shell_pid);
+-        #[cfg(windows)]
++        #[cfg(any(windows, target_os = "aros"))]
+         let result = spawn_daemon(program, args);
+ 
+         match result {
+@@ -1928,7 +1928,7 @@
+                     TerminalEvent::CursorBlinkingChange => self.ctx.update_cursor_blinking(),
+                     TerminalEvent::Exit | TerminalEvent::ChildExit(_) | TerminalEvent::Wakeup => (),
+                 },
+-                #[cfg(unix)]
++                #[cfg(all(unix, not(target_os = "aros")))]
+                 EventType::IpcConfig(_) | EventType::IpcGetConfig(..) | EventType::Shutdown => (),
+                 EventType::Message(_)
+                 | EventType::ConfigReload(_)
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/main.rs alacritty-0.17.0/alacritty/src/main.rs
+--- alacritty-0.17.0.orig/alacritty/src/main.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/main.rs	2026-10-04 08:49:14
+@@ -9,7 +9,13 @@
+ // See https://msdn.microsoft.com/en-us/library/4cc7ya5b.aspx for more details.
+ #![windows_subsystem = "windows"]
+ 
+-#[cfg(not(any(feature = "x11", feature = "wayland", target_os = "macos", windows)))]
++#[cfg(not(any(
++    feature = "x11",
++    feature = "wayland",
++    target_os = "macos",
++    target_os = "aros",
++    windows
++)))]
+ compile_error!(r#"at least one of the "x11"/"wayland" features must be enabled"#);
+ 
+ use std::error::Error;
+@@ -41,7 +47,7 @@
+ mod migrate;
+ #[cfg(windows)]
+ mod panic;
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ mod polling;
+ mod renderer;
+ mod scheduler;
+@@ -53,9 +59,9 @@
+     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
+ }
+ 
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use crate::cli::MessageOptions;
+-#[cfg(not(any(target_os = "macos", windows)))]
++#[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+ use crate::cli::SocketMessage;
+ use crate::cli::{Options, Subcommands};
+ use crate::config::UiConfig;
+@@ -63,7 +69,7 @@
+ use crate::event::{Event, Processor};
+ #[cfg(target_os = "macos")]
+ use crate::macos::locale;
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use crate::polling::{IoListener, ipc};
+ 
+ fn main() -> Result<(), Box<dyn Error>> {
+@@ -82,7 +88,7 @@
+     let options = Options::new();
+ 
+     match options.subcommands {
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         Some(Subcommands::Msg(options)) => msg(options)?,
+         Some(Subcommands::Migrate(options)) => migrate::migrate(options),
+         None => alacritty(options)?,
+@@ -92,10 +98,10 @@
+ }
+ 
+ /// `msg` subcommand entrypoint.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ #[allow(unused_mut)]
+ fn msg(mut options: MessageOptions) -> Result<(), Box<dyn Error>> {
+-    #[cfg(not(any(target_os = "macos", windows)))]
++    #[cfg(not(any(target_os = "macos", target_os = "aros", windows)))]
+     if let SocketMessage::CreateWindow(window_options) = &mut options.message {
+         window_options.activation_token =
+             env::var("XDG_ACTIVATION_TOKEN").or_else(|_| env::var("DESKTOP_STARTUP_ID")).ok();
+@@ -107,7 +113,7 @@
+ ///
+ /// This stores temporary files to automate their destruction through its `Drop` implementation.
+ struct TemporaryFiles {
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     socket_path: Option<PathBuf>,
+     log_file: Option<PathBuf>,
+ }
+@@ -115,7 +121,7 @@
+ impl Drop for TemporaryFiles {
+     fn drop(&mut self) {
+         // Clean up the IPC socket file.
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         if let Some(socket_path) = self.socket_path.as_deref() {
+             let _ = fs::remove_file(socket_path);
+         }
+@@ -186,7 +192,7 @@
+     macos::disable_autofill();
+ 
+     // Spawn the Unix I/O event polling thread.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     let socket_path = match IoListener::spawn(&config, &options, window_event_loop.create_proxy()) {
+         Ok(handle) => handle.ipc_socket_path,
+         Err(err) if options.daemon => return Err(err.into()),
+@@ -199,7 +205,7 @@
+     // Setup automatic RAII cleanup for our files.
+     let log_cleanup = log_file.filter(|_| !config.debug.persistent_logging);
+     let _files = TemporaryFiles {
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         socket_path,
+         log_file: log_cleanup,
+     };
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/migrate/mod.rs alacritty-0.17.0/alacritty/src/migrate/mod.rs
+--- alacritty-0.17.0.orig/alacritty/src/migrate/mod.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/migrate/mod.rs	2026-10-04 08:49:14
+@@ -4,6 +4,7 @@
+ use std::path::Path;
+ use std::{fs, mem};
+ 
++#[cfg(not(target_os = "aros"))]
+ use tempfile::NamedTempFile;
+ use toml_edit::{DocumentMut, Item};
+ 
+@@ -236,10 +237,17 @@
+         );
+     } else if !options.dry_run {
+         // Atomically replace the configuration file.
+-        let tmp = NamedTempFile::new_in(path.parent().unwrap())
+-            .map_err(|err| format!("could not create temporary file: {err}"))?;
+-        fs::write(tmp.path(), toml).map_err(|err| format!("filesystem error: {err}"))?;
+-        tmp.persist(path).map_err(|err| format!("atomic replacement failed: {err}"))?;
++        #[cfg(not(target_os = "aros"))]
++        {
++            let tmp = NamedTempFile::new_in(path.parent().unwrap())
++                .map_err(|err| format!("could not create temporary file: {err}"))?;
++            fs::write(tmp.path(), toml).map_err(|err| format!("filesystem error: {err}"))?;
++            tmp.persist(path).map_err(|err| format!("atomic replacement failed: {err}"))?;
++        }
++
++        // No tempfile on AROS, so write in place.
++        #[cfg(target_os = "aros")]
++        fs::write(path, toml).map_err(|err| format!("filesystem error: {err}"))?;
+     }
+     Ok(())
+ }
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/renderer/platform.rs alacritty-0.17.0/alacritty/src/renderer/platform.rs
+--- alacritty-0.17.0.orig/alacritty/src/renderer/platform.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/renderer/platform.rs	2026-10-04 08:49:14
+@@ -40,8 +40,11 @@
+         DisplayApiPreference::GlxThenEgl(Box::new(x11::register_xlib_error_hook))
+     };
+ 
+-    #[cfg(all(not(feature = "x11"), not(any(target_os = "macos", windows))))]
++    #[cfg(all(not(feature = "x11"), not(any(target_os = "macos", target_os = "aros", windows))))]
+     let preference = DisplayApiPreference::Egl;
++
++    #[cfg(target_os = "aros")]
++    let preference = DisplayApiPreference::Gla;
+ 
+     let display = unsafe { Display::new(raw_display_handle, preference)? };
+     log::info!("Using {}", { display.version_string() });
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty/src/window_context.rs alacritty-0.17.0/alacritty/src/window_context.rs
+--- alacritty-0.17.0.orig/alacritty/src/window_context.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty/src/window_context.rs	2026-10-04 08:49:14
+@@ -4,7 +4,7 @@
+ use std::fs::File;
+ use std::io::Write;
+ use std::mem;
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ use std::os::unix::io::{AsRawFd, RawFd};
+ use std::rc::Rc;
+ use std::sync::Arc;
+@@ -38,7 +38,7 @@
+ use crate::event::{
+     ActionContext, Event, EventProxy, InlineSearchState, Mouse, SearchState, TouchPurpose,
+ };
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ use crate::logging::LOG_TARGET_IPC_CONFIG;
+ use crate::message_bar::MessageBuffer;
+ use crate::scheduler::Scheduler;
+@@ -61,9 +61,9 @@
+     touch: TouchPurpose,
+     occluded: bool,
+     preserve_title: bool,
+-    #[cfg(not(windows))]
++    #[cfg(not(any(windows, target_os = "aros")))]
+     master_fd: RawFd,
+-    #[cfg(not(windows))]
++    #[cfg(not(any(windows, target_os = "aros")))]
+     shell_pid: u32,
+     window_config: ParsedOptions,
+     config: Rc<UiConfig>,
+@@ -200,9 +200,9 @@
+         // reading/writing to the shell.
+         let pty = tty::new(&pty_config, display.size_info.into(), display.window.id().into())?;
+ 
+-        #[cfg(not(windows))]
++        #[cfg(not(any(windows, target_os = "aros")))]
+         let master_fd = pty.file().as_raw_fd();
+-        #[cfg(not(windows))]
++        #[cfg(not(any(windows, target_os = "aros")))]
+         let shell_pid = pty.child().id();
+ 
+         // Create the pseudoterminal I/O loop.
+@@ -236,9 +236,9 @@
+             preserve_title,
+             terminal,
+             display,
+-            #[cfg(not(windows))]
++            #[cfg(not(any(windows, target_os = "aros")))]
+             master_fd,
+-            #[cfg(not(windows))]
++            #[cfg(not(any(windows, target_os = "aros")))]
+             shell_pid,
+             config,
+             notifier: Notifier(loop_tx),
+@@ -333,13 +333,13 @@
+     }
+ 
+     /// Get reference to the window's configuration.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     pub fn config(&self) -> &UiConfig {
+         &self.config
+     }
+ 
+     /// Clear the window config overrides.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     pub fn reset_window_config(&mut self, config: Rc<UiConfig>) {
+         // Clear previous window errors.
+         self.message_buffer.remove_target(LOG_TARGET_IPC_CONFIG);
+@@ -351,7 +351,7 @@
+     }
+ 
+     /// Add new window config overrides.
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     pub fn add_window_config(&mut self, config: Rc<UiConfig>, options: &ParsedOptions) {
+         // Clear previous window errors.
+         self.message_buffer.remove_target(LOG_TARGET_IPC_CONFIG);
+@@ -440,9 +440,9 @@
+             dirty: &mut self.dirty,
+             occluded: &mut self.occluded,
+             terminal: &mut terminal,
+-            #[cfg(not(windows))]
++            #[cfg(not(any(windows, target_os = "aros")))]
+             master_fd: self.master_fd,
+-            #[cfg(not(windows))]
++            #[cfg(not(any(windows, target_os = "aros")))]
+             shell_pid: self.shell_pid,
+             preserve_title: self.preserve_title,
+             config: &self.config,
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty_terminal/Cargo.toml alacritty-0.17.0/alacritty_terminal/Cargo.toml
+--- alacritty-0.17.0.orig/alacritty_terminal/Cargo.toml	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty_terminal/Cargo.toml	2026-10-04 08:50:03
+@@ -14,6 +14,9 @@
+ default = ["serde"]
+ serde = ["dep:serde", "bitflags/serde", "vte/serde"]
+ 
++[lints]
++workspace = true
++
+ [dependencies]
+ base64 = "0.22.0"
+ bitflags = "2.4.1"
+@@ -27,10 +30,13 @@
+ vte = { version = "0.15.0", default-features = false, features = ["std", "ansi"] }
+ serde = { version = "1", features = ["derive", "rc"], optional = true }
+ 
+-[target.'cfg(unix)'.dependencies]
++[target.'cfg(all(unix, not(target_os = "aros")))'.dependencies]
+ rustix-openpty = "0.2.0"
+ rustix = { version = "1.0.0", default-features = false, features = ["std"] }
+ signal-hook = "0.4.3"
++
++[target.'cfg(target_os = "aros")'.dependencies]
++aros-pty-sys = "0.1"
+ 
+ [target.'cfg(windows)'.dependencies]
+ piper = "0.2.1"
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty_terminal/src/tty/aros.rs alacritty-0.17.0/alacritty_terminal/src/tty/aros.rs
+--- alacritty-0.17.0.orig/alacritty_terminal/src/tty/aros.rs	1970-01-01 01:00:00
++++ alacritty-0.17.0/alacritty_terminal/src/tty/aros.rs	2026-10-04 08:49:14
+@@ -0,0 +1,233 @@
++//! TTY for AROS.
++//!
++//! AROS has no pseudo-terminals. The shell runs against a console handler of
++//! our own instead (`aros-pty-sys`), which plays the part of a CON: window.
++//! A thread blocks on the console's output and posts readiness to the
++//! poller, as the Windows backend does for ConPTY.
++
++use std::collections::VecDeque;
++use std::ffi::CString;
++use std::io::{self, ErrorKind, Read, Write};
++use std::sync::{Arc, Mutex};
++use std::thread::JoinHandle;
++
++use aros_pty_sys as sys;
++use log::warn;
++use polling::os::aros::PollerArosExt;
++use polling::{Event, PollMode, Poller};
++
++use crate::event::{OnResize, WindowSize};
++use crate::thread;
++use crate::tty::{ChildEvent, EventedPty, EventedReadWrite, Options, Shell};
++
++// Interest in PTY read/writes.
++pub(crate) const PTY_READ_WRITE_TOKEN: usize = 0;
++
++// Interest in new child events.
++pub(crate) const PTY_CHILD_EVENT_TOKEN: usize = 1;
++
++/// The console handle, used by the terminal and the reader thread.
++struct Console(*mut sys::aros_pty);
++
++// SAFETY: the console locks its shared state itself.
++unsafe impl Send for Console {}
++unsafe impl Sync for Console {}
++
++#[derive(Default)]
++struct State {
++    output: VecDeque<u8>,
++    exited: bool,
++    exit_reported: bool,
++    interest: Option<(Arc<Poller>, Event)>,
++}
++
++impl State {
++    /// Tells the poller about whatever is ready for the registered interest.
++    fn post(&self) {
++        let Some((poller, interest)) = &self.interest else { return };
++        if interest.readable && !self.output.is_empty() {
++            let _ = poller.post(Event::readable(PTY_READ_WRITE_TOKEN));
++        }
++        if self.exited && !self.exit_reported {
++            let _ = poller.post(Event::readable(PTY_CHILD_EVENT_TOKEN));
++        }
++    }
++}
++
++struct Shared {
++    console: Console,
++    state: Mutex<State>,
++}
++
++pub struct Pty {
++    shared: Arc<Shared>,
++    reader: Reader,
++    writer: Writer,
++    thread: Option<JoinHandle<()>>,
++}
++
++/// Output of the console, as far as the reader thread has collected it.
++pub struct Reader(Arc<Shared>);
++
++impl Read for Reader {
++    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
++        let mut state = self.0.state.lock().unwrap();
++        if state.output.is_empty() {
++            return if state.exited { Ok(0) } else { Err(ErrorKind::WouldBlock.into()) };
++        }
++        let len = buf.len().min(state.output.len());
++        for (dst, src) in buf.iter_mut().zip(state.output.drain(..len)) {
++            *dst = src;
++        }
++        Ok(len)
++    }
++}
++
++/// Input to the console, which queues it without blocking.
++pub struct Writer(Arc<Shared>);
++
++impl Write for Writer {
++    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
++        let len = buf.len().min(i32::MAX as usize);
++        unsafe { sys::aros_pty_write(self.0.console.0, buf.as_ptr(), len as i32) };
++        Ok(len)
++    }
++
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++
++/// The command line for the shell, or `None` for the user shell itself.
++fn command_line(shell: Option<&Shell>) -> Option<CString> {
++    let shell = shell?;
++    let mut line = shell.program.clone();
++    for arg in &shell.args {
++        line.push(' ');
++        if arg.is_empty() || arg.contains([' ', '"']) {
++            line.push('"');
++            line.push_str(&arg.replace('"', "*\""));
++            line.push('"');
++        } else {
++            line.push_str(arg);
++        }
++    }
++    CString::new(line).ok()
++}
++
++/// Create a new TTY and return a handle to interact with it.
++pub fn new(config: &Options, window_size: WindowSize, _window_id: u64) -> io::Result<Pty> {
++    if config.working_directory.is_some() {
++        warn!("Working directory is not supported on AROS yet");
++    }
++
++    let command = command_line(config.shell.as_ref());
++    let console = unsafe {
++        sys::aros_pty_spawn(
++            command.as_ref().map_or(std::ptr::null(), |command| command.as_ptr()),
++            i32::from(window_size.num_cols),
++            i32::from(window_size.num_lines),
++        )
++    };
++    if console.is_null() {
++        return Err(io::Error::other("could not start a shell on the console"));
++    }
++
++    let shared = Arc::new(Shared { console: Console(console), state: Mutex::default() });
++
++    let reader_shared = shared.clone();
++    let thread = thread::spawn_named("PTY console reader", move || {
++        let mut buf = [0u8; 4096];
++        loop {
++            let len = unsafe {
++                sys::aros_pty_read(reader_shared.console.0, buf.as_mut_ptr(), buf.len() as i32)
++            };
++            let mut state = reader_shared.state.lock().unwrap();
++            if len <= 0 {
++                // Every handle on the console is closed: the shell is gone.
++                state.exited = true;
++                state.post();
++                break;
++            }
++            state.output.extend(&buf[..len as usize]);
++            state.post();
++        }
++    });
++
++    Ok(Pty {
++        reader: Reader(shared.clone()),
++        writer: Writer(shared.clone()),
++        shared,
++        thread: Some(thread),
++    })
++}
++
++impl Drop for Pty {
++    fn drop(&mut self) {
++        // Ends the shell and waits until nothing uses the console any more,
++        // which also lets the reader thread see the end.
++        unsafe { sys::aros_pty_close(self.shared.console.0) };
++        if let Some(thread) = self.thread.take() {
++            let _ = thread.join();
++        }
++        unsafe { sys::aros_pty_free(self.shared.console.0) };
++    }
++}
++
++impl EventedReadWrite for Pty {
++    type Reader = Reader;
++    type Writer = Writer;
++
++    unsafe fn register(&mut self, poll: &Arc<Poller>, interest: Event, mode: PollMode) -> io::Result<()> {
++        self.reregister(poll, interest, mode)
++    }
++
++    fn reregister(&mut self, poll: &Arc<Poller>, mut interest: Event, _: PollMode) -> io::Result<()> {
++        interest.key = PTY_READ_WRITE_TOKEN;
++        let mut state = self.shared.state.lock().unwrap();
++        state.interest = Some((poll.clone(), interest));
++        // Writes never block, so write interest is met at once.
++        if interest.writable {
++            poll.post(Event::writable(PTY_READ_WRITE_TOKEN))?;
++        }
++        state.post();
++        Ok(())
++    }
++
++    fn deregister(&mut self, _: &Arc<Poller>) -> io::Result<()> {
++        self.shared.state.lock().unwrap().interest = None;
++        Ok(())
++    }
++
++    fn reader(&mut self) -> &mut Reader {
++        &mut self.reader
++    }
++
++    fn writer(&mut self) -> &mut Writer {
++        &mut self.writer
++    }
++}
++
++impl EventedPty for Pty {
++    fn next_child_event(&mut self) -> Option<ChildEvent> {
++        let mut state = self.shared.state.lock().unwrap();
++        if state.exited && !state.exit_reported {
++            state.exit_reported = true;
++            Some(ChildEvent::Exited(None))
++        } else {
++            None
++        }
++    }
++}
++
++impl OnResize for Pty {
++    fn on_resize(&mut self, window_size: WindowSize) {
++        unsafe {
++            sys::aros_pty_resize(
++                self.shared.console.0,
++                i32::from(window_size.num_cols),
++                i32::from(window_size.num_lines),
++            )
++        };
++    }
++}
+diff -ruN -x .git -x target -x .github alacritty-0.17.0.orig/alacritty_terminal/src/tty/mod.rs alacritty-0.17.0/alacritty_terminal/src/tty/mod.rs
+--- alacritty-0.17.0.orig/alacritty_terminal/src/tty/mod.rs	2026-04-06 21:19:11
++++ alacritty-0.17.0/alacritty_terminal/src/tty/mod.rs	2026-10-04 08:49:14
+@@ -8,10 +8,15 @@
+ 
+ use polling::{Event, PollMode, Poller};
+ 
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ mod unix;
+-#[cfg(not(windows))]
++#[cfg(not(any(windows, target_os = "aros")))]
+ pub use self::unix::*;
++
++#[cfg(target_os = "aros")]
++mod aros;
++#[cfg(target_os = "aros")]
++pub use self::aros::*;
+ 
+ #[cfg(windows)]
+ pub mod windows;

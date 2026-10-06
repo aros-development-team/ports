@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-winit
+
+WINIT_VERSION := 0.30.13
+
+%fetch mmake=ports-library-rust-winit archive=winit-$(WINIT_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/winit" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=winit-$(WINIT_VERSION)-aros.diff:winit-$(WINIT_VERSION):-p1
+
+#MM- ports-library-rust-winit : ports-library-rust-winit-refresh
+
+#MM
+ports-library-rust-winit-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),winit-$(WINIT_VERSION).crate,winit-$(WINIT_VERSION),winit-$(WINIT_VERSION)-aros.diff)

@@ -1,0 +1,12 @@
+# The full static FreeType: libfreetype2.a only wraps the subset of the API
+# that freetype2.library exports.
+prefix=/Developer
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: FreeType 2
+Description: A free, high-quality, and portable font engine.
+Version: 26.6.20
+Requires: libpng, zlib
+Libs: -L${libdir} -lfreetype2.static
+Cflags: -I${includedir}/freetype -I${includedir}

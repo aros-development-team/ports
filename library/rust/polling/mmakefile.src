@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-polling
+
+POLLING_VERSION := 3.11.0
+
+%fetch mmake=ports-library-rust-polling archive=polling-$(POLLING_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/polling" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=polling-$(POLLING_VERSION)-aros.diff:polling-$(POLLING_VERSION):-p1
+
+#MM- ports-library-rust-polling : ports-library-rust-polling-refresh
+
+#MM
+ports-library-rust-polling-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),polling-$(POLLING_VERSION).crate,polling-$(POLLING_VERSION),polling-$(POLLING_VERSION)-aros.diff)

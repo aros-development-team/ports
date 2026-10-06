@@ -1,0 +1,6 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+# Every crate below adds itself to ports-library-rust. Ports that build with
+# cargo depend on it rather than on the individual crates.

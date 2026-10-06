@@ -1,0 +1,19 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+include $(SRCDIR)/$(CURDIR)/../rust-crates.cfg
+
+#MM- ports-library-rust : ports-library-rust-glutin
+
+GLUTIN_VERSION := 0.32.3
+
+%fetch mmake=ports-library-rust-glutin archive=glutin-$(GLUTIN_VERSION) suffixes="crate" \
+    archive_origins="$(RUST_CRATES_ORIGIN)/glutin" location=$(PORTSSOURCEDIR) \
+    destination=$(RUST_CRATES_DIR) \
+    patches_specs=glutin-$(GLUTIN_VERSION)-aros.diff:glutin-$(GLUTIN_VERSION):-p1
+
+#MM- ports-library-rust-glutin : ports-library-rust-glutin-refresh
+
+#MM
+ports-library-rust-glutin-refresh :
+	@$(call RUST_REFRESH,$(RUST_CRATES_DIR),glutin-$(GLUTIN_VERSION).crate,glutin-$(GLUTIN_VERSION),glutin-$(GLUTIN_VERSION)-aros.diff)

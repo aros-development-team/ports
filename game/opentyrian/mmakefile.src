@@ -1,0 +1,89 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-game : ports-game-opentyrian
+
+#MM  ports-game-opentyrian : \
+#MM    contrib-sdl2 \
+#MM    ports-game-opentyrian-fetch \
+#MM    ports-game-opentyrian-data-fetch \
+#MM    ports-game-opentyrian-install-data \
+#MM    ports-game-opentyrian-install-docs
+
+PACKAGE      := opentyrian
+# Pinned to a commit, not a release: the last tag (v2.1.20221123) predates the
+# file I/O rework, and upstream has no newer release.
+COMMIT       := d75038105d2aa3664702e87c9bf76195e0e0d558
+ARCHBASE     := $(PACKAGE)-$(COMMIT)
+ARCHNAME     := $(COMMIT)
+PATCH        := $(PACKAGE)-2.1-aros.diff
+REPOSITORIES := https://github.com/opentyrian/opentyrian/archive
+
+# Tyrian 2.1 data files, released as freeware by the copyright holder.
+DATAARCH     := tyrian21
+DATAREPO     := https://camanis.net/tyrian
+
+TARGETDIR    := $(AROS_CONTRIB)/Games/Action/OpenTyrian
+
+OT_SRCDIR    := $(PORTSDIR)/$(PACKAGE)/$(ARCHBASE)
+OT_DATADIR   := $(PORTSDIR)/$(PACKAGE)/$(DATAARCH)
+
+# The stock Makefile needs no patching: every host-specific decision it makes
+# is overridable from the command line.
+#   WITH_NETWORK=false - contrib only has SDL_net 1.2.8 (SDL1); there is no
+#                        SDL2_net, and network.[ch] guard cleanly on the flag.
+#   VCS_IDREV=false    - the tarball has no .git, so let version detection fail
+#                        quietly instead of shelling out to git per build.
+#   TYRIAN_DIR         - the game data lives next to the executable.
+#   SDL_*              - substitutes for the pkg-config probe.
+#   TARGET             - metamake runs us with TARGET=ports-game-opentyrian as a
+#                        command-line variable, which MAKEOVERRIDES leaks into
+#                        this sub-make and would otherwise name the executable
+#                        after the mmake target. Restate the Makefile's default.
+OT_MAKE_OPTS := \
+    TARGET=opentyrian \
+    WITH_NETWORK=false \
+    VCS_IDREV=false \
+    TYRIAN_DIR="PROGDIR:data" \
+    CC="$(CC) $(TARGET_SYSROOT) $(CFLAGS)" \
+    SDL_CPPFLAGS="-I$(AROS_DEVELOPER)/include/SDL2" \
+    SDL_LDFLAGS="-L$(AROS_DEVELOPER)/lib" \
+    SDL_LDLIBS="-lSDL2"
+
+#MM
+ports-game-opentyrian :
+	$(MAKE) -C $(OT_SRCDIR) $(OT_MAKE_OPTS)
+	$(MKDIR) $(TARGETDIR)
+	@# Installed under the icon's name, not the Makefile's lowercase TARGET.
+	$(CP) $(OT_SRCDIR)/opentyrian $(TARGETDIR)/OpenTyrian
+
+%copy_dir_recursive mmake=ports-game-opentyrian-install-data \
+    src=$(OT_DATADIR) dst=$(TARGETDIR)/data
+
+DOCS := COPYING NEWS README
+%copy_files_q mmake=ports-game-opentyrian-install-docs \
+    files="$(DOCS)" src=$(OT_SRCDIR) dst=$(TARGETDIR)
+
+%fetch mmake=ports-game-opentyrian-fetch archive=$(ARCHNAME) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="tar.gz" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) \
+    patches_specs=$(PATCH):$(ARCHBASE):-p1
+
+# Regenerate $(PATCH) after editing the unpacked source. Writes
+# $(ARCHNAME)-aros-new.diff here; compare it, then rename over $(PATCH).
+%create_patch mmake=ports-game-opentyrian-create-patch archive=$(ARCHNAME) \
+    srcdir=$(ARCHBASE) suffixes="tar.gz" \
+    destination=$(PORTSDIR)/$(PACKAGE) location=$(PORTSSOURCEDIR) \
+    excludes="obj opentyrian *.o *.d"
+
+%fetch mmake=ports-game-opentyrian-data-fetch archive=$(DATAARCH) \
+    destination=$(PORTSDIR)/$(PACKAGE) suffixes="zip" \
+    location=$(PORTSSOURCEDIR) archive_origins=$(DATAREPO)
+
+#MM
+ports-game-opentyrian-clean :
+	$(RM) $(TARGETDIR)
+	-$(MAKE) -C $(OT_SRCDIR) TARGET=opentyrian clean 2>/dev/null
+
+%common

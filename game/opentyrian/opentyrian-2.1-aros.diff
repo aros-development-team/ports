@@ -1,0 +1,40 @@
+diff -ruN -X ./exclude.patterns opentyrian-d75038105d2aa3664702e87c9bf76195e0e0d558/src/file.c opentyrian-d75038105d2aa3664702e87c9bf76195e0e0d558.aros/src/file.c
+--- opentyrian-d75038105d2aa3664702e87c9bf76195e0e0d558/src/file.c	2026-08-15 17:02:30
++++ opentyrian-d75038105d2aa3664702e87c9bf76195e0e0d558.aros/src/file.c	2026-08-25 10:56:31
+@@ -158,6 +158,17 @@
+ 		userDirPathLen = 0;
+ 	}
+ 
++#ifdef __AROS__
++	/* AROS sets neither XDG_CONFIG_HOME nor HOME, so the generic code below
++	 * would fall through to a relative path, i.e. the current directory. That
++	 * is the program's own drawer when launched from Workbench, but an
++	 * arbitrary one when launched from a shell - which would scatter the
++	 * configuration and high scores. Anchor them to the program instead. */
++	userDirPath = "PROGDIR:";
++	userDirPathLen = strlen(userDirPath);
++	return;
++#endif
++
+ #ifdef TARGET_WIN32
+ 	const char *appData = getenv("APPDATA");
+ 	if (appData != NULL)
+@@ -204,13 +215,16 @@
+ 
+ #ifdef _WIN32
+ 	(void)_mkdir(userDirPath);
+-#else
++#elif !defined(__AROS__)
+ 	(void)mkdir(userDirPath, 0700);
+ #endif
+ 
+ 	size_t pathSize = userDirPathLen + 1 + strlen(filename) + 1;
+ 	char *path = malloc(pathSize);
+-	snprintf(path, pathSize, "%s/%s", userDirPath, filename);
++	/* An AmigaDOS volume or assign name already ends in ':', which must not be
++	 * followed by a separator - a leading '/' there means the parent instead. */
++	const char *separator = userDirPath[userDirPathLen - 1] == ':' ? "" : "/";
++	snprintf(path, pathSize, "%s%s%s", userDirPath, separator, filename);
+ 
+ 	File file = fileOpen(path, mode);
+ 

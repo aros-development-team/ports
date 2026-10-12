@@ -73,8 +73,8 @@ $(ALACRITTY_CONFIG) : $(TOP)/$(CURDIR)/mmakefile $(SRCDIR)/ports/library/rust/ru
 	    $(ECHO) 'raw-window-handle = { path = "$(RUST_CRATES_DIR)/raw-window-handle-0.6.2" }' ; \
 	    $(ECHO) 'winit = { path = "$(RUST_CRATES_DIR)/winit-0.30.13" }' ; \
 	    $(ECHO) 'glutin = { path = "$(RUST_CRATES_DIR)/glutin-0.32.3" }' ; \
-	    $(ECHO) 'aros-gui-sys = { path = "$(RUST_CRATES_SRCDIR)/aros-gui-sys" }' ; \
-	    $(ECHO) 'aros-pty-sys = { path = "$(RUST_CRATES_SRCDIR)/aros-pty-sys" }' ; \
+	    $(ECHO) 'aros-gui-sys = { path = "$(RUST_SYS_CRATESDIR)/aros-gui-sys" }' ; \
+	    $(ECHO) 'aros-pty-sys = { path = "$(RUST_SYS_CRATESDIR)/aros-pty-sys" }' ; \
 	) > $@
 
 # FreeType and fontconfig from the port's own .pc files, which link the

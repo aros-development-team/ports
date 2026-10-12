@@ -1,0 +1,33 @@
+[package]
+name = "photocraft-aros"
+description = "PhotoCraft on AROS: the egui shell drawn into an Intuition window"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+# The AROS shell talks to intuition.library and friends through a small C file (c/aros_shell.c)
+# and `extern "C"` declarations (src/ffi.rs): the one place in this crate that needs `unsafe`,
+# like photocraft-tablet's platform code. Everything else follows the workspace's rules.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[[bin]]
+name = "PhotoCraft"
+path = "src/main.rs"
+
+[dependencies]
+photocraft-ui-egui = { path = "../../crates/ui-egui", default-features = false }
+photocraft-engine = { workspace = true }
+photocraft-io = { workspace = true }
+photocraft-format = { workspace = true }
+photocraft-codecs = { workspace = true }
+photocraft-doc = { workspace = true }
+photocraft-text = { workspace = true }
+egui = { workspace = true, features = ["default_fonts"] }
+serde_json = { workspace = true }
+log = { workspace = true }

@@ -1,0 +1,499 @@
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/apps/photocraft-cli/Cargo.toml photocraft/apps/photocraft-cli/Cargo.toml
+--- photocraft.orig/apps/photocraft-cli/Cargo.toml	2026-10-12 01:25:40.588832556 +0100
++++ photocraft/apps/photocraft-cli/Cargo.toml	2026-10-12 01:48:22.912034453 +0100
+@@ -7,6 +7,9 @@
+ build = "build.rs"
+ 
+ [features]
++default = ["mcp"]
++# The `mcp` subcommand (an MCP server over stdio) and the TCP bridge; off where there are no sockets.
++mcp = ["photocraft-automation/mcp", "dep:tokio"]
+ # Open HEIC/HEIF photos (the optional photocraft-heif crate). Not default so distributors choose
+ # it; official builds (CI, packaging/, release) build with `--features heif`.
+ heif = ["photocraft-codecs/heif"]
+@@ -23,13 +26,13 @@
+ path = "src/main.rs"
+ 
+ [dependencies]
+-photocraft-automation = { path = "../../crates/automation" }
++photocraft-automation = { path = "../../crates/automation", default-features = false }
+ photocraft-engine = { workspace = true }
+ photocraft-io = { workspace = true }
+ photocraft-format = { path = "../../crates/format" }
+ photocraft-codecs = { workspace = true }
+ serde_json = { workspace = true }
+-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
++tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
+ 
+ [build-dependencies]
+ # Icon + VERSIONINFO for photocraft-cli.exe; build.rs only uses it when targeting Windows.
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/apps/photocraft-cli/src/lib.rs photocraft/apps/photocraft-cli/src/lib.rs
+--- photocraft.orig/apps/photocraft-cli/src/lib.rs	2026-10-12 01:25:40.588944356 +0100
++++ photocraft/apps/photocraft-cli/src/lib.rs	2026-10-12 01:48:22.912206153 +0100
+@@ -6,7 +6,9 @@
+ use std::io::Write;
+ use std::path::{Path, PathBuf};
+ 
+-use photocraft_automation::{AuthorizedWorkspace, Headless, PhotocraftMcp, files, security};
++#[cfg(feature = "mcp")]
++use photocraft_automation::PhotocraftMcp;
++use photocraft_automation::{AuthorizedWorkspace, Headless, files, security};
+ use photocraft_engine::actions_cmds::Action;
+ use photocraft_io::ExportOptions;
+ use serde_json::{Value, json};
+@@ -533,6 +535,7 @@
+     }
+ }
+ 
++#[cfg(feature = "mcp")]
+ fn mcp(a: &Args) -> R {
+     let server = match a.get("--bridge") {
+         Some(addr) => {
+@@ -546,6 +549,12 @@
+     rt.block_on(server.serve_stdio()).map_err(|e| e.to_string())
+ }
+ 
++/// Built without the `mcp` feature (no sockets on the target): the subcommand explains itself.
++#[cfg(not(feature = "mcp"))]
++fn mcp(_a: &Args) -> R {
++    Err("the MCP server is not available in this build (built without the `mcp` feature); use `serve` for the JSON-lines protocol on stdin/stdout".to_string())
++}
++
+ #[cfg(test)]
+ mod missing_font_warning_tests {
+     use super::*;
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/automation/Cargo.toml photocraft/crates/automation/Cargo.toml
+--- photocraft.orig/crates/automation/Cargo.toml	2026-10-12 01:25:40.618858056 +0100
++++ photocraft/crates/automation/Cargo.toml	2026-10-12 01:48:22.911501253 +0100
+@@ -6,6 +6,15 @@
+ license.workspace = true
+ rust-version.workspace = true
+ 
++[features]
++default = ["mcp", "sandbox"]
++# The MCP server (rmcp over tokio) and the TCP bridge to a running desktop app. Off on targets
++# without sockets (AROS), where only the headless, stdin/stdout automation remains.
++mcp = ["dep:rmcp", "dep:tokio"]
++# Capability-based filesystem roots through cap-std; without it the same path policy is applied
++# before plain std::fs access beneath the roots (targets cap-std's rustix does not build for).
++sandbox = ["dep:cap-std"]
++
+ [lints]
+ workspace = true
+ 
+@@ -20,12 +29,12 @@
+ serde = { workspace = true }
+ serde_json = { workspace = true }
+ thiserror = { workspace = true }
+-rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"] }
+-tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync", "net", "io-util", "time"] }
++rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"], optional = true }
++tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync", "net", "io-util", "time"], optional = true }
+ base64 = "0.22"
+ schemars = "1"
+ getrandom = { workspace = true }
+-cap-std = "4"
++cap-std = { version = "4", optional = true }
+ 
+ [dev-dependencies]
+ rmcp = { version = "3.5", default-features = false, features = ["client", "server", "macros", "transport-io"] }
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/automation/src/lib.rs photocraft/crates/automation/src/lib.rs
+--- photocraft.orig/crates/automation/src/lib.rs	2026-10-12 01:25:40.619872956 +0100
++++ photocraft/crates/automation/src/lib.rs	2026-10-12 01:48:22.911644453 +0100
+@@ -16,17 +16,21 @@
+ #![forbid(unsafe_code)]
+ #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+ 
++#[cfg(feature = "mcp")]
+ pub mod bridge;
+ pub mod budgets;
+ pub mod files;
+ pub mod headless;
+ pub mod rpc;
+ pub mod security;
++#[cfg(feature = "mcp")]
+ pub mod server;
+ pub mod workspace;
+ 
++#[cfg(feature = "mcp")]
+ pub use bridge::BridgeClient;
+ pub use headless::Headless;
++#[cfg(feature = "mcp")]
+ pub use server::{Backend, PhotocraftMcp};
+ pub use workspace::AuthorizedWorkspace;
+ 
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/automation/src/workspace.rs photocraft/crates/automation/src/workspace.rs
+--- photocraft.orig/crates/automation/src/workspace.rs	2026-10-12 01:25:40.620410656 +0100
++++ photocraft/crates/automation/src/workspace.rs	2026-10-12 02:00:03.641804468 +0100
+@@ -4,8 +4,12 @@
+ use std::path::{Component, Path, PathBuf};
+ use std::sync::Arc;
+ 
++#[cfg(feature = "sandbox")]
+ use cap_std::ambient_authority;
++#[cfg(feature = "sandbox")]
+ use cap_std::fs::{Dir, OpenOptions};
++#[cfg(not(feature = "sandbox"))]
++use plain_dir::{Dir, OpenOptions, ambient_authority};
+ use photocraft_format::atomic::RenameRetry;
+ use serde_json::Value;
+ 
+@@ -13,6 +17,101 @@
+ 
+ const DENIED: &str = "automation filesystem access is not granted";
+ 
++/// The subset of `cap_std::fs` this module uses, over `std::fs` beneath a root directory, for
++/// targets cap-std does not build for. The request paths it is handed have already passed
++/// [`relative_path`] (relative, no `..`, no prefixes), and it refuses anything else itself; what
++/// it cannot do is stop a symlink below the root from pointing outside it.
++#[cfg(not(feature = "sandbox"))]
++mod plain_dir {
++    use std::io;
++    use std::path::{Component, Path, PathBuf};
++
++    pub fn ambient_authority() {}
++
++    pub struct Dir {
++        root: PathBuf,
++    }
++
++    pub struct File(std::fs::File);
++
++    pub use std::fs::OpenOptions;
++
++    fn below(root: &Path, path: &Path) -> io::Result<PathBuf> {
++        if path.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
++            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "path leaves the automation root"));
++        }
++        Ok(root.join(path))
++    }
++
++    impl Dir {
++        pub fn open_ambient_dir(path: &Path, (): ()) -> io::Result<Self> {
++            let root = std::path::absolute(path)?;
++            if !std::fs::metadata(&root)?.is_dir() {
++                return Err(io::Error::new(io::ErrorKind::NotADirectory, "not a directory"));
++            }
++            Ok(Self { root })
++        }
++
++        pub fn open<P: AsRef<Path>>(&self, path: P) -> io::Result<File> {
++            std::fs::File::open(below(&self.root, path.as_ref())?).map(File)
++        }
++
++        pub fn open_with<P: AsRef<Path>>(&self, path: P, options: &OpenOptions) -> io::Result<File> {
++            options.open(below(&self.root, path.as_ref())?).map(File)
++        }
++
++        pub fn open_dir<P: AsRef<Path>>(&self, path: P) -> io::Result<Self> {
++            let root = below(&self.root, path.as_ref())?;
++            if !std::fs::metadata(&root)?.is_dir() {
++                return Err(io::Error::new(io::ErrorKind::NotADirectory, "not a directory"));
++            }
++            Ok(Self { root })
++        }
++
++        pub fn create_dir_all<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
++            std::fs::create_dir_all(below(&self.root, path.as_ref())?)
++        }
++
++        pub fn remove_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
++            std::fs::remove_file(below(&self.root, path.as_ref())?)
++        }
++
++        pub fn rename<P: AsRef<Path>, Q: AsRef<Path>>(&self, from: P, to_dir: &Self, to: Q) -> io::Result<()> {
++            std::fs::rename(below(&self.root, from.as_ref())?, below(&to_dir.root, to.as_ref())?)
++        }
++    }
++
++    impl File {
++        pub fn metadata(&self) -> io::Result<std::fs::Metadata> {
++            self.0.metadata()
++        }
++
++        pub fn sync_all(&self) -> io::Result<()> {
++            self.0.sync_all()
++        }
++
++        pub fn into_std(self) -> std::fs::File {
++            self.0
++        }
++    }
++
++    impl io::Read for File {
++        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
++            self.0.read(buf)
++        }
++    }
++
++    impl io::Write for File {
++        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
++            self.0.write(buf)
++        }
++
++        fn flush(&mut self) -> io::Result<()> {
++            self.0.flush()
++        }
++    }
++}
++
+ #[derive(Clone)]
+ struct RootCapability {
+     dir: Arc<Dir>,
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/format/src/atomic.rs photocraft/crates/format/src/atomic.rs
+--- photocraft.orig/crates/format/src/atomic.rs	2026-10-12 01:25:40.650213856 +0100
++++ photocraft/crates/format/src/atomic.rs	2026-10-12 02:37:41.865435590 +0100
+@@ -132,21 +132,51 @@
+     atomic_write_with(&RealFs, RenameRetry::platform(), path, bytes)
+ }
+ 
++/// The folder (`None` for a bare file name) and the file name of `target`. On AROS a path may
++/// name a device or volume with a colon (`Work:a.png`, `T:x`), which `Path` does not know as a
++/// separator; the folder keeps its trailing separator so [`join_in`] can put files beside it.
++fn split_dir_and_name(target: &Path) -> Option<(Option<PathBuf>, String)> {
++    if cfg!(target_os = "aros") {
++        let text = target.to_string_lossy();
++        let (dir, name) = match text.rfind(['/', ':']) {
++            Some(i) => (Some(PathBuf::from(&text[..=i])), &text[i + 1..]),
++            None => (None, &text[..]),
++        };
++        return (!name.is_empty()).then(|| (dir, name.to_string()));
++    }
++    let name = target.file_name()?.to_string_lossy().into_owned();
++    Some((target.parent().filter(|d| !d.as_os_str().is_empty()).map(Path::to_path_buf), name))
++}
++
++/// `file` inside `dir`, where `dir` may end in a separator already (see [`split_dir_and_name`]).
++fn join_in(dir: &Path, file: &str) -> PathBuf {
++    let text = dir.to_string_lossy();
++    if cfg!(target_os = "aros") && text.ends_with([':', '/']) {
++        return PathBuf::from(format!("{text}{file}"));
++    }
++    dir.join(file)
++}
++
+ /// [`atomic_write`] through an explicit file system and retry policy (the failure-injection seam).
+ pub fn atomic_write_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, bytes: &[u8]) -> io::Result<()> {
+     let target = resolve_symlink(path);
+-    let name = target.file_name().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("{}: not a file path", path.display())))?;
+-    let dir = match target.parent() {
+-        Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
+-        _ => PathBuf::from("."),
++    let (parent, name) = split_dir_and_name(&target).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("{}: not a file path", path.display())))?;
++    // The target's folder, or `None` for a bare file name (the current directory, which exists;
++    // naming it "." or prefixing "./" is not accepted by every C library, AROS's among them).
++    let dir = parent.clone().unwrap_or_else(|| PathBuf::from("."));
++    if let Some(parent) = &parent {
++        std::fs::create_dir_all(parent).map_err(|e| context(e, format!("cannot create the folder {}", parent.display())))?;
++    }
++    let sibling = |file: String| match &parent {
++        Some(parent) => join_in(parent, &file),
++        None => PathBuf::from(file),
+     };
+-    std::fs::create_dir_all(&dir).map_err(|e| context(e, format!("cannot create the folder {}", dir.display())))?;
+ 
+     // Create a fresh temporary file next to the target (same directory, so the rename never
+     // crosses a device). The name is unique per process and call; retry a few on collisions.
+     let mut tmp = None;
+     for _ in 0..8 {
+-        let candidate = dir.join(temp_name(&name.to_string_lossy()));
++        let candidate = sibling(temp_name(&name));
+         match fs.write_new(&candidate, bytes) {
+             Ok(()) => {
+                 tmp = Some(candidate);
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/text/src/fonts.rs photocraft/crates/text/src/fonts.rs
+--- photocraft.orig/crates/text/src/fonts.rs	2026-10-12 01:25:40.667679056 +0100
++++ photocraft/crates/text/src/fonts.rs	2026-10-12 01:39:20.815175100 +0100
+@@ -557,6 +557,14 @@
+         if let Some(h) = &home {
+             v.push(h.join("Library/Fonts"));
+         }
++    } else if cfg!(target_os = "aros") {
++        // AROS keeps its TrueType fonts under FONTS: (SYS:Fonts); the assign may list several
++        // directories, so the assign itself is scanned rather than SYS:Fonts alone.
++        v.push(PathBuf::from("FONTS:TrueType"));
++        v.push(PathBuf::from("FONTS:"));
++        if let Some(d) = std::env::var_os("PHOTOCRAFT_FONT_DIR") {
++            v.push(PathBuf::from(d));
++        }
+     } else if cfg!(target_os = "windows") {
+         let windir = std::env::var_os("WINDIR").map_or_else(|| PathBuf::from("C:\\Windows"), PathBuf::from);
+         v.push(windir.join("Fonts"));
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/Cargo.toml photocraft/crates/ui-egui/Cargo.toml
+--- photocraft.orig/crates/ui-egui/Cargo.toml	2026-10-12 01:25:40.667679056 +0100
++++ photocraft/crates/ui-egui/Cargo.toml	2026-10-12 01:42:22.168152865 +0100
+@@ -4,6 +4,12 @@
+ edition.workspace = true
+ license.workspace = true
+ 
++[features]
++# The eframe shell: `impl eframe::App` and the window handle file dialogs are parented to. Off
++# for shells with their own window and event loop (the AROS port drives egui directly).
++default = ["eframe"]
++eframe = ["dep:eframe"]
++
+ [lints]
+ workspace = true
+ 
+@@ -28,9 +34,12 @@
+ photocraft-format = { workspace = true }
+ # Decoding the brand mark's PNG (`brand.rs`); already linked through photocraft-io.
+ photocraft-codecs = { workspace = true }
+-egui = { workspace = true }
++egui = { workspace = true, features = ["default_fonts"] }
+ egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
+-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
++eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"], optional = true }
++# The GPU canvas (`gpu_canvas`) renders through egui-wgpu; a shell without eframe (AROS) still
++# compiles it, with no wgpu backend behind it.
++egui-wgpu = { version = "0.36", default-features = false }
+ serde = { workspace = true }
+ serde_json = { workspace = true }
+ log = { workspace = true }
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/src/file_dialog.rs photocraft/crates/ui-egui/src/file_dialog.rs
+--- photocraft.orig/crates/ui-egui/src/file_dialog.rs	2026-10-12 01:25:40.678934956 +0100
++++ photocraft/crates/ui-egui/src/file_dialog.rs	2026-10-12 01:37:47.296253624 +0100
+@@ -62,9 +62,16 @@
+     }
+ }
+ 
++/// The native window a file dialog is parented to: eframe's frame, or nothing for shells that
++/// show their own requesters (the AROS port opens asl.library requesters on its own window).
++#[cfg(feature = "eframe")]
++pub type WindowHandle = eframe::Frame;
++#[cfg(not(feature = "eframe"))]
++pub type WindowHandle = ();
++
+ /// Show a file dialog and return at once, answering through the reply when the user is done.
+ /// The window (`None` in tests) is the dialog's parent.
+-pub type FileDialogFn = Box<dyn FnMut(FileDialogRequest, Option<&eframe::Frame>, FileDialogReply)>;
++pub type FileDialogFn = Box<dyn FnMut(FileDialogRequest, Option<&WindowHandle>, FileDialogReply)>;
+ 
+ /// What to do with the answer (`None`: cancelled).
+ type Then = Box<dyn FnOnce(&mut PhotocraftApp, Option<FileDialogAnswer>) -> Result<Value, String>>;
+@@ -249,7 +256,7 @@
+ 
+     /// Called every frame: shows a queued dialog with `parent` (the window) as its parent, and
+     /// continues the action that asked once the answer is in. Its errors go to the status bar.
+-    pub fn poll_file_dialog(&mut self, ctx: &egui::Context, parent: Option<&eframe::Frame>) {
++    pub fn poll_file_dialog(&mut self, ctx: &egui::Context, parent: Option<&WindowHandle>) {
+         let Some(p) = self.file_dialog.as_mut() else { return };
+         if let Some(request) = p.request.take() {
+             let (tx, rx) = mpsc::channel();
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/src/file_open.rs photocraft/crates/ui-egui/src/file_open.rs
+--- photocraft.orig/crates/ui-egui/src/file_open.rs	2026-10-12 01:25:40.678934956 +0100
++++ photocraft/crates/ui-egui/src/file_open.rs	2026-10-12 02:23:32.453207757 +0100
+@@ -290,6 +290,11 @@
+ 
+ #[cfg(not(target_arch = "wasm32"))]
+ fn absolute(p: &str) -> String {
++    // An AmigaDOS path with a device or volume (`Work:Images/a.png`) is absolute already, and
++    // std (which knows only a leading `/`) would put the current directory in front of it.
++    if cfg!(target_os = "aros") && p.split('/').next().is_some_and(|first| first.contains(':')) {
++        return p.to_string();
++    }
+     std::path::absolute(p).map(|a| a.to_string_lossy().to_string()).unwrap_or_else(|_| p.to_string())
+ }
+ 
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/src/gpu_canvas.rs photocraft/crates/ui-egui/src/gpu_canvas.rs
+--- photocraft.orig/crates/ui-egui/src/gpu_canvas.rs	2026-10-12 01:25:40.678934956 +0100
++++ photocraft/crates/ui-egui/src/gpu_canvas.rs	2026-10-12 01:37:47.295984924 +0100
+@@ -28,8 +28,8 @@
+ use std::collections::HashMap;
+ use std::num::NonZeroU64;
+ 
+-use eframe::egui_wgpu::{self, CallbackResources, CallbackTrait, RenderState, ScreenDescriptor};
+-use eframe::wgpu;
++use egui_wgpu::wgpu;
++use egui_wgpu::{CallbackResources, CallbackTrait, RenderState, ScreenDescriptor};
+ 
+ pub use photocraft_gpu::{DeviceHealth, Fault};
+ 
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/src/lib.rs photocraft/crates/ui-egui/src/lib.rs
+--- photocraft.orig/crates/ui-egui/src/lib.rs	2026-10-12 01:25:40.693471056 +0100
++++ photocraft/crates/ui-egui/src/lib.rs	2026-10-12 01:37:47.297174324 +0100
+@@ -806,7 +806,7 @@
+ 
+     /// Draw the document canvas on the GPU (custom WGSL shader) instead of via egui textures.
+     /// Call from the app creator with `cc.wgpu_render_state`; without it the CPU path is used.
+-    pub fn set_wgpu(&mut self, rs: eframe::egui_wgpu::RenderState) {
++    pub fn set_wgpu(&mut self, rs: egui_wgpu::RenderState) {
+         // Preferences › Performance › cache tile size (PHOTOCRAFT_GPU_TILE still overrides).
+         let tile = self.session.prefs().performance.cache_tile_size;
+         // Escaped driver/setup panics must leave the session and CPU canvas alive.
+@@ -1490,8 +1490,13 @@
+     }
+ }
+ 
+-impl eframe::App for PhotocraftApp {
+-    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
++/// The per-frame entry points a shell drives, in this order: [`Self::shell_raw_input_hook`]
++/// before the pass begins, [`Self::shell_logic`] at its start, then [`Self::shell_ui`] inside the
++/// root panel. eframe calls them through its `App` trait (below); other shells call them directly.
++impl PhotocraftApp {
++    /// Everything that runs before the UI is laid out; `parent` is the window file dialogs are
++    /// parented to.
++    pub fn shell_logic(&mut self, ctx: &egui::Context, parent: Option<&file_dialog::WindowHandle>) {
+         i18n::set_current(i18n::Lang::from_pref(&self.session.prefs().interface.language));
+         // Caps Lock state read from the OS once per frame (see `Services::caps_lock`): the canvas
+         // cursor block needs it before the frame renders. `None` (Wayland/web) keeps `false`.
+@@ -1571,10 +1576,11 @@
+         if !self.pending_screenshots.is_empty() {
+             ctx.request_repaint_after(std::time::Duration::from_millis(16));
+         }
+-        self.poll_file_dialog(ctx, Some(frame));
++        self.poll_file_dialog(ctx, parent);
+     }
+ 
+-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
++    /// Adjusts the raw input before each pass (native menu keys, clipboard keys, synthetic input).
++    pub fn shell_raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+         // An undecorated window gets its caption back when the toolkit changes its flags
+         // (maximize, restore, …): take it off again before the frame is laid out (#2246).
+         if let Some(window_frame) = self.services.window_frame.as_mut() {
+@@ -1596,7 +1602,8 @@
+         }
+     }
+ 
+-    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
++    /// Lays out the whole interface into `ui` (the root panel, no margin or background).
++    pub fn shell_ui(&mut self, ui: &mut egui::Ui, parent: Option<&file_dialog::WindowHandle>) {
+         let ctx = ui.ctx().clone();
+         i18n::set_current(i18n::Lang::from_pref(&self.session.prefs().interface.language));
+         // Fonts registered via set_fonts only take effect next frame; named families would panic now.
+@@ -1711,7 +1718,22 @@
+             }
+         }
+         // Menus and buttons in this frame may have asked for a file dialog.
+-        self.poll_file_dialog(&ctx, Some(frame));
++        self.poll_file_dialog(&ctx, parent);
++    }
++}
++
++#[cfg(feature = "eframe")]
++impl eframe::App for PhotocraftApp {
++    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
++        self.shell_logic(ctx, Some(frame));
++    }
++
++    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
++        self.shell_raw_input_hook(ctx, raw_input);
++    }
++
++    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
++        self.shell_ui(ui, Some(frame));
+     }
+ }
+ 
+diff -ruN -x target -x Cargo.lock -x photocraft-aros -x '*.orig' -x '*.rej' photocraft.orig/crates/ui-egui/src/native_menu.rs photocraft/crates/ui-egui/src/native_menu.rs
+--- photocraft.orig/crates/ui-egui/src/native_menu.rs	2026-10-12 01:25:40.694577456 +0100
++++ photocraft/crates/ui-egui/src/native_menu.rs	2026-10-12 01:39:20.743119500 +0100
+@@ -1051,7 +1051,7 @@
+             app.services.native_menu = Some(NativeMenu::new(Box::new(Fake { synced: Default::default(), events: vec![Event::Key(paste)] })));
+             let step = |app: &mut PhotocraftApp, events: Vec<egui::Event>| {
+                 let mut raw = egui::RawInput { events, ..Default::default() };
+-                eframe::App::raw_input_hook(app, &ctx, &mut raw);
++                app.shell_raw_input_hook(&ctx, &mut raw);
+                 frame(&ctx, raw, |ui| {
+                     run(app, ui.ctx());
+                     crate::shortcuts::handle(app, ui.ctx());

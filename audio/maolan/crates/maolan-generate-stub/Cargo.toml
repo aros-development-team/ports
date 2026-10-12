@@ -1,0 +1,12 @@
+[package]
+name = "maolan-generate"
+version = "0.0.17"
+edition = "2024"
+description = "AROS stand-in for maolan-generate: the request and response types only, no Burn models"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+
+[lib]
+path = "src/lib.rs"

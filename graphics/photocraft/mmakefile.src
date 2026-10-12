@@ -1,0 +1,112 @@
+#   Build PhotoCraft (https://github.com/storytold/photocraft), an image
+#   editor written in Rust, with the Rust crosstool (configure --enable-rust).
+#
+#   The upstream source snapshot is fetched and patched for AROS, the AROS
+#   shell (photocraft-aros, this directory) is linked into its workspace, the
+#   crates.io crates that need AROS changes come from the shared crate stores
+#   (tools/crosstools/rust/crates and contrib/development/rust/crates), the
+#   rest are downloaded once into the shared cargo home (the one step that
+#   needs network access), and cargo builds the PhotoCraft window program and
+#   the headless photocraft-cli for the target. See README.md.
+
+include $(SRCDIR)/config/aros-contrib.cfg
+-include $(SRCDIR)/tools/crosstools/rust.cfg
+-include $(SRCDIR)/contrib/development/rust/contrib-rust.cfg
+
+#MM- ports-graphics : ports-graphics-photocraft-$(TARGET_RUST)
+#MM- ports-graphics-photocraft-yes : ports-graphics-photocraft
+
+#MM ports-graphics-photocraft : tools-crosstools-rust \
+#MM     ports-graphics-photocraft-fetch ports-graphics-photocraft-crates \
+#MM     ports-graphics-photocraft-build ports-graphics-photocraft-install \
+#MM     ports-graphics-photocraft-icons ports-graphics-photocraft-cpy
+ports-graphics-photocraft :
+	$(Q)$(NOP)
+
+#MM- ports-graphics-photocraft-quick : ports-graphics-photocraft-build ports-graphics-photocraft-install
+
+# The upstream snapshot: a commit on main (GitHub archives are named after it,
+# and unpack to photocraft-<commit>).
+PHOTOCRAFT_VERSION      := 0.7.0
+PHOTOCRAFT_REV          := c450e755aed5e77fa6d4de7f04996085f5871085
+PHOTOCRAFT_REPOSITORY   := https://github.com/storytold/photocraft/archive
+PHOTOCRAFT_SOURCEDIR    := $(PORTSSOURCEDIR)/photocraft
+PHOTOCRAFT_PORTDIR      := $(PORTSDIR)/photocraft
+PHOTOCRAFT_SRCDIR       := $(PHOTOCRAFT_PORTDIR)/photocraft-$(PHOTOCRAFT_REV)
+PHOTOCRAFT_GENDIR       := $(GENDIR)/$(CURDIR)
+PHOTOCRAFT_TARGETDIR    := $(PHOTOCRAFT_GENDIR)/target
+PHOTOCRAFT_CARGO_CONFIG := $(PHOTOCRAFT_GENDIR)/cargo-config.toml
+PHOTOCRAFT_DESTDIR      := $(AROS_CONTRIB)/MultiMedia/Gfx/PhotoCraft
+PHOTOCRAFT_CRATES_FETCHED := $(RUST_CARGO_HOME)/.photocraft-$(PHOTOCRAFT_REV)-fetched
+
+PHOTOCRAFT_CARGO     := $(CONTRIB_RUST_CARGO) --config $(PHOTOCRAFT_CARGO_CONFIG)
+PHOTOCRAFT_MANIFEST  := --manifest-path $(PHOTOCRAFT_SRCDIR)/Cargo.toml
+PHOTOCRAFT_PACKAGES  := -p photocraft-aros -p photocraft-cli --no-default-features
+PHOTOCRAFT_BINDIR    := $(PHOTOCRAFT_TARGETDIR)/$(RUST_TARGET_TRIPLE)/release
+
+## Sources ###
+
+%fetch mmake=ports-graphics-photocraft-fetch archive=$(PHOTOCRAFT_REV) \
+    archive_origins="$(PHOTOCRAFT_REPOSITORY)" suffixes="tar.gz" \
+    location=$(PHOTOCRAFT_SOURCEDIR) destination=$(PHOTOCRAFT_PORTDIR) \
+    patches_specs=photocraft-$(PHOTOCRAFT_VERSION)-aros.diff:photocraft-$(PHOTOCRAFT_REV):-p1
+
+%create_patch mmake=ports-graphics-photocraft-create-patch \
+    archive=$(PHOTOCRAFT_REV) srcdir=photocraft-$(PHOTOCRAFT_REV) suffixes="tar.gz" \
+    location=$(PHOTOCRAFT_SOURCEDIR) destination=$(PHOTOCRAFT_PORTDIR) \
+    excludes="target Cargo.lock apps/photocraft-aros"
+
+# The patched crates from the shared stores (libc, getrandom, parking_lot_core; fontique).
+#MM ports-graphics-photocraft-crates : rust-crates-config contrib-rust-crates-config
+ports-graphics-photocraft-crates :
+	$(Q)$(NOP)
+
+## cargo configuration ###
+
+# PhotoCraft has no patches of its own beyond the stores'.
+%rust_cargo_config mmake=ports-graphics-photocraft-cargo-config file=$(PHOTOCRAFT_CARGO_CONFIG) \
+    targetdir=$(PHOTOCRAFT_TARGETDIR)
+
+# The AROS shell is a workspace member through this link, picked up by the
+# workspace's apps/* glob.
+#MM
+ports-graphics-photocraft-link-shell : $(PHOTOCRAFT_SRCDIR)/apps/photocraft-aros
+
+$(PHOTOCRAFT_SRCDIR)/apps/photocraft-aros :
+	@$(ECHO) "Linking    photocraft-aros into the workspace"
+	@$(RM) $@
+	@ln -s $(SRCDIR)/$(CURDIR)/photocraft-aros $@
+
+## Crates ###
+
+#MM ports-graphics-photocraft-cargo-fetch : ports-graphics-photocraft-fetch ports-graphics-photocraft-crates \
+#MM     ports-graphics-photocraft-cargo-config ports-graphics-photocraft-link-shell
+%rust_cargo_fetch mmake=ports-graphics-photocraft-cargo-fetch cargo="$(PHOTOCRAFT_CARGO)" \
+    manifest="$(PHOTOCRAFT_MANIFEST)" stamp=$(PHOTOCRAFT_CRATES_FETCHED) \
+    locks="$(RUST_CRATES_LOCK) $(CONTRIB_RUST_CRATES_LOCK)" name="PhotoCraft's"
+
+## Build ###
+
+#MM ports-graphics-photocraft-build : tools-crosstools-rust tools-crosstools-autolibs \
+#MM     ports-graphics-photocraft-cargo-config ports-graphics-photocraft-cargo-fetch
+#MM
+ports-graphics-photocraft-build : $(PHOTOCRAFT_SRCDIR)/apps/photocraft-aros
+	@$(ECHO) "Building   PhotoCraft $(PHOTOCRAFT_VERSION) for $(RUST_TARGET_TRIPLE)"
+	+$(Q)$(PHOTOCRAFT_CARGO) build $(PHOTOCRAFT_MANIFEST) --offline --release --target $(RUST_TARGET_TRIPLE) $(PHOTOCRAFT_PACKAGES)
+
+#MM
+ports-graphics-photocraft-install :
+	%mkdirs_q $(PHOTOCRAFT_DESTDIR)
+	$(Q)$(CP) $(PHOTOCRAFT_BINDIR)/PhotoCraft $(PHOTOCRAFT_DESTDIR)/PhotoCraft
+	$(Q)$(CP) $(PHOTOCRAFT_BINDIR)/photocraft-cli $(PHOTOCRAFT_DESTDIR)/photocraft-cli
+
+%build_icons mmake=ports-graphics-photocraft-icons icons=PhotoCraft \
+    dir=$(PHOTOCRAFT_DESTDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons
+
+%copy_files_q mmake=ports-graphics-photocraft-cpy files="README.md" src=. dst=$(PHOTOCRAFT_DESTDIR)
+
+#MM
+ports-graphics-photocraft-clean :
+	$(RM) $(PHOTOCRAFT_TARGETDIR) $(PHOTOCRAFT_CARGO_CONFIG)
+
+%common

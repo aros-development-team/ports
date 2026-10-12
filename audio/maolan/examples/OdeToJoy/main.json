@@ -1,0 +1,90 @@
+{
+  "tracks": [
+    {
+      "id": 1,
+      "name": "Tone",
+      "level": 0.0,
+      "balance": 0.0,
+      "armed": false,
+      "muted": false,
+      "phase_inverted": false,
+      "soloed": false,
+      "is_master": false,
+      "input_monitor": [
+        false,
+        false
+      ],
+      "disk_monitor": [
+        true,
+        true
+      ],
+      "height": 120.0,
+      "audio": {
+        "clips": [
+          {
+            "name": "audio/ode-to-joy.wav",
+            "start": 0,
+            "length": 669120,
+            "offset": 0,
+            "source_length_samples": 669120,
+            "peaks_file": null
+          }
+        ],
+        "ins": 2,
+        "outs": 2
+      },
+      "midi": {
+        "clips": [],
+        "ins": 0,
+        "outs": 0
+      },
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      }
+    }
+  ],
+  "unused_audio_clips": [],
+  "unused_midi_clips": [],
+  "connections": [
+    {
+      "from_track": "Tone",
+      "from_port": 0,
+      "to_track": "hw:out",
+      "to_port": 0,
+      "kind": "Audio"
+    },
+    {
+      "from_track": "Tone",
+      "from_port": 1,
+      "to_track": "hw:out",
+      "to_port": 1,
+      "kind": "Audio"
+    }
+  ],
+  "transport": {
+    "sample_rate_hz": 48000,
+    "period_frames": 1024,
+    "hw_out_level": 0.0,
+    "hw_out_balance": 0.0,
+    "tempo": 120.0,
+    "time_signature_num": 4,
+    "time_signature_denom": 4,
+    "loop_enabled": false,
+    "loop_range_samples": null,
+    "session_range_samples": [
+      0,
+      669120
+    ],
+    "punch_range_samples": null,
+    "punch_enabled": false,
+    "musical_key": "C",
+    "tempo_points": [],
+    "time_signature_points": []
+  },
+  "ui": {
+    "tracks_width": 200.0,
+    "mixer_height": 300.0,
+    "zoom_visible_bars": 8.0
+  }
+}

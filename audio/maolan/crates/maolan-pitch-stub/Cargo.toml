@@ -1,0 +1,12 @@
+[package]
+name = "maolan-pitch"
+version = "0.0.1"
+edition = "2024"
+description = "AROS stand-in for maolan-pitch: the neural pitch API without Burn, reporting that it is unavailable"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+anyhow = "1.0"
+
+[lib]
+path = "src/lib.rs"

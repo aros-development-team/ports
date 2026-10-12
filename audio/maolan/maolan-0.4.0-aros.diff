@@ -1,0 +1,725 @@
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/Cargo.toml maolan/Cargo.toml
+--- a/Cargo.toml	2026-10-12 13:08:03.603777133 +0100
++++ b/Cargo.toml	2026-10-12 13:48:52.546214437 +0100
+@@ -19,10 +19,8 @@
+ 
+ [dependencies]
+ chrono = "0.4"
+-crossterm = "0.29.0"
+ dirs = "7.0.0"
+ ebur128 = "0.1"
+-hf-hub = { version = "1.0.0", default-features = false, features = ["blocking", "rustls-tls"] }
+ i24 = "2.3.3"
+ maolan-generate = "0.0.17"
+ maolan-editor = { version = "0.1.0", default-features = false, features = ["embedded"] }
+@@ -33,7 +31,6 @@
+ mixosc = "0.0.16"
+ midly = "0.5.3"
+ pitch-detection = "0.3.0"
+-ratatui = "0.30.0"
+ regex = "1.13.1"
+ rfd = "0.17.2"
+ rubato = "5.0.0"
+@@ -50,9 +47,12 @@
+ [target.'cfg(target_os = "linux")'.dependencies]
+ alsa = "0.12.0"
+ 
+-[target.'cfg(unix)'.dependencies]
++[target.'cfg(all(unix, not(target_os = "aros")))'.dependencies]
+ nix = { version = "0.31.3", features = ["signal", "process", "user"] }
+ x11-dl = "2.21.0"
++# The terminal tools (maolan-cli) are not built for AROS.
++crossterm = "0.29.0"
++ratatui = "0.30.0"
+ 
+ [target.'cfg(target_os = "windows")'.dependencies]
+ windows = { version = "0.62.2", features = ["Win32_Devices_Properties", "Win32_Media_Audio", "Win32_Media_Multimedia", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell_PropertiesSystem"] }
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/consts.rs maolan/src/consts.rs
+--- a/src/consts.rs	2026-10-12 13:08:03.610472433 +0100
++++ b/src/consts.rs	2026-10-12 14:40:05.285123102 +0100
+@@ -53,6 +53,8 @@
+ }
+ 
+ pub mod platform_caps {
++    // AHI opens one audio mode for playback and recording alike, so AROS has no
++    // separate input device.
+     pub const HAS_SEPARATE_AUDIO_INPUT_DEVICE: bool = cfg!(any(
+         target_os = "linux",
+         target_os = "windows",
+@@ -64,10 +66,12 @@
+         target_os = "linux",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ));
+     pub const REQUIRE_VST3_STATE_FOR_SAVE: bool = false;
+-    pub const SUPPORTS_PLUGIN_GRAPH: bool = true;
++    // Plug-in hosting needs shared libraries and child processes, which AROS lacks.
++    pub const SUPPORTS_PLUGIN_GRAPH: bool = cfg!(not(target_os = "aros"));
+ }
+ 
+ pub mod main {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/mod.rs maolan/src/gui/mod.rs
+--- a/src/gui/mod.rs	2026-10-12 13:08:03.611621333 +0100
++++ b/src/gui/mod.rs	2026-10-12 15:35:01.912649056 +0100
+@@ -667,6 +667,8 @@
+     pub timing: TimingState,
+     pub session_ops: SessionOpsState,
+     pub plugin_params: PluginParamState,
++    /// A session folder given on the command line, opened once the audio device is up.
++    pub startup_session: Option<std::path::PathBuf>,
+     menu: menu::Menu,
+     size: Size,
+     state: State,
+@@ -859,6 +861,7 @@
+             },
+             session_ops: SessionOpsState::default(),
+             plugin_params: PluginParamState::default(),
++            startup_session: None,
+             shortcut_overrides: prefs.shortcut_overrides,
+             modulators: vec![],
+             selected_modulator_id: None,
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/generate.rs maolan/src/gui/update/dispatch/generate.rs
+--- a/src/gui/update/dispatch/generate.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/generate.rs	2026-10-12 13:51:15.483297259 +0100
+@@ -39,7 +39,7 @@
+                 self.generate.generate_audio_seconds_total_input = value;
+             }
+             Message::GenerateAudioCancel => {
+-                #[cfg(unix)]
++                #[cfg(all(unix, not(target_os = "aros")))]
+                 if let Some(pid) = self.generate.generate_audio_process_id.take() {
+                     use nix::sys::signal::{self, Signal};
+                     use nix::unistd::Pid;
+@@ -475,7 +475,7 @@
+                 self.generate.generate_midi_seed_input = value.clone();
+             }
+             Message::GenerateMidiCancel => {
+-                #[cfg(unix)]
++                #[cfg(all(unix, not(target_os = "aros")))]
+                 if let Some(pid) = self.generate.generate_midi_process_id.take() {
+                     use nix::sys::signal::{self, Signal};
+                     use nix::unistd::Pid;
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/mod.rs maolan/src/gui/update/dispatch/mod.rs
+--- a/src/gui/update/dispatch/mod.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/mod.rs	2026-10-12 15:35:30.962735891 +0100
+@@ -960,6 +960,18 @@
+     }
+ 
+     pub fn update(&mut self, message: Message) -> Task<Message> {
++        let task = self.update_inner(message);
++        // A session named on the command line waits until the audio device is open.
++        if self.startup_session.is_some()
++            && self.state.read().map(|s| s.hw_loaded).unwrap_or(false)
++            && let Some(path) = self.startup_session.take()
++        {
++            return Task::batch(vec![task, Task::done(Message::LoadSessionPath(path))]);
++        }
++        task
++    }
++
++    fn update_inner(&mut self, message: Message) -> Task<Message> {
+         struct SyncLogOnDrop(*mut Maolan);
+ 
+         impl Drop for SyncLogOnDrop {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/response.rs maolan/src/gui/update/dispatch/response.rs
+--- a/src/gui/update/dispatch/response.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/response.rs	2026-10-12 16:00:23.276287244 +0100
+@@ -144,6 +144,15 @@
+                 if !handled_response_state && !handled_response_track && !handled_response_timing {
+                     match a {
+                         Action::Quit => {
++                            // AROS: exit() must run on the process's main task (posixc's
++                            // exit() returns into the startup context on that task's stack,
++                            // and waits for every pthread), so the program ends by leaving
++                            // iced's loop and returning from main.
++                            #[cfg(target_os = "aros")]
++                            {
++                                return maolan_widgets::iced::exit();
++                            }
++                            #[cfg(not(target_os = "aros"))]
+                             exit(0);
+                         }
+                         Action::AddTrack {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/session_io.rs maolan/src/gui/update/dispatch/session_io.rs
+--- a/src/gui/update/dispatch/session_io.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/session_io.rs	2026-10-12 13:34:55.981638408 +0100
+@@ -584,6 +584,7 @@
+                 target_os = "windows",
+                 target_os = "freebsd",
+                 target_os = "openbsd",
++        target_os = "aros",
+                 target_os = "macos"
+             ))]
+             Message::PreferencesDevicesLoaded {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/show.rs maolan/src/gui/update/dispatch/show.rs
+--- a/src/gui/update/dispatch/show.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/show.rs	2026-10-12 13:34:55.986678508 +0100
+@@ -189,6 +189,7 @@
+                     target_os = "windows",
+                     target_os = "freebsd",
+                     target_os = "openbsd",
++        target_os = "aros",
+                     target_os = "macos"
+                 ))]
+                 {
+@@ -214,7 +215,7 @@
+                                     crate::state::discover_windows_input_devices(),
+                                 )
+                             }
+-                            #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
++                            #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros"))]
+                             {
+                                 (
+                                     crate::state::discover_output_audio_devices(),
+@@ -240,6 +241,7 @@
+                     target_os = "windows",
+                     target_os = "freebsd",
+                     target_os = "openbsd",
++        target_os = "aros",
+                     target_os = "macos"
+                 )))]
+                 {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/dispatch/ui.rs maolan/src/gui/update/dispatch/ui.rs
+--- a/src/gui/update/dispatch/ui.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/dispatch/ui.rs	2026-10-12 13:34:55.984537408 +0100
+@@ -121,6 +121,7 @@
+                 target_os = "freebsd",
+                 target_os = "linux",
+                 target_os = "openbsd",
++        target_os = "aros",
+                 target_os = "windows",
+                 target_os = "macos"
+             ))]
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/gui/update/hw.rs maolan/src/gui/update/hw.rs
+--- a/src/gui/update/hw.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/gui/update/hw.rs	2026-10-12 14:02:28.435158311 +0100
+@@ -13,7 +13,7 @@
+         self.state.write().expect("state lock poisoned").selected_hw = Some(hw.to_string());
+     }
+ 
+-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+     pub(super) fn apply_hw_input_selected(&self, hw: &AudioDeviceOption) {
+         let mut state = self.state.write().expect("state lock poisoned");
+         let selected = Self::select_refreshed_device(
+@@ -53,6 +53,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -81,7 +82,7 @@
+         selected
+     }
+ 
+-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+     pub(super) fn selected_output_device_for_platform(
+         state: &mut crate::state::StateData,
+         hw: &AudioDeviceOption,
+@@ -146,7 +147,7 @@
+         selected
+     }
+ 
+-    #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
++    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros"))]
+     pub(super) fn apply_backend_device_defaults(
+         state: &mut crate::state::StateData,
+         backend: &crate::state::AudioBackendOption,
+@@ -159,6 +160,10 @@
+         if !matches!(backend, crate::state::AudioBackendOption::Sndio) {
+             return;
+         }
++        #[cfg(target_os = "aros")]
++        if !matches!(backend, crate::state::AudioBackendOption::Ahi) {
++            return;
++        }
+         state.selected_hw = Self::select_first_backend_output_device(
+             state,
+             crate::state::discover_output_audio_devices,
+@@ -228,7 +233,7 @@
+ 
+ #[cfg(all(
+     test,
+-    any(target_os = "linux", target_os = "freebsd", target_os = "openbsd")
++    any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "aros")
+ ))]
+ mod tests {
+     use super::*;
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/hw.rs maolan/src/hw.rs
+--- a/src/hw.rs	2026-10-12 13:08:03.613133233 +0100
++++ b/src/hw.rs	2026-10-12 14:40:13.250755749 +0100
+@@ -213,6 +213,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -250,7 +251,7 @@
+                 state.selected_input_hw.clone(),
+             )
+         };
+-        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+         let (available_input_hw, mut selected_input_hw) = {
+             let state = self.state.read().expect("state lock poisoned");
+             (
+@@ -270,6 +271,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -284,6 +286,8 @@
+                 crate::state::AudioBackendOption::Oss => hw.id.starts_with("/dev/dsp"),
+                 #[cfg(target_os = "openbsd")]
+                 crate::state::AudioBackendOption::Sndio => !hw.id.is_empty(),
++                #[cfg(target_os = "aros")]
++                crate::state::AudioBackendOption::Ahi => !hw.id.is_empty(),
+                 #[cfg(target_os = "linux")]
+                 crate::state::AudioBackendOption::Alsa => hw.id.starts_with("hw:"),
+                 #[cfg(target_os = "macos")]
+@@ -300,6 +304,8 @@
+                 crate::state::AudioBackendOption::Oss => hw.id.starts_with("/dev/dsp"),
+                 #[cfg(target_os = "openbsd")]
+                 crate::state::AudioBackendOption::Sndio => !hw.id.is_empty(),
++                #[cfg(target_os = "aros")]
++                crate::state::AudioBackendOption::Ahi => !hw.id.is_empty(),
+                 #[cfg(target_os = "linux")]
+                 crate::state::AudioBackendOption::Alsa => hw.id.starts_with("hw:"),
+                 #[cfg(target_os = "macos")]
+@@ -330,7 +336,7 @@
+             selected_input_hw =
+                 selected_input_hw.filter(|s| available_input_hw.iter().any(|hw| hw == s));
+         }
+-        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+         {
+             selected_input_hw =
+                 selected_input_hw.filter(|s| available_input_hw.iter().any(|hw| hw.id == s.id));
+@@ -362,6 +368,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -404,6 +411,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -416,6 +424,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -450,6 +459,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -458,6 +468,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -470,6 +481,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -478,6 +490,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -496,6 +509,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -504,6 +518,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -512,6 +527,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -520,6 +536,7 @@
+             target_os = "freebsd",
+             target_os = "linux",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+@@ -529,6 +546,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -537,6 +555,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         )))]
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/main.rs maolan/src/main.rs
+--- a/src/main.rs	2026-10-12 13:08:03.617803233 +0100
++++ b/src/main.rs	2026-10-12 15:35:01.913481556 +0100
+@@ -133,7 +133,21 @@
+         ..Default::default()
+     };
+ 
+-    maolan_widgets::iced::application(Maolan::new, Maolan::update, Maolan::view)
++    // `--session <folder>` opens that session at start (AROS has no file manager
++    // arguments to pass a folder otherwise).
++    let session_at_start: Option<String> = {
++        let args: Vec<String> = std::env::args().collect();
++        args.iter()
++            .position(|a| a == "--session")
++            .and_then(|pos| args.get(pos + 1).cloned())
++    };
++    let boot = move || {
++        let (mut app, task) = Maolan::new();
++        app.startup_session = session_at_start.clone().map(std::path::PathBuf::from);
++        (app, task)
++    };
++
++    maolan_widgets::iced::application(boot, Maolan::update, Maolan::view)
+         .title(Maolan::title)
+         .settings(settings)
+         .theme(Theme::Dark)
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/message.rs maolan/src/message.rs
+--- a/src/message.rs	2026-10-12 13:08:03.617803233 +0100
++++ b/src/message.rs	2026-10-12 13:34:55.956427207 +0100
+@@ -1205,6 +1205,7 @@
+         target_os = "windows",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ))]
+     PreferencesDevicesLoaded {
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/state/mod.rs maolan/src/state/mod.rs
+--- a/src/state/mod.rs	2026-10-12 13:08:03.618680233 +0100
++++ b/src/state/mod.rs	2026-10-12 14:39:28.598209342 +0100
+@@ -8,6 +8,8 @@
+ mod platform_macos;
+ #[cfg(target_os = "openbsd")]
+ mod platform_openbsd;
++#[cfg(target_os = "aros")]
++mod platform_aros;
+ mod session;
+ mod track;
+ 
+@@ -120,6 +122,8 @@
+ };
+ #[cfg(target_os = "openbsd")]
+ pub(crate) use platform_openbsd::discover_openbsd_audio_devices;
++#[cfg(target_os = "aros")]
++pub(crate) use platform_aros::discover_aros_audio_devices;
+ pub use session::{
+     LaunchMode, LaunchQuantization, Scene, SelectedSlots, SessionMatrix, SlotClipRef,
+     SlotPlayState, SlotRuntimes,
+@@ -783,6 +787,8 @@
+     Oss,
+     #[cfg(target_os = "openbsd")]
+     Sndio,
++    #[cfg(target_os = "aros")]
++    Ahi,
+     #[cfg(target_os = "linux")]
+     Alsa,
+     #[cfg(target_os = "macos")]
+@@ -800,6 +806,8 @@
+             Self::Oss => "OSS",
+             #[cfg(target_os = "openbsd")]
+             Self::Sndio => "sndio",
++            #[cfg(target_os = "aros")]
++            Self::Ahi => "AHI",
+             #[cfg(target_os = "linux")]
+             Self::Alsa => "ALSA",
+             #[cfg(target_os = "macos")]
+@@ -904,7 +912,7 @@
+     }
+ }
+ 
+-#[cfg(target_os = "freebsd")]
++#[cfg(any(target_os = "freebsd", target_os = "aros"))]
+ impl From<maolan_engine::audio_devices::AudioDeviceDescriptor> for AudioDeviceOption {
+     fn from(device: maolan_engine::audio_devices::AudioDeviceDescriptor) -> Self {
+         let mut out = Self::with_oss_caps(
+@@ -1543,6 +1551,7 @@
+         target_os = "windows",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ))]
+     pub available_input_hw: Vec<InputAudioDevice>,
+@@ -1550,6 +1559,7 @@
+         target_os = "freebsd",
+         target_os = "linux",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "windows",
+         target_os = "macos"
+     ))]
+@@ -1795,6 +1805,7 @@
+                 target_os = "windows",
+                 target_os = "freebsd",
+                 target_os = "openbsd",
++        target_os = "aros",
+                 target_os = "macos"
+             ))]
+             available_input_hw: initial_hw.available_input_hw,
+@@ -1802,6 +1813,7 @@
+                 target_os = "freebsd",
+                 target_os = "linux",
+                 target_os = "openbsd",
++        target_os = "aros",
+                 target_os = "windows",
+                 target_os = "macos"
+             ))]
+@@ -1963,6 +1975,7 @@
+         target_os = "windows",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ))]
+     available_input_hw: Vec<InputAudioDevice>,
+@@ -1970,6 +1983,7 @@
+         target_os = "linux",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "windows",
+         target_os = "macos"
+     ))]
+@@ -1986,6 +2000,7 @@
+         target_os = "windows",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ))]
+     let available_input_hw = initial_input_hw_devices();
+@@ -1994,6 +2009,7 @@
+         target_os = "windows",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "macos"
+     ))]
+     let selected_input_hw = initial_selected_input_hw(&available_input_hw);
+@@ -2007,6 +2023,7 @@
+             target_os = "windows",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "macos"
+         ))]
+         available_input_hw,
+@@ -2014,6 +2031,7 @@
+             target_os = "linux",
+             target_os = "freebsd",
+             target_os = "openbsd",
++        target_os = "aros",
+             target_os = "windows",
+             target_os = "macos"
+         ))]
+@@ -2021,7 +2039,7 @@
+     }
+ }
+ 
+-#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+ pub(crate) fn discover_output_audio_devices() -> Vec<AudioDeviceOption> {
+     #[cfg(target_os = "freebsd")]
+     {
+@@ -2038,13 +2056,20 @@
+             .filter(|d| d.supports_output)
+             .collect()
+     }
++    #[cfg(target_os = "aros")]
++    {
++        discover_aros_audio_devices()
++            .into_iter()
++            .filter(|d| d.supports_output)
++            .collect()
++    }
+     #[cfg(target_os = "macos")]
+     {
+         discover_coreaudio_output_devices()
+     }
+ }
+ 
+-#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "macos"))]
++#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros", target_os = "macos"))]
+ pub(crate) fn discover_input_audio_devices() -> Vec<AudioDeviceOption> {
+     #[cfg(target_os = "freebsd")]
+     {
+@@ -2061,6 +2086,13 @@
+             .filter(|d| d.supports_input)
+             .collect()
+     }
++    #[cfg(target_os = "aros")]
++    {
++        discover_aros_audio_devices()
++            .into_iter()
++            .filter(|d| d.supports_input)
++            .collect()
++    }
+     #[cfg(target_os = "macos")]
+     {
+         discover_coreaudio_input_devices()
+@@ -2072,6 +2104,8 @@
+     let devices = discover_output_audio_devices();
+     #[cfg(target_os = "openbsd")]
+     let devices = discover_output_audio_devices();
++    #[cfg(target_os = "aros")]
++    let devices = discover_output_audio_devices();
+     #[cfg(target_os = "macos")]
+     let devices = discover_coreaudio_output_devices();
+     #[cfg(target_os = "linux")]
+@@ -2082,6 +2116,7 @@
+         target_os = "linux",
+         target_os = "freebsd",
+         target_os = "openbsd",
++        target_os = "aros",
+         target_os = "windows",
+         target_os = "macos"
+     )))]
+@@ -2092,6 +2127,7 @@
+ #[cfg(any(
+     target_os = "freebsd",
+     target_os = "openbsd",
++        target_os = "aros",
+     target_os = "linux",
+     target_os = "windows",
+     target_os = "macos"
+@@ -2109,6 +2145,7 @@
+ #[cfg(not(any(
+     target_os = "freebsd",
+     target_os = "openbsd",
++        target_os = "aros",
+     target_os = "linux",
+     target_os = "windows",
+     target_os = "macos"
+@@ -2122,6 +2159,7 @@
+     target_os = "windows",
+     target_os = "freebsd",
+     target_os = "openbsd",
++        target_os = "aros",
+     target_os = "macos"
+ ))]
+ fn initial_input_hw_devices() -> Vec<InputAudioDevice> {
+@@ -2129,7 +2167,7 @@
+     let devices = discover_alsa_input_devices();
+     #[cfg(target_os = "windows")]
+     let devices = discover_windows_input_devices();
+-    #[cfg(any(target_os = "freebsd", target_os = "openbsd"))]
++    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "aros"))]
+     let devices = discover_input_audio_devices();
+     #[cfg(target_os = "macos")]
+     let devices = discover_coreaudio_input_devices();
+@@ -2141,6 +2179,7 @@
+     target_os = "windows",
+     target_os = "freebsd",
+     target_os = "openbsd",
++        target_os = "aros",
+     target_os = "macos"
+ ))]
+ fn initial_selected_input_hw(hw: &[InputAudioDevice]) -> Option<InputAudioDevice> {
+@@ -2158,6 +2197,7 @@
+     target_os = "windows",
+     target_os = "freebsd",
+     target_os = "openbsd",
++        target_os = "aros",
+     target_os = "macos"
+ )))]
+ fn initial_selected_input_hw(_selected_hw: &Option<OutputAudioDevice>) -> Option<InputAudioDevice> {
+@@ -2168,12 +2208,14 @@
+ 
+ fn supported_audio_backends() -> Vec<AudioBackendOption> {
+     [
+-        #[cfg(unix)]
++        #[cfg(all(unix, not(target_os = "aros")))]
+         Some(AudioBackendOption::Jack),
+         #[cfg(target_os = "freebsd")]
+         Some(AudioBackendOption::Oss),
+         #[cfg(target_os = "openbsd")]
+         Some(AudioBackendOption::Sndio),
++        #[cfg(target_os = "aros")]
++        Some(AudioBackendOption::Ahi),
+         #[cfg(target_os = "linux")]
+         Some(AudioBackendOption::Alsa),
+         #[cfg(target_os = "macos")]
+@@ -2192,6 +2234,8 @@
+         AudioBackendOption::Oss => 0,
+         #[cfg(target_os = "openbsd")]
+         AudioBackendOption::Sndio => 0,
++        #[cfg(target_os = "aros")]
++        AudioBackendOption::Ahi => 0,
+         #[cfg(target_os = "linux")]
+         AudioBackendOption::Alsa => 0,
+         #[cfg(target_os = "macos")]
+diff -ruN -x target -x Cargo.lock -x .git maolan.orig/src/state/platform_aros.rs maolan/src/state/platform_aros.rs
+--- a/src/state/platform_aros.rs	1970-01-01 01:00:00.000000000 +0100
++++ b/src/state/platform_aros.rs	2026-10-12 13:35:31.509023281 +0100
+@@ -0,0 +1,9 @@
++use super::AudioDeviceOption;
++
++/// The audio modes ahi.device offers, through the engine's AHI backend.
++pub(crate) fn discover_aros_audio_devices() -> Vec<AudioDeviceOption> {
++    maolan_engine::audio_devices::discover_ahi_audio_devices()
++        .into_iter()
++        .map(AudioDeviceOption::from)
++        .collect()
++}

@@ -1,0 +1,63 @@
+diff -ruN -x .cargo-checksum.json -x Cargo.toml.orig -x .cargo_vcs_info.json -x target -x Cargo.lock a/src/cli.rs b/src/cli.rs
+--- a/src/cli.rs	2006-07-24 02:21:28.000000000 +0100
++++ b/src/cli.rs	2026-10-12 13:56:40.226609293 +0100
+@@ -41,7 +41,7 @@
+ /// cycle thread (prio 18, engine/src/workers/hw_worker.rs) so a busy host can
+ /// never preempt the cycle thread that waits on it, yet high enough to answer
+ /// an audio block within the engine's bounded plugin wait.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ const RT_PRIORITY_HOST: i32 = 14;
+ 
+ /// Best-effort realtime setup for the plugin-host process: lock memory pages
+@@ -52,7 +52,7 @@
+ /// finite limit, `MCL_FUTURE` turns every later mapping that cannot be
+ /// locked (such as the 4 MiB plugin shared-memory segment) into an `mmap`
+ /// failure with `EAGAIN`, which would abort plugin hosting at attach time.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ fn configure_realtime_process() {
+     let lock_flags = if memlock_limit_is_unlimited() {
+         libc::MCL_CURRENT | libc::MCL_FUTURE
+@@ -82,12 +82,12 @@
+     }
+ }
+ 
+-#[cfg(not(unix))]
++#[cfg(not(all(unix, not(target_os = "aros"))))]
+ fn configure_realtime_process() {}
+ 
+ /// Returns true when `RLIMIT_MEMLOCK` is unlimited, so `MCL_FUTURE` cannot
+ /// make later mappings fail.
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ fn memlock_limit_is_unlimited() -> bool {
+     let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+     let rc = unsafe { libc::getrlimit(libc::RLIMIT_MEMLOCK, limit.as_mut_ptr()) };
+diff -ruN -x .cargo-checksum.json -x Cargo.toml.orig -x .cargo_vcs_info.json -x target -x Cargo.lock a/src/scan.rs b/src/scan.rs
+--- a/src/scan.rs	2006-07-24 02:21:28.000000000 +0100
++++ b/src/scan.rs	2026-10-12 13:56:40.226347193 +0100
+@@ -431,7 +431,7 @@
+     }
+ }
+ 
+-#[cfg(unix)]
++#[cfg(all(unix, not(target_os = "aros")))]
+ fn default_clap_search_roots() -> Vec<PathBuf> {
+     let mut roots = Vec::new();
+     #[cfg(unix)]
+diff -ruN -x .cargo-checksum.json -x Cargo.toml.orig -x .cargo_vcs_info.json -x target -x Cargo.lock a/src/vst3/mod.rs b/src/vst3/mod.rs
+--- a/src/vst3/mod.rs	2006-07-24 02:21:28.000000000 +0100
++++ b/src/vst3/mod.rs	2026-10-12 14:47:42.937393398 +0100
+@@ -24,9 +24,10 @@
+ use std::path::PathBuf;
+ 
+ pub fn default_vst3_search_roots() -> Vec<PathBuf> {
++    #[allow(unused_mut)]
+     let mut roots = Vec::new();
+ 
+-    #[cfg(unix)]
++    #[cfg(all(unix, not(target_os = "aros")))]
+     {
+         paths::push_unix_plugin_roots(&mut roots, "vst3");
+     }

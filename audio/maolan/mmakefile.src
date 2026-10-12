@@ -1,0 +1,127 @@
+#   Build Maolan (https://github.com/maolan/maolan), a digital audio
+#   workstation written in Rust, with the Rust crosstool (configure
+#   --enable-rust).
+#
+#   The upstream source snapshot is fetched and patched for AROS, the
+#   crates.io crates that need AROS changes come from the shared crate stores
+#   (tools/crosstools/rust/crates and contrib/development/rust/crates, the
+#   latter with the iced shell and the ASL requesters), the two engine crates
+#   patched here and the stand-ins for the machine-learning crates replace
+#   their upstream counterparts through this program's cargo config, the rest
+#   are downloaded once into the shared cargo home (the one step that needs
+#   network access), and cargo builds the Maolan program for the target. See
+#   README.md.
+
+include $(SRCDIR)/config/aros-contrib.cfg
+-include $(SRCDIR)/tools/crosstools/rust.cfg
+-include $(SRCDIR)/contrib/development/rust/contrib-rust.cfg
+
+#MM- ports-audio : ports-audio-maolan-$(TARGET_RUST)
+#MM- ports-audio-maolan-yes : ports-audio-maolan
+
+#MM ports-audio-maolan : tools-crosstools-rust \
+#MM     ports-audio-maolan-fetch ports-audio-maolan-crates \
+#MM     ports-audio-maolan-build ports-audio-maolan-install \
+#MM     ports-audio-maolan-icons ports-audio-maolan-cpy \
+#MM     ports-audio-maolan-examples
+ports-audio-maolan :
+	$(Q)$(NOP)
+
+#MM- ports-audio-maolan-quick : ports-audio-maolan-build ports-audio-maolan-install
+
+# The upstream snapshot: a commit on main (GitHub archives are named after it,
+# and unpack to maolan-<commit>).
+MAOLAN_VERSION      := 0.4.0
+MAOLAN_REV          := 056692d381ade88bd24743f2b6b33746f60781da
+MAOLAN_REPOSITORY   := https://github.com/maolan/maolan/archive
+MAOLAN_SOURCEDIR    := $(PORTSSOURCEDIR)/maolan
+MAOLAN_PORTDIR      := $(PORTSDIR)/maolan
+MAOLAN_SRCDIR       := $(MAOLAN_PORTDIR)/maolan-$(MAOLAN_REV)
+MAOLAN_CRATESDIR    := $(MAOLAN_PORTDIR)/crates
+MAOLAN_GENDIR       := $(GENDIR)/$(CURDIR)
+MAOLAN_TARGETDIR    := $(MAOLAN_GENDIR)/target
+MAOLAN_CARGO_CONFIG := $(MAOLAN_GENDIR)/cargo-config.toml
+MAOLAN_DESTDIR      := $(AROS_CONTRIB)/MultiMedia/Audio/Maolan
+MAOLAN_CRATES_FETCHED := $(RUST_CARGO_HOME)/.maolan-$(MAOLAN_REV)-fetched
+
+# The two engine crates get patches of their own (the AHI backend, the
+# plug-in host without its realtime setup); the stand-in crates live here.
+CRATE_MAOLAN_ENGINE      := maolan-engine-0.4.0
+CRATE_MAOLAN_PLUGIN_HOST := maolan-plugin-host-0.1.1
+MAOLAN_AROS_CRATESDIR    := $(SRCDIR)/$(CURDIR)/crates
+
+MAOLAN_CARGO     := $(CONTRIB_RUST_CARGO) --config $(MAOLAN_CARGO_CONFIG)
+MAOLAN_MANIFEST  := --manifest-path $(MAOLAN_SRCDIR)/Cargo.toml
+MAOLAN_BINDIR    := $(MAOLAN_TARGETDIR)/$(RUST_TARGET_TRIPLE)/release
+
+## Sources ###
+
+%fetch mmake=ports-audio-maolan-fetch archive=$(MAOLAN_REV) \
+    archive_origins="$(MAOLAN_REPOSITORY)" suffixes="tar.gz" \
+    location=$(MAOLAN_SOURCEDIR) destination=$(MAOLAN_PORTDIR) \
+    patches_specs=maolan-$(MAOLAN_VERSION)-aros.diff:maolan-$(MAOLAN_REV):-p1
+
+%create_patch mmake=ports-audio-maolan-create-patch \
+    archive=$(MAOLAN_REV) srcdir=maolan-$(MAOLAN_REV) suffixes="tar.gz" \
+    location=$(MAOLAN_SOURCEDIR) destination=$(MAOLAN_PORTDIR) \
+    excludes="target Cargo.lock"
+
+# The patched crates: the shared stores' (libc, getrandom, parking_lot_core; tokio and
+# what it brings, libloading, iced with its AROS shell, rfd-aros) and Maolan's own two.
+#MM ports-audio-maolan-crates : rust-crates-config contrib-rust-crates-config \
+#MM     ports-audio-maolan-fetch-maolan-engine ports-audio-maolan-fetch-maolan-plugin-host
+ports-audio-maolan-crates :
+	$(Q)$(NOP)
+
+%fetch mmake=ports-audio-maolan-fetch-maolan-engine archive=$(CRATE_MAOLAN_ENGINE) suffixes="crate" \
+    archive_origins="$(CRATES_IO)/maolan-engine" location=$(MAOLAN_SOURCEDIR) destination=$(MAOLAN_CRATESDIR) \
+    patches_specs=$(CRATE_MAOLAN_ENGINE)-aros.diff:$(CRATE_MAOLAN_ENGINE):-p1
+%fetch mmake=ports-audio-maolan-fetch-maolan-plugin-host archive=$(CRATE_MAOLAN_PLUGIN_HOST) suffixes="crate" \
+    archive_origins="$(CRATES_IO)/maolan-plugin-host" location=$(MAOLAN_SOURCEDIR) destination=$(MAOLAN_CRATESDIR) \
+    patches_specs=$(CRATE_MAOLAN_PLUGIN_HOST)-aros.diff:$(CRATE_MAOLAN_PLUGIN_HOST):-p1
+
+## cargo configuration ###
+
+%rust_cargo_config mmake=ports-audio-maolan-cargo-config file=$(MAOLAN_CARGO_CONFIG) \
+    targetdir=$(MAOLAN_TARGETDIR) \
+    patches="maolan-engine=$(MAOLAN_CRATESDIR)/$(CRATE_MAOLAN_ENGINE) \
+        maolan-plugin-host=$(MAOLAN_CRATESDIR)/$(CRATE_MAOLAN_PLUGIN_HOST) \
+        maolan-generate=$(MAOLAN_AROS_CRATESDIR)/maolan-generate-stub \
+        maolan-pitch=$(MAOLAN_AROS_CRATESDIR)/maolan-pitch-stub"
+
+## Crates ###
+
+#MM ports-audio-maolan-cargo-fetch : ports-audio-maolan-fetch ports-audio-maolan-crates \
+#MM     ports-audio-maolan-cargo-config
+%rust_cargo_fetch mmake=ports-audio-maolan-cargo-fetch cargo="$(MAOLAN_CARGO)" \
+    manifest="$(MAOLAN_MANIFEST)" stamp=$(MAOLAN_CRATES_FETCHED) \
+    locks="$(RUST_CRATES_LOCK) $(CONTRIB_RUST_CRATES_LOCK)" name="Maolan's"
+
+## Build ###
+
+#MM ports-audio-maolan-build : tools-crosstools-rust tools-crosstools-autolibs \
+#MM     ports-audio-maolan-cargo-config ports-audio-maolan-cargo-fetch
+#MM
+ports-audio-maolan-build :
+	@$(ECHO) "Building   Maolan $(MAOLAN_VERSION) for $(RUST_TARGET_TRIPLE)"
+	+$(Q)$(MAOLAN_CARGO) build $(MAOLAN_MANIFEST) --offline --release --target $(RUST_TARGET_TRIPLE) --bin maolan
+
+#MM
+ports-audio-maolan-install :
+	%mkdirs_q $(MAOLAN_DESTDIR)
+	$(Q)$(CP) $(MAOLAN_BINDIR)/maolan $(MAOLAN_DESTDIR)/Maolan
+
+%build_icons mmake=ports-audio-maolan-icons icons=Maolan \
+    dir=$(MAOLAN_DESTDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons
+
+%copy_files_q mmake=ports-audio-maolan-cpy files="README.md" src=. dst=$(MAOLAN_DESTDIR)
+
+# An example session (one track, a synthesized Ode to Joy) to try playback with:
+# Maolan --session PROGDIR:Examples/OdeToJoy
+%copy_dir_recursive mmake=ports-audio-maolan-examples src=examples/OdeToJoy dst=$(MAOLAN_DESTDIR)/Examples/OdeToJoy
+
+#MM
+ports-audio-maolan-clean :
+	$(RM) $(MAOLAN_TARGETDIR) $(MAOLAN_CARGO_CONFIG)
+
+%common

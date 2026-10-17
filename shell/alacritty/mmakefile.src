@@ -2,11 +2,12 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 -include $(SRCDIR)/tools/crosstools/rust.cfg
-include $(SRCDIR)/ports/library/rust/rust-crates.cfg
+-include $(SRCDIR)/contrib/development/rust/contrib-rust.cfg
 
 # Alacritty, built with cargo and the AROS Rust crosstool. The AROS parts of
-# its dependencies (winit, glutin, polling, libc, ...) come from
-# ports/library/rust through the [patch.crates-io] section written below.
+# its dependencies (winit, glutin, polling, libc, ...) come from the contrib
+# crate store (contrib/development/rust/crates) through the
+# [patch.crates-io] section written below.
 
 #MM- ports-shell : ports-shell-alacritty-$(TARGET_RUST)
 #MM- ports-shell-alacritty-yes : ports-shell-alacritty
@@ -14,7 +15,10 @@ include $(SRCDIR)/ports/library/rust/rust-crates.cfg
 #MM ports-shell-alacritty : includes linklibs tools-crosstools-rust \
 #MM     linklibs-gl workbench-libs-freetype-linklibs workbench-libs-png workbench-libs-z \
 #MM     development-fontconfig development-libxml2 \
-#MM     ports-library-rust ports-shell-alacritty-fetch
+#MM     contrib-rust-crates-libc0185 contrib-rust-crates-libloading08 \
+#MM     contrib-rust-crates-polling contrib-rust-crates-raw-window-handle \
+#MM     contrib-rust-crates-winit contrib-rust-crates-glutin \
+#MM     ports-shell-alacritty-fetch
 
 ALACRITTY_VERSION   := 0.17.0
 ALACRITTY_SRCDIR    := $(PORTSDIR)/alacritty/alacritty-$(ALACRITTY_VERSION)
@@ -44,7 +48,7 @@ ports-shell-alacritty-refresh :
 	@$(call RUST_REFRESH,$(PORTSDIR)/alacritty,v$(ALACRITTY_VERSION).tar.gz,alacritty-$(ALACRITTY_VERSION),alacritty-$(ALACRITTY_VERSION)-aros.diff)
 
 # The crate versions this port's Cargo.lock uses.
-$(ALACRITTY_CONFIG) : $(TOP)/$(CURDIR)/mmakefile $(SRCDIR)/ports/library/rust/rust-crates.cfg
+$(ALACRITTY_CONFIG) : $(TOP)/$(CURDIR)/mmakefile $(SRCDIR)/contrib/development/rust/contrib-rust.cfg
 	%mkdirs_q $(ALACRITTY_GENDIR)
 	@$(ECHO) "Writing    $(subst $(TOP)/,,$@)"
 	@( \
@@ -67,12 +71,12 @@ $(ALACRITTY_CONFIG) : $(TOP)/$(CURDIR)/mmakefile $(SRCDIR)/ports/library/rust/ru
 	    $(ECHO) 'debug = 0' ; \
 	    $(ECHO) '' ; \
 	    $(ECHO) '[patch.crates-io]' ; \
-	    $(ECHO) 'libc = { path = "$(RUST_CRATES_DIR)/libc-0.2.185" }' ; \
-	    $(ECHO) 'libloading = { path = "$(RUST_CRATES_DIR)/libloading-0.8.9" }' ; \
-	    $(ECHO) 'polling = { path = "$(RUST_CRATES_DIR)/polling-3.11.0" }' ; \
-	    $(ECHO) 'raw-window-handle = { path = "$(RUST_CRATES_DIR)/raw-window-handle-0.6.2" }' ; \
-	    $(ECHO) 'winit = { path = "$(RUST_CRATES_DIR)/winit-0.30.13" }' ; \
-	    $(ECHO) 'glutin = { path = "$(RUST_CRATES_DIR)/glutin-0.32.3" }' ; \
+	    $(ECHO) 'libc = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_LIBC0185)" }' ; \
+	    $(ECHO) 'libloading = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_LIBLOADING08)" }' ; \
+	    $(ECHO) 'polling = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_POLLING)" }' ; \
+	    $(ECHO) 'raw-window-handle = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_RAW_WINDOW_HANDLE)" }' ; \
+	    $(ECHO) 'winit = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_WINIT)" }' ; \
+	    $(ECHO) 'glutin = { path = "$(RUST_CRATESDIR)/$(CONTRIB_RUST_CRATE_GLUTIN)" }' ; \
 	    $(ECHO) 'aros-gui-sys = { path = "$(RUST_SYS_CRATESDIR)/aros-gui-sys" }' ; \
 	    $(ECHO) 'aros-pty-sys = { path = "$(RUST_SYS_CRATESDIR)/aros-pty-sys" }' ; \
 	) > $@

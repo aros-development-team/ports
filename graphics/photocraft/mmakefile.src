@@ -37,7 +37,9 @@ PHOTOCRAFT_GENDIR       := $(GENDIR)/$(CURDIR)
 PHOTOCRAFT_TARGETDIR    := $(PHOTOCRAFT_GENDIR)/target
 PHOTOCRAFT_CARGO_CONFIG := $(PHOTOCRAFT_GENDIR)/cargo-config.toml
 PHOTOCRAFT_DESTDIR      := $(AROS_CONTRIB)/MultiMedia/Gfx/PhotoCraft
-PHOTOCRAFT_CRATES_FETCHED := $(RUST_CARGO_HOME)/.photocraft-$(PHOTOCRAFT_REV)-fetched
+# Per build tree: the fetch also moves this tree's Cargo.lock to the crate
+# stores' versions (the downloads go to the shared cargo home).
+PHOTOCRAFT_CRATES_FETCHED := $(PHOTOCRAFT_GENDIR)/.photocraft-$(PHOTOCRAFT_REV)-fetched
 
 PHOTOCRAFT_CARGO     := $(CONTRIB_RUST_CARGO) --config $(PHOTOCRAFT_CARGO_CONFIG)
 PHOTOCRAFT_MANIFEST  := --manifest-path $(PHOTOCRAFT_SRCDIR)/Cargo.toml

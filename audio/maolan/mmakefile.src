@@ -42,7 +42,9 @@ MAOLAN_GENDIR       := $(GENDIR)/$(CURDIR)
 MAOLAN_TARGETDIR    := $(MAOLAN_GENDIR)/target
 MAOLAN_CARGO_CONFIG := $(MAOLAN_GENDIR)/cargo-config.toml
 MAOLAN_DESTDIR      := $(AROS_CONTRIB)/MultiMedia/Audio/Maolan
-MAOLAN_CRATES_FETCHED := $(RUST_CARGO_HOME)/.maolan-$(MAOLAN_REV)-fetched
+# Per build tree: the fetch also moves this tree's Cargo.lock to the crate
+# stores' versions (the downloads go to the shared cargo home).
+MAOLAN_CRATES_FETCHED := $(MAOLAN_GENDIR)/.maolan-$(MAOLAN_REV)-fetched
 
 # The two engine crates get patches of their own (the AHI backend, the
 # plug-in host without its realtime setup); the stand-in crates live here.

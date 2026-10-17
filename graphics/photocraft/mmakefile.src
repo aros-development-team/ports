@@ -101,6 +101,7 @@ ports-graphics-photocraft-install :
 	%mkdirs_q $(PHOTOCRAFT_DESTDIR)
 	$(Q)$(CP) $(PHOTOCRAFT_BINDIR)/PhotoCraft $(PHOTOCRAFT_DESTDIR)/PhotoCraft
 	$(Q)$(CP) $(PHOTOCRAFT_BINDIR)/photocraft-cli $(PHOTOCRAFT_DESTDIR)/photocraft-cli
+	$(Q)$(TARGET_STRIP) $(PHOTOCRAFT_DESTDIR)/PhotoCraft $(PHOTOCRAFT_DESTDIR)/photocraft-cli
 
 %build_icons mmake=ports-graphics-photocraft-icons icons=PhotoCraft \
     dir=$(PHOTOCRAFT_DESTDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons

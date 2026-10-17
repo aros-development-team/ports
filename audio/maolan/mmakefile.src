@@ -112,6 +112,7 @@ ports-audio-maolan-build :
 ports-audio-maolan-install :
 	%mkdirs_q $(MAOLAN_DESTDIR)
 	$(Q)$(CP) $(MAOLAN_BINDIR)/maolan $(MAOLAN_DESTDIR)/Maolan
+	$(Q)$(TARGET_STRIP) $(MAOLAN_DESTDIR)/Maolan
 
 %build_icons mmake=ports-audio-maolan-icons icons=Maolan \
     dir=$(MAOLAN_DESTDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons

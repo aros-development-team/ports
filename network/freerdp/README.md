@@ -50,6 +50,15 @@ unknown certificates before accepting them. Changed pins reject connection.
 Ctrl+Alt+Enter switches between windowed and fullscreen mode. Resize remote
 desktop requests a matching resolution when the server supports it.
 
+Tab and Shift+Tab move through the preferences controls in display order.
+During a connection, Shift+right-click opens the Project menu; ordinary
+right-clicks go to the remote desktop. Preferences (reconnect) and Disconnect
+end the connection and return to the dialog. Quit closes the application.
+The menu shortcuts are Right-Amiga+P, Right-Amiga+D and Right-Amiga+Q.
+Re-enter the password or load a saved profile before reconnecting. Command-line
+options outside the fields supported by the dialog are not retained there;
+the dialog represents one shared directory and one printer.
+
 Sharing is opt-in: text clipboard, audio playback, microphone capture, a
 selected local directory, and either text or PDF/XPS printer mode. The server
 must support and permit the corresponding channels. Directory sharing rejects

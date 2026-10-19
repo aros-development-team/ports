@@ -1296,10 +1296,10 @@ index 0000000..5e653eb
 +}
 diff --git a/client/AROS/native.c b/client/AROS/native.c
 new file mode 100644
-index 0000000..1339307
+index 0000000..a1d2d78
 --- /dev/null
 +++ b/client/AROS/native.c
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,476 @@
 +/* ADT AROS native desktop backend. */
 +#include "native.h"
 +#include "profile.h"
@@ -1310,6 +1310,9 @@ index 0000000..1339307
 +#include <proto/exec.h>
 +#include <proto/dos.h>
 +#include <proto/intuition.h>
++#include <proto/gadtools.h>
++#include <libraries/gadtools.h>
++#include <devices/inputevent.h>
 +#include <proto/cybergraphics.h>
 +#include <cybergraphx/cybergraphics.h>
 +int native_desktop_size(uint32_t *width, uint32_t *height)
@@ -1325,13 +1328,29 @@ index 0000000..1339307
 +    struct Screen *screen=LockPubScreen(NULL); if (!screen) return 0;
 +    *width=screen->Width; *height=screen->Height; UnlockPubScreen(NULL,screen); return 1;
 +}
-+struct native_window { struct Window *window; int fullscreen, resize; uint32_t saved_width, saved_height; };
++struct native_window { struct Window *window; struct Menu *menus; int fullscreen, resize; uint32_t saved_width, saved_height; };
++static struct NewMenu session_menu[] = {
++    { NM_TITLE, "Project", NULL, 0, 0, NULL },
++    { NM_ITEM, "Preferences (reconnect)...", "P", 0, 0, (APTR)NATIVE_MENU_PREFERENCES },
++    { NM_ITEM, "Disconnect", "D", 0, 0, (APTR)NATIVE_MENU_DISCONNECT },
++    { NM_ITEM, NM_BARLABEL, NULL, 0, 0, NULL },
++    { NM_ITEM, "Quit", "Q", 0, 0, (APTR)NATIVE_MENU_QUIT },
++    { NM_END, NULL, NULL, 0, 0, NULL }
++};
++static int attach_menu(struct Window *window, struct Menu *menus)
++{
++    APTR visual = GetVisualInfoA(window->WScreen, NULL);
++    if (!visual) return 0;
++    int result = LayoutMenusA(menus, visual, NULL) && SetMenuStrip(window, menus);
++    FreeVisualInfo(visual);
++    return result;
++}
 +static struct Window *open_desktop(uint32_t width, uint32_t height, int fullscreen, int resize)
 +{
 +    struct Screen *screen = LockPubScreen(NULL);
 +    if (!screen) return NULL;
 +    if (fullscreen) { width = screen->Width; height = screen->Height; }
-+    struct Window *w = OpenWindowTags(NULL, WA_Title, (IPTR)(fullscreen ? NULL : "ADT Remote Desktop - Ctrl+Alt+Enter: fullscreen"),
++    struct Window *w = OpenWindowTags(NULL, WA_Title, (IPTR)(fullscreen ? NULL : "Remote Desktop - Shift+right-click: menu"),
 +        WA_PubScreen, (IPTR)screen, WA_Left, 0, WA_Top, 0,
 +        WA_InnerWidth, width, WA_InnerHeight, height,
 +        WA_Borderless, fullscreen, WA_DragBar, !fullscreen, WA_DepthGadget, !fullscreen,
@@ -1339,7 +1358,8 @@ index 0000000..1339307
 +        WA_MinWidth, 200, WA_MinHeight, 200, WA_MaxWidth, screen->Width, WA_MaxHeight, screen->Height,
 +        WA_Activate, TRUE, WA_ReportMouse, TRUE,
 +        WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_RAWKEY | IDCMP_MOUSEBUTTONS |
-+                  IDCMP_MOUSEMOVE | IDCMP_REFRESHWINDOW | IDCMP_INACTIVEWINDOW | IDCMP_NEWSIZE,
++                  IDCMP_MOUSEMOVE | IDCMP_REFRESHWINDOW | IDCMP_INACTIVEWINDOW | IDCMP_NEWSIZE |
++                  IDCMP_MENUVERIFY | IDCMP_MENUPICK,
 +        TAG_DONE);
 +    UnlockPubScreen(NULL, screen); return w;
 +}
@@ -1351,6 +1371,10 @@ index 0000000..1339307
 +    if (fullscreen) native_desktop_size(&n->saved_width,&n->saved_height);
 +    n->window=open_desktop(width,height,fullscreen,resize);
 +    if (!n->window) { free(n); return NULL; }
++    n->menus = CreateMenusA(session_menu, NULL);
++    if (!n->menus || !attach_menu(n->window, n->menus)) {
++        native_close(n); return NULL;
++    }
 +    return n;
 +}
 +int native_toggle_fullscreen(struct native_window *n, uint32_t *width, uint32_t *height)
@@ -1362,6 +1386,12 @@ index 0000000..1339307
 +    }
 +    struct Window *next=open_desktop(n->saved_width,n->saved_height,!n->fullscreen,n->resize);
 +    if (!next) return 0;
++    ClearMenuStrip(n->window);
++    if (!attach_menu(next, n->menus)) {
++        CloseWindow(next);
++        attach_menu(n->window, n->menus);
++        return 0;
++    }
 +    struct Message *m; while ((m=GetMsg(n->window->UserPort))) ReplyMsg(m);
 +    CloseWindow(n->window); n->window=next; n->fullscreen=!n->fullscreen;
 +    *width=next->Width-next->BorderLeft-next->BorderRight;
@@ -1374,8 +1404,10 @@ index 0000000..1339307
 +    if (n->window) {
 +        struct Message *message;
 +        while ((message = GetMsg(n->window->UserPort))) ReplyMsg(message);
++        ClearMenuStrip(n->window);
 +        CloseWindow(n->window);
 +    }
++    if (n->menus) FreeMenus(n->menus);
 +    free(n);
 +}
 +int native_poll(struct native_window *n, struct native_event *event)
@@ -1386,6 +1418,24 @@ index 0000000..1339307
 +    event->x = msg->MouseX - n->window->BorderLeft;
 +    event->y = msg->MouseY - n->window->BorderTop;
 +    switch (msg->Class) {
++    case IDCMP_MENUVERIFY:
++        /* Keep ordinary remote right-clicks; Shift or the border opens our menu. */
++        if (msg->Code == MENUHOT && event->x >= 0 && event->y >= 0 &&
++            event->x < n->window->Width - n->window->BorderLeft - n->window->BorderRight &&
++            event->y < n->window->Height - n->window->BorderTop - n->window->BorderBottom &&
++            !(msg->Qualifier & (IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT))) {
++            msg->Code = MENUCANCEL;
++            event->kind = 4; event->code = MENUDOWN;
++        } else {
++            event->kind = 6;
++        }
++        break;
++    case IDCMP_MENUPICK:
++        if (msg->Code != MENUNULL) {
++            struct MenuItem *item = ItemAddress(n->menus, msg->Code);
++            if (item) { event->kind = 8; event->code = (IPTR)GTMENUITEM_USERDATA(item); }
++        }
++        break;
 +    case IDCMP_CLOSEWINDOW: event->kind = 1; break;
 +    case IDCMP_INACTIVEWINDOW: event->kind = 6; break;
 +    case IDCMP_NEWSIZE:
@@ -1425,7 +1475,7 @@ index 0000000..1339307
 +static Object *field(const char *text, int secret)
 +{
 +    return MUI_NewObject(MUIC_String, MUIA_Frame, MUIV_Frame_String,
-+        MUIA_String_MaxLen, 512, MUIA_String_Secret, secret,
++        MUIA_CycleChain, TRUE, MUIA_String_MaxLen, 512, MUIA_String_Secret, secret,
 +        MUIA_String_Contents, (IPTR)(text ? text : ""), TAG_DONE);
 +}
 +static Object *label(const char *text)
@@ -1474,7 +1524,9 @@ index 0000000..1339307
 +    DoMethod(accept,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,1);
 +    DoMethod(cancel,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,2);
 +    DoMethod(win,MUIM_Notify,MUIA_Window_CloseRequest,TRUE,(IPTR)app,2,MUIM_Application_ReturnID,2);
-+    SetAttrs(win,MUIA_Window_Open,TRUE,TAG_DONE);
++    SetAttrs(accept, MUIA_CycleChain, TRUE, TAG_DONE);
++    SetAttrs(cancel, MUIA_CycleChain, TRUE, TAG_DONE);
++    SetAttrs(win,MUIA_Window_Open,TRUE,MUIA_Window_ActiveObject,(IPTR)first,TAG_DONE);
 +    IPTR opened=0;GetAttr(MUIA_Window_Open,win,&opened);int result=0;
 +    while(opened){
 +        ULONG signals=0;IPTR id=DoMethod(app,MUIM_Application_NewInput,(IPTR)&signals);
@@ -1541,7 +1593,10 @@ index 0000000..1339307
 +        remember=MUI_MakeObject(MUIO_Checkmark,(IPTR)NULL);
 +        DoMethod(sharing,OM_ADDMEMBER,(IPTR)remember);
 +        DoMethod(sharing,OM_ADDMEMBER,(IPTR)label("Remember password"));
-+        profile_name=field("default",0); pin=field("",0); directory=field("",0);
++        profile_name=field("default",0); pin=field(options->fingerprint,0); directory=field(options->directory,0);
++        int values[] = { options->clipboard, options->sound, options->microphone,
++            options->printer, options->fullscreen, options->resize, options->documents };
++        for (unsigned i = 0; i < 7; i++) SetAttrs(checks[i], MUIA_Selected, values[i], TAG_DONE);
 +        load=MUI_MakeObject(MUIO_Button,(IPTR)"Load profile");
 +        save=MUI_MakeObject(MUIO_Button,(IPTR)"Save profile");
 +        profiles=MUI_NewObject(MUIC_Group,MUIA_Group_Columns,2,
@@ -1576,7 +1631,17 @@ index 0000000..1339307
 +        DoMethod(load,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,3);
 +        DoMethod(save,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,4);
 +    }
-+    SetAttrs(win, MUIA_Window_Open, TRUE, TAG_DONE);
++    SetAttrs(ok, MUIA_CycleChain, TRUE, TAG_DONE);
++    SetAttrs(cancel, MUIA_CycleChain, TRUE, TAG_DONE);
++    if (options) {
++        SetAttrs(load, MUIA_CycleChain, TRUE, TAG_DONE);
++        SetAttrs(save, MUIA_CycleChain, TRUE, TAG_DONE);
++        SetAttrs(remember, MUIA_CycleChain, TRUE, TAG_DONE);
++        for (unsigned i = 0; i < 7; i++)
++            SetAttrs(checks[i], MUIA_CycleChain, TRUE, TAG_DONE);
++    }
++    SetAttrs(win, MUIA_Window_Open, TRUE, MUIA_Window_ActiveObject,
++             (IPTR)(options ? profile_name : u), TAG_DONE);
 +    IPTR opened = 0; GetAttr(MUIA_Window_Open, win, &opened);
 +    int result = 0;
 +    while (opened) {
@@ -1713,15 +1778,18 @@ index 0000000..1339307
 +}
 diff --git a/client/AROS/native.h b/client/AROS/native.h
 new file mode 100644
-index 0000000..58a3416
+index 0000000..b6f6750
 --- /dev/null
 +++ b/client/AROS/native.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,25 @@
 +/* Native ABI boundary: do not include WinPR or Exec headers here. */
 +#ifndef ADT_RDP_NATIVE_H
 +#define ADT_RDP_NATIVE_H
 +#include <stdint.h>
 +struct native_window;
++enum native_menu_action {
++    NATIVE_MENU_PREFERENCES = 1, NATIVE_MENU_DISCONNECT, NATIVE_MENU_QUIT
++};
 +struct native_event { uint32_t kind, code, qualifier; int32_t x, y; };
 +int native_desktop_size(uint32_t *width, uint32_t *height);
 +int native_screen_size(uint32_t *width, uint32_t *height);
@@ -1990,10 +2058,10 @@ index 0000000..d00a5c2
 +#endif /* FREERDP_CLIENT_SAMPLE_CHANNELS_H */
 diff --git a/client/AROS/tf_freerdp.c b/client/AROS/tf_freerdp.c
 new file mode 100644
-index 0000000..ad8f76d
+index 0000000..c565c80
 --- /dev/null
 +++ b/client/AROS/tf_freerdp.c
-@@ -0,0 +1,668 @@
+@@ -0,0 +1,716 @@
 +/**
 + * FreeRDP: A Remote Desktop Protocol Implementation
 + * FreeRDP Test UI
@@ -2323,7 +2391,7 @@ index 0000000..ad8f76d
 +		{
 +			if (ev.kind == 1)
 +				goto disconnect;
-+			if (ev.kind == 6) {
++			if (ev.kind == 6 || ev.kind == 8) {
 +				for (unsigned k = 0; k < 128; k++) {
 +					if (((tfContext*)instance->context)->keys[k])
 +						freerdp_input_send_keyboard_event_ex(instance->context->input,
@@ -2334,6 +2402,11 @@ index 0000000..ad8f76d
 +				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON2, 0, 0);
 +				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON3, 0, 0);
 +			}
++            if (ev.kind == 8) {
++                if (ev.code == NATIVE_MENU_PREFERENCES || ev.code == NATIVE_MENU_DISCONNECT)
++                    ((tfContext*)instance->context)->return_to_preferences = TRUE;
++                goto disconnect;
++            }
 +			if (ev.kind == 7) {
 +                adt_display_resize((tfContext*)instance->context, ev.x, ev.y);
 +                ev.kind=5;
@@ -2577,8 +2650,17 @@ index 0000000..ad8f76d
 +	if (!freerdp_setApplicationDetails(FREERDP_VENDOR_STRING, "RemoteDesktop", FREERDP_VERSION_MAJOR))
 +		return -1;
 +
++    char *host = NULL, *user = NULL, *password = NULL, *domain = NULL;
++    struct native_options native_options = {0};
++    BOOL show_preferences = argc == 1;
++    BOOL reopen = FALSE;
++    rdpContext *context = NULL;
++
 +	RdpClientEntry(&clientEntryPoints);
-+	rdpContext* context = freerdp_client_context_new(&clientEntryPoints);
++new_connection:
++    reopen = FALSE;
++    rc = -1;
++	context = freerdp_client_context_new(&clientEntryPoints);
 +
 +	if (!context)
 +		goto fail;
@@ -2586,16 +2668,14 @@ index 0000000..ad8f76d
 +	if (!freerdp_settings_set_bool(context->settings, FreeRDP_RdpSecurity, FALSE) ||
 +	    !freerdp_settings_set_bool(context->settings, FreeRDP_RedirectClipboard, FALSE))
 +		goto fail;
-+	if (argc == 1) {
++	if (show_preferences) {
 +        uint32_t width = 0, height = 0;
 +        if (native_desktop_size(&width, &height)) {
 +            if (!freerdp_settings_set_uint32(context->settings, FreeRDP_DesktopWidth, width) ||
 +                !freerdp_settings_set_uint32(context->settings, FreeRDP_DesktopHeight, height)) goto fail;
 +        }
-+		char *host = _strdup(""), *user = NULL, *password = NULL, *domain = NULL;
-+		struct native_options native_options = {0};
 +		if (!native_connection(&host, &user, &password, &domain, &native_options)) {
-+			free(host); free(user); free(password); free(domain); rc = 0; goto fail;
++			rc = 0; goto fail;
 +		}
 +		char target[520];
 +		snprintf(target, sizeof(target), "/v:%s", host);
@@ -2622,7 +2702,7 @@ index 0000000..ad8f76d
 +		    freerdp_settings_set_string(context->settings, FreeRDP_Password, password) &&
 +		    freerdp_settings_set_string(context->settings, FreeRDP_Domain, domain);
 +		if (password) SecureZeroMemory(password, strlen(password));
-+		free(host); free(user); free(password); free(domain);
++		free(password); password = NULL;
 +		if (!configured) goto fail;
 +	}
 +	else
@@ -2648,12 +2728,48 @@ index 0000000..ad8f76d
 +		rc = res == FREERDP_ERROR_LOGOFF_BY_USER ? 0 : (int)res;
 +	}
 +
++    reopen = ((tfContext*)context)->return_to_preferences;
++    if (reopen && !show_preferences) {
++        const char *host_value = freerdp_settings_get_string(context->settings, FreeRDP_ServerHostname);
++        char endpoint[520];
++        UINT32 port = freerdp_settings_get_uint32(context->settings, FreeRDP_ServerPort);
++        snprintf(endpoint, sizeof(endpoint), strchr(host_value ? host_value : "", ':') ? "[%s]:%u" : "%s:%u",
++                 host_value ? host_value : "", (unsigned)port);
++        host = _strdup(endpoint);
++        const char *user_value = freerdp_settings_get_string(context->settings, FreeRDP_Username);
++        user = _strdup(user_value ? user_value : "");
++        const char *domain_value = freerdp_settings_get_string(context->settings, FreeRDP_Domain);
++        domain = _strdup(domain_value ? domain_value : "");
++        native_options.clipboard = freerdp_settings_get_bool(context->settings, FreeRDP_RedirectClipboard);
++        native_options.sound = freerdp_settings_get_bool(context->settings, FreeRDP_AudioPlayback);
++        native_options.microphone = freerdp_settings_get_bool(context->settings, FreeRDP_AudioCapture);
++        native_options.fullscreen = freerdp_settings_get_bool(context->settings, FreeRDP_Fullscreen);
++        native_options.resize = freerdp_settings_get_bool(context->settings, FreeRDP_DynamicResolutionUpdate);
++        const char *pin = freerdp_settings_get_string(context->settings, FreeRDP_CertificateAcceptedFingerprints);
++        if (pin && !strncmp(pin, "sha256:", 7) && strlen(pin + 7) == 64)
++            memcpy(native_options.fingerprint, pin + 7, 65);
++        RDPDR_DRIVE *drive = (RDPDR_DRIVE *)freerdp_device_collection_find_type(context->settings, RDPDR_DTYP_FILESYSTEM);
++        if (drive && drive->Path && strlen(drive->Path) < sizeof(native_options.directory))
++            strcpy(native_options.directory, drive->Path);
++        RDPDR_PRINTER *printer = (RDPDR_PRINTER *)freerdp_device_collection_find_type(context->settings, RDPDR_DTYP_PRINT);
++        if (printer) {
++            native_options.documents = printer->DriverName && !strcmp(printer->DriverName, "ADT PDF/XPS printer");
++            native_options.printer = !native_options.documents;
++        }
++    }
 +	if (freerdp_client_stop(context) != 0)
 +		rc = -1;
 +
 +fail:
 +	WLog_DBG(TAG, "Freeing client context");
 +	freerdp_client_context_free(context);
++    context = NULL;
++    if (reopen) {
++        show_preferences = TRUE;
++        goto new_connection;
++    }
++    if (password) SecureZeroMemory(password, strlen(password));
++    free(host); free(user); free(password); free(domain);
 +	winpr_aros_shutdown_default_threadpool();
 +	WLog_INFO(TAG, "Client stopped (status %d)", rc);
 +    if (argc==1 && rc) {
@@ -2664,10 +2780,10 @@ index 0000000..ad8f76d
 +}
 diff --git a/client/AROS/tf_freerdp.h b/client/AROS/tf_freerdp.h
 new file mode 100644
-index 0000000..7e5ad77
+index 0000000..56f51ef
 --- /dev/null
 +++ b/client/AROS/tf_freerdp.h
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,51 @@
 +/**
 + * FreeRDP: A Remote Desktop Protocol Implementation
 + * Sample Client
@@ -2714,6 +2830,7 @@ index 0000000..7e5ad77
 +    UINT64 disp_area, resize_changed;
 +    UINT32 resize_width, resize_height;
 +    BOOL fullscreen_key;
++    BOOL return_to_preferences;
 +	/* Channels */
 +} tfContext;
 +
@@ -3708,4 +3825,4 @@ new file mode 100644
 +++ b/client/AROS/CMakeLists.txt
 @@ -0,0 +1,2 @@
 +add_executable(adt-rdp tf_freerdp.c tf_channels.c native.c input.c clipboard.c clipboard_native.c profile.c vault.c display.c)
-+target_link_libraries(adt-rdp PRIVATE freerdp-client freerdp winpr cybergraphics intuition graphics iffparse muimaster OpenSSL::Crypto)
++target_link_libraries(adt-rdp PRIVATE freerdp-client freerdp winpr cybergraphics intuition gadtools graphics iffparse muimaster OpenSSL::Crypto)

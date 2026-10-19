@@ -1,0 +1,219 @@
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/engine/src/cmd/component_link.rs solidcraft/crates/engine/src/cmd/component_link.rs
+--- a/crates/engine/src/cmd/component_link.rs	2026-10-19 14:23:25.737951895 +0100
++++ b/crates/engine/src/cmd/component_link.rs	2026-10-19 14:42:08.698456259 +0100
+@@ -47,7 +47,12 @@
+ 
+ /// A path as given, made absolute when the platform can, with `.` and `..` worked out.
+ fn absolute(p: &Path) -> PathBuf {
+-    let full = std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
++    // An AmigaDOS path with a device or volume (`Work:Designs/a.solidcraft`) is absolute already.
++    let full = if cfg!(target_os = "aros") && p.components().next().is_some_and(|c| c.as_os_str().to_string_lossy().contains(':')) {
++        p.to_path_buf()
++    } else {
++        std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
++    };
+     let mut out = PathBuf::new();
+     for c in full.components() {
+         match c {
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/engine/src/recovery.rs solidcraft/crates/engine/src/recovery.rs
+--- a/crates/engine/src/recovery.rs	2026-10-19 14:23:25.756408395 +0100
++++ b/crates/engine/src/recovery.rs	2026-10-19 14:42:08.698090459 +0100
+@@ -30,6 +30,12 @@
+         return Some(long_names(Path::new(&d)));
+     }
+     let env = |k: &str| std::env::var_os(k).filter(|d| !d.is_empty()).map(PathBuf::from);
++    // AROS: everything the app keeps lives beside the program (`PROGDIR:SolidCraftData`, like
++    // the portable mode of other systems); there is no per-user data folder.
++    if cfg!(target_os = "aros") {
++        let dir = data_dir()?.join("recovery");
++        return Some(dir);
++    }
+     let root = if cfg!(windows) {
+         env("LOCALAPPDATA")?
+     } else if cfg!(target_os = "macos") {
+@@ -55,7 +61,10 @@
+ /// (`~/.local/share/solidcraft`).
+ pub fn data_dir() -> Option<PathBuf> {
+     let env = |k: &str| std::env::var_os(k).filter(|d| !d.is_empty()).map(PathBuf::from);
+-    if cfg!(windows) {
++    if cfg!(target_os = "aros") {
++        // Beside the program (`SOLIDCRAFT_DATA_DIR` moves it).
++        Some(solidcraft_geom::env::var_os("DATA_DIR").filter(|d| !d.is_empty()).map_or_else(|| PathBuf::from("PROGDIR:SolidCraftData"), PathBuf::from))
++    } else if cfg!(windows) {
+         Some(env("LOCALAPPDATA")?.join("SolidCraft"))
+     } else if cfg!(target_os = "macos") {
+         Some(env("HOME")?.join("Library/Application Support/SolidCraft"))
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/gpu/src/capture.rs solidcraft/crates/gpu/src/capture.rs
+--- a/crates/gpu/src/capture.rs	2026-10-19 14:23:25.771569095 +0100
++++ b/crates/gpu/src/capture.rs	2026-10-19 17:03:02.665548762 +0100
+@@ -63,7 +63,10 @@
+     /// `Depth24PlusStencil8` on a device that has a float one too, to compare the two.
+     pub fn with_depth(adapter: &wgpu::Adapter, device: wgpu::Device, queue: wgpu::Queue, depth: wgpu::TextureFormat) -> Result<Self> {
+         let flags = |f: wgpu::TextureFormat| adapter.get_texture_format_features(f).flags;
+-        let samples = if flags(FORMAT).sample_count_supported(SAMPLES) && flags(depth).sample_count_supported(SAMPLES) { SAMPLES } else { 1 };
++        // No multisampling on OpenGL: its resolve path can give an entirely blank picture (Mesa's
++        // software rasterizers do), as egui-wgpu finds for the window.
++        let gl = adapter.get_info().backend == wgpu::Backend::Gl;
++        let samples = if !gl && flags(FORMAT).sample_count_supported(SAMPLES) && flags(depth).sample_count_supported(SAMPLES) { SAMPLES } else { 1 };
+         let scopes = error_scopes(&device);
+         let renderer = Renderer::new(&device, GpuTarget { format: FORMAT, depth: Some(depth), samples, tess: false }, None);
+         let background = background_pipeline(&device, samples, depth);
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/io/Cargo.toml solidcraft/crates/io/Cargo.toml
+--- a/crates/io/Cargo.toml	2026-10-19 14:23:25.773191595 +0100
++++ b/crates/io/Cargo.toml	2026-10-19 14:42:08.599415159 +0100
+@@ -25,8 +25,9 @@
+ [target.'cfg(target_vendor = "apple")'.dependencies]
+ rustix = { version = "1", default-features = false, features = ["std", "fs"] }
+ 
+-# FreeCAD and Rhino import. Not in the browser build: it compiles the zstd C library.
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++# FreeCAD and Rhino import. Not in the browser build: it compiles the zstd C library. Nor on
++# AROS: its zstd and tempfile (rustix) dependencies do not build for that target.
++[target.'cfg(not(any(target_arch = "wasm32", target_os = "aros")))'.dependencies]
+ cadmpeg-core = { workspace = true }
+ cadmpeg-ir = { workspace = true }
+ cadmpeg-registry = { workspace = true }
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/io/src/native_cad.rs solidcraft/crates/io/src/native_cad.rs
+--- a/crates/io/src/native_cad.rs	2026-10-19 14:23:25.774279095 +0100
++++ b/crates/io/src/native_cad.rs	2026-10-19 14:42:08.599792759 +0100
+@@ -23,7 +23,7 @@
+ 
+ /// Restate a FreeCAD or Rhino file (`file` is its name) as STEP text, with the losses
+ /// and warnings cadmpeg reported. Panics inside cadmpeg become errors.
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(not(any(target_arch = "wasm32", target_os = "aros")))]
+ pub fn native_cad_to_step(bytes: &[u8], file: &str) -> Result<(String, Vec<String>), String> {
+     let name = std::path::Path::new(file).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| file.to_string());
+     solidcraft_kernel::guard("cadmpeg import", || convert::to_step(&name, bytes).map_err(solidcraft_kernel::KernelError::Invalid)).map_err(
+@@ -40,7 +40,14 @@
+     Err(format!("{file}: not supported in the browser yet (FreeCAD and Rhino files open in the desktop app)"))
+ }
+ 
+-#[cfg(not(target_arch = "wasm32"))]
++/// Restate a FreeCAD or Rhino file as STEP: not built on AROS (cadmpeg's zstd and tempfile
++/// dependencies do not build for the target).
++#[cfg(target_os = "aros")]
++pub fn native_cad_to_step(_bytes: &[u8], file: &str) -> Result<(String, Vec<String>), String> {
++    Err(format!("{file}: FreeCAD and Rhino import is not built on AROS; export the part as STEP first"))
++}
++
++#[cfg(not(any(target_arch = "wasm32", target_os = "aros")))]
+ mod convert {
+     use std::io::Cursor;
+ 
+@@ -152,5 +159,5 @@
+     if stem.trim().is_empty() || !step.contains(PLACEHOLDER) { step } else { step.replace(PLACEHOLDER, &format!("'{stem}'")) }
+ }
+ 
+-#[cfg(test)]
++#[cfg(all(test, not(any(target_arch = "wasm32", target_os = "aros"))))]
+ mod tests;
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/ui-egui/Cargo.toml solidcraft/crates/ui-egui/Cargo.toml
+--- a/crates/ui-egui/Cargo.toml	2026-10-19 14:23:25.818375295 +0100
++++ b/crates/ui-egui/Cargo.toml	2026-10-19 14:42:08.597947759 +0100
+@@ -37,7 +37,8 @@
+ 
+ # Pictures pasted into the agent chat; already in the tree, with the same features, through
+ # egui-winit's clipboard.
+-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++# Not on AROS: arboard has no backend there (the AROS shell reads the clipboard as text).
++[target.'cfg(not(any(target_arch = "wasm32", target_os = "aros")))'.dependencies]
+ arboard = { version = "3.6", default-features = false, features = ["image-data"] }
+ 
+ [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/ui-egui/src/agent_chat/attach.rs solidcraft/crates/ui-egui/src/agent_chat/attach.rs
+--- a/crates/ui-egui/src/agent_chat/attach.rs	2026-10-19 14:23:25.819447095 +0100
++++ b/crates/ui-egui/src/agent_chat/attach.rs	2026-10-19 14:42:08.698821559 +0100
+@@ -235,6 +235,10 @@
+ 
+ /// The path as an absolute one, so the agent (working in another folder) finds the file.
+ fn absolute(path: &Path) -> PathBuf {
++    // An AmigaDOS path with a device or volume (`Work:a.png`) is absolute already.
++    if cfg!(target_os = "aros") && path.components().next().is_some_and(|c| c.as_os_str().to_string_lossy().contains(':')) {
++        return path.to_path_buf();
++    }
+     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
+ }
+ 
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/ui-egui/src/agent_chat/mod.rs solidcraft/crates/ui-egui/src/agent_chat/mod.rs
+--- a/crates/ui-egui/src/agent_chat/mod.rs	2026-10-19 14:23:25.819447095 +0100
++++ b/crates/ui-egui/src/agent_chat/mod.rs	2026-10-19 14:42:08.599053259 +0100
+@@ -1057,12 +1057,18 @@
+ }
+ 
+ /// Attach the picture on the clipboard, if it holds one.
+-#[cfg(not(target_arch = "wasm32"))]
++#[cfg(not(any(target_arch = "wasm32", target_os = "aros")))]
+ pub fn paste_picture(app: &mut SolveApp) -> std::result::Result<String, String> {
+     let image = arboard::Clipboard::new().and_then(|mut c| c.get_image()).map_err(|_| tr("ui.agent_chat_no_picture").to_string())?;
+     attach_rgba(app, image.width, image.height, &image.bytes)
+ }
+ 
++/// AROS: the clipboard holds text only (IFF FTXT); there is no picture to attach.
++#[cfg(target_os = "aros")]
++pub fn paste_picture(_app: &mut SolveApp) -> std::result::Result<String, String> {
++    Err(tr("ui.agent_chat_no_picture").to_string())
++}
++
+ /// Files dropped on the chat attach to the next message; called before the app handles drops, so
+ /// those taken aren't opened too. A drop is the chat's when the pointer was last seen over it:
+ /// the platform gives no position during a drag (winit 0.30), so that is the best the chat can
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/ui-egui/src/agent_chat/paste.rs solidcraft/crates/ui-egui/src/agent_chat/paste.rs
+--- a/crates/ui-egui/src/agent_chat/paste.rs	2026-10-19 14:23:25.819447095 +0100
++++ b/crates/ui-egui/src/agent_chat/paste.rs	2026-10-19 14:42:08.598163259 +0100
+@@ -30,13 +30,24 @@
+ pub struct System;
+ 
+ impl Clipboard for System {
++    #[cfg(not(target_os = "aros"))]
+     fn files(&mut self) -> Vec<PathBuf> {
+         arboard::Clipboard::new().and_then(|mut c| c.get().file_list()).unwrap_or_default()
+     }
++    #[cfg(not(target_os = "aros"))]
+     fn picture(&mut self) -> Option<Picture> {
+         let i = arboard::Clipboard::new().and_then(|mut c| c.get_image()).ok()?;
+         Some(Picture { width: i.width, height: i.height, rgba: i.bytes.into_owned() })
+     }
++    // AROS: the clipboard carries text only (the shell reads it); no files or pictures.
++    #[cfg(target_os = "aros")]
++    fn files(&mut self) -> Vec<PathBuf> {
++        Vec::new()
++    }
++    #[cfg(target_os = "aros")]
++    fn picture(&mut self) -> Option<Picture> {
++        None
++    }
+ }
+ 
+ /// What a paste does.
+diff -ruN -x target -x Cargo.lock -x .git -x solidcraft-aros -x '*.orig' -x '*.rej' solidcraft.orig/crates/ui-egui/src/fonts.rs solidcraft/crates/ui-egui/src/fonts.rs
+--- a/crates/ui-egui/src/fonts.rs	2026-10-19 14:23:25.824408395 +0100
++++ b/crates/ui-egui/src/fonts.rs	2026-10-19 14:59:48.335282279 +0100
+@@ -511,6 +511,14 @@
+         }
+     }
+ 
++    // AROS keeps its TrueType fonts in FONTS:TrueType.
++    #[cfg(target_os = "aros")]
++    {
++        if let Some(bytes) = scan_dir_for_font(std::path::Path::new("FONTS:TrueType"), 2, is_cjk_font_name) {
++            return Some(bytes);
++        }
++    }
++
+     None
+ }
+ 
+@@ -601,6 +609,12 @@
+             }
+         }
+     }
++    #[cfg(target_os = "aros")]
++    {
++        if let Some(bytes) = scan_dir_for_font(std::path::Path::new("FONTS:TrueType"), 2, is_chinese_font_name) {
++            return Some(bytes);
++        }
++    }
+     None
+ }
+ 

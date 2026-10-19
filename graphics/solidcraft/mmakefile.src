@@ -1,0 +1,119 @@
+#   Build SolidCraft (https://github.com/tangency-labs/solidcraft), a
+#   parametric 3D CAD application written in Rust, with the Rust crosstool
+#   (configure --enable-rust).
+#
+#   The upstream source snapshot is fetched and patched for AROS, the AROS
+#   shell (solidcraft-aros, this directory) is linked into its workspace, the
+#   crates.io crates that need AROS changes come from the shared crate stores
+#   (tools/crosstools/rust/crates and contrib/development/rust/crates, the
+#   latter with wgpu 30's OpenGL backend on gl.library), the rest are
+#   downloaded once into the shared cargo home (the one step that needs
+#   network access), and cargo builds the SolidCraft window program and the
+#   headless solidcraft-cli for the target. See README.md.
+
+include $(SRCDIR)/config/aros-contrib.cfg
+-include $(SRCDIR)/tools/crosstools/rust.cfg
+-include $(SRCDIR)/contrib/development/rust/contrib-rust.cfg
+
+#MM- ports-graphics : ports-graphics-solidcraft-$(TARGET_RUST)
+#MM- ports-graphics-solidcraft-yes : ports-graphics-solidcraft
+
+#MM ports-graphics-solidcraft : tools-crosstools-rust \
+#MM     ports-graphics-solidcraft-fetch ports-graphics-solidcraft-crates \
+#MM     ports-graphics-solidcraft-build ports-graphics-solidcraft-install \
+#MM     ports-graphics-solidcraft-icons ports-graphics-solidcraft-cpy
+ports-graphics-solidcraft :
+	$(Q)$(NOP)
+
+#MM- ports-graphics-solidcraft-quick : ports-graphics-solidcraft-build ports-graphics-solidcraft-install
+
+# The upstream snapshot: a commit on main (GitHub archives are named after it,
+# and unpack to solidcraft-<commit>).
+SOLIDCRAFT_VERSION      := 0.16.2
+SOLIDCRAFT_REV          := b76302e850b6b6ae7c7d42882efd49488d1c0b18
+SOLIDCRAFT_REPOSITORY   := https://github.com/tangency-labs/solidcraft/archive
+SOLIDCRAFT_SOURCEDIR    := $(PORTSSOURCEDIR)/solidcraft
+SOLIDCRAFT_PORTDIR      := $(PORTSDIR)/solidcraft
+SOLIDCRAFT_SRCDIR       := $(SOLIDCRAFT_PORTDIR)/solidcraft-$(SOLIDCRAFT_REV)
+SOLIDCRAFT_GENDIR       := $(GENDIR)/$(CURDIR)
+SOLIDCRAFT_TARGETDIR    := $(SOLIDCRAFT_GENDIR)/target
+SOLIDCRAFT_CARGO_CONFIG := $(SOLIDCRAFT_GENDIR)/cargo-config.toml
+SOLIDCRAFT_DESTDIR      := $(AROS_CONTRIB)/MultiMedia/Gfx/SolidCraft
+# Per build tree: the fetch also moves this tree's Cargo.lock to the crate
+# stores' versions (the downloads go to the shared cargo home).
+SOLIDCRAFT_CRATES_FETCHED := $(SOLIDCRAFT_GENDIR)/.solidcraft-$(SOLIDCRAFT_REV)-fetched
+
+SOLIDCRAFT_CARGO     := $(CONTRIB_RUST_CARGO) --config $(SOLIDCRAFT_CARGO_CONFIG)
+SOLIDCRAFT_MANIFEST  := --manifest-path $(SOLIDCRAFT_SRCDIR)/Cargo.toml
+SOLIDCRAFT_PACKAGES  := -p solidcraft-aros -p solidcraft-cli --bin SolidCraft --bin solidcraft-cli
+SOLIDCRAFT_BINDIR    := $(SOLIDCRAFT_TARGETDIR)/$(RUST_TARGET_TRIPLE)/release
+
+## Sources ###
+
+%fetch mmake=ports-graphics-solidcraft-fetch archive=$(SOLIDCRAFT_REV) \
+    archive_origins="$(SOLIDCRAFT_REPOSITORY)" suffixes="tar.gz" \
+    location=$(SOLIDCRAFT_SOURCEDIR) destination=$(SOLIDCRAFT_PORTDIR) \
+    patches_specs=solidcraft-$(SOLIDCRAFT_VERSION)-aros.diff:solidcraft-$(SOLIDCRAFT_REV):-p1
+
+%create_patch mmake=ports-graphics-solidcraft-create-patch \
+    archive=$(SOLIDCRAFT_REV) srcdir=solidcraft-$(SOLIDCRAFT_REV) suffixes="tar.gz" \
+    location=$(SOLIDCRAFT_SOURCEDIR) destination=$(SOLIDCRAFT_PORTDIR) \
+    excludes="target Cargo.lock apps/solidcraft-aros"
+
+# The patched crates from the shared stores (libc, getrandom, parking_lot_core;
+# raw-window-handle, libloading, wgpu 30, wgpu-core 30, wgpu-hal 30, naga 30,
+# naga-types 30).
+#MM ports-graphics-solidcraft-crates : rust-crates-config contrib-rust-crates-config
+ports-graphics-solidcraft-crates :
+	$(Q)$(NOP)
+
+## cargo configuration ###
+
+# SolidCraft has no patches of its own beyond the stores'.
+%rust_cargo_config mmake=ports-graphics-solidcraft-cargo-config file=$(SOLIDCRAFT_CARGO_CONFIG) \
+    targetdir=$(SOLIDCRAFT_TARGETDIR)
+
+# The AROS shell is a workspace member through this link, picked up by the
+# workspace's apps/* glob.
+#MM
+ports-graphics-solidcraft-link-shell : $(SOLIDCRAFT_SRCDIR)/apps/solidcraft-aros
+
+$(SOLIDCRAFT_SRCDIR)/apps/solidcraft-aros :
+	@$(ECHO) "Linking    solidcraft-aros into the workspace"
+	@$(RM) $@
+	@ln -s $(SRCDIR)/$(CURDIR)/solidcraft-aros $@
+
+## Crates ###
+
+#MM ports-graphics-solidcraft-cargo-fetch : ports-graphics-solidcraft-fetch ports-graphics-solidcraft-crates \
+#MM     ports-graphics-solidcraft-cargo-config ports-graphics-solidcraft-link-shell
+%rust_cargo_fetch mmake=ports-graphics-solidcraft-cargo-fetch cargo="$(SOLIDCRAFT_CARGO)" \
+    manifest="$(SOLIDCRAFT_MANIFEST)" stamp=$(SOLIDCRAFT_CRATES_FETCHED) \
+    locks="$(RUST_CRATES_LOCK) $(CONTRIB_RUST_CRATES_LOCK)" name="SolidCraft's"
+
+## Build ###
+
+#MM ports-graphics-solidcraft-build : tools-crosstools-rust tools-crosstools-autolibs \
+#MM     ports-graphics-solidcraft-cargo-config ports-graphics-solidcraft-cargo-fetch
+#MM
+ports-graphics-solidcraft-build : $(SOLIDCRAFT_SRCDIR)/apps/solidcraft-aros
+	@$(ECHO) "Building   SolidCraft $(SOLIDCRAFT_VERSION) for $(RUST_TARGET_TRIPLE)"
+	+$(Q)$(SOLIDCRAFT_CARGO) build $(SOLIDCRAFT_MANIFEST) --offline --release --target $(RUST_TARGET_TRIPLE) $(SOLIDCRAFT_PACKAGES)
+
+#MM
+ports-graphics-solidcraft-install :
+	%mkdirs_q $(SOLIDCRAFT_DESTDIR)
+	$(Q)$(CP) $(SOLIDCRAFT_BINDIR)/SolidCraft $(SOLIDCRAFT_DESTDIR)/SolidCraft
+	$(Q)$(CP) $(SOLIDCRAFT_BINDIR)/solidcraft-cli $(SOLIDCRAFT_DESTDIR)/solidcraft-cli
+	$(Q)$(TARGET_STRIP) $(SOLIDCRAFT_DESTDIR)/SolidCraft $(SOLIDCRAFT_DESTDIR)/solidcraft-cli
+
+%build_icons mmake=ports-graphics-solidcraft-icons icons=SolidCraft \
+    dir=$(SOLIDCRAFT_DESTDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons
+
+%copy_files_q mmake=ports-graphics-solidcraft-cpy files="README.md" src=. dst=$(SOLIDCRAFT_DESTDIR)
+
+#MM
+ports-graphics-solidcraft-clean :
+	$(RM) $(SOLIDCRAFT_TARGETDIR) $(SOLIDCRAFT_CARGO_CONFIG)
+
+%common

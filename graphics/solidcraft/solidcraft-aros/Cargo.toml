@@ -1,0 +1,43 @@
+[package]
+name = "solidcraft-aros"
+description = "SolidCraft on AROS: the egui interface in an Intuition window, drawn with wgpu's OpenGL backend on gl.library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+build = "build.rs"
+
+# The shell talks to Intuition, gl.library and friends through aros-gui-sys and a small C file of
+# its own (c/aros_extra.c): the one place in the tree that needs `unsafe`, like the platform code
+# of the desktop app. Keep the rest in sync with [workspace.lints].
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+too_many_arguments = "allow"
+type_complexity = "allow"
+neg_cmp_op_on_partial_ord = "allow"
+
+[[bin]]
+name = "SolidCraft"
+path = "src/main.rs"
+
+[dependencies]
+solidcraft-engine = { workspace = true }
+solidcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+egui-wgpu = { workspace = true }
+wgpu = { workspace = true, features = ["gles"] }
+# The `Aros` window handle (the crate store's patched raw-window-handle).
+raw-window-handle = "0.6"
+pollster = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+# Screenshots (`--screenshot`) are written as PNG.
+image = { workspace = true }
+
+[target.'cfg(target_os = "aros")'.dependencies]
+# Intuition windows, input, signals, the clipboard, ASL requesters (tools/crosstools/rust/crates).
+aros-gui-sys = "0.1"

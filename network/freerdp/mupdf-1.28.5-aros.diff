@@ -1,0 +1,64 @@
+diff --git a/source/fitz/random.c b/source/fitz/random.c
+index ad92c63..307dcaf 100644
+--- a/source/fitz/random.c
++++ b/source/fitz/random.c
+@@ -60,7 +60,7 @@ static int getentropy_win32(unsigned char *entropy, size_t len)
+ 	return !ok;
+ }
+ 
+-#else
++#elif !defined(__AROS__)
+ 
+ static void getentropy_fallback(unsigned char *s, int n)
+ {
+@@ -88,6 +88,10 @@ void fz_memrnd(fz_context *ctx, unsigned char *data, int len)
+ #if defined(_WIN32)
+ 		if (getentropy_win32(entropy, sizeof entropy))
+ 			getentropy_fallback(entropy, sizeof entropy);
++#elif defined(__AROS__)
++		/* Do not silently substitute a time-seeded PRNG when system entropy fails. */
++		if (getentropy(entropy, sizeof entropy) < 0)
++			fz_throw(ctx, FZ_ERROR_SYSTEM, "System entropy unavailable");
+ #elif defined(EMSCRIPTEN)
+ 		// __wasi_random_get is not yet widely supported, so we can't call getentropy
+ 		getentropy_fallback(entropy, sizeof entropy);
+diff --git a/source/pdf/aros-timegm.h b/source/pdf/aros-timegm.h
+new file mode 100644
+index 0000000..3e9f8c6
+--- /dev/null
++++ b/source/pdf/aros-timegm.h
+@@ -0,0 +1,20 @@
++/* UTC civil-date conversion for AROS, independent of the process timezone. */
++#ifndef MUPDF_AROS_TIMEGM_H
++#define MUPDF_AROS_TIMEGM_H
++#include <stdint.h>
++#include <time.h>
++static time_t aros_timegm(const struct tm *tm)
++{
++	int64_t year=(int64_t)tm->tm_year+1900;
++	int64_t month=(int64_t)tm->tm_mon+1;
++	year-=month<=2;
++	int64_t era=(year>=0 ? year : year-399)/400;
++	int64_t yoe=year-era*400;
++	int64_t doy=(153*(month+(month>2 ? -3 : 9))+2)/5+tm->tm_mday-1;
++	int64_t doe=yoe*365+yoe/4-yoe/100+doy;
++	int64_t seconds=(era*146097+doe-719468)*86400+
++		(int64_t)tm->tm_hour*3600+(int64_t)tm->tm_min*60+tm->tm_sec;
++	time_t result=(time_t)seconds;
++	return (int64_t)result==seconds ? result : (time_t)-1;
++}
++#endif
+diff --git a/source/pdf/pdf-parse.c b/source/pdf/pdf-parse.c
+index 5c3aa1a..ccbd136 100644
+--- a/source/pdf/pdf-parse.c
++++ b/source/pdf/pdf-parse.c
+@@ -28,6 +28,9 @@
+ 
+ #ifdef _WIN32
+ #define timegm _mkgmtime
++#elif defined(__AROS__)
++#include "aros-timegm.h"
++#define timegm aros_timegm
+ #endif
+ 
+ #define isdigit(c) (c >= '0' && c <= '9')

@@ -1,0 +1,3711 @@
+diff --git a/channels/audin/client/CMakeLists.txt b/channels/audin/client/CMakeLists.txt
+index b1768c6..9389876 100644
+--- a/channels/audin/client/CMakeLists.txt
++++ b/channels/audin/client/CMakeLists.txt
+@@ -60,3 +60,7 @@ endif()
+ if(WITH_IOSAUDIO)
+   add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "ios" "")
+ endif()
++
++if(CMAKE_SYSTEM_NAME STREQUAL "AROS")
++  add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "ahi" "")
++endif()
+diff --git a/channels/audin/client/ahi/CMakeLists.txt b/channels/audin/client/ahi/CMakeLists.txt
+new file mode 100644
+index 0000000..491efea
+--- /dev/null
++++ b/channels/audin/client/ahi/CMakeLists.txt
+@@ -0,0 +1,5 @@
++define_channel_client_subsystem("audin" "ahi" "")
++set(${MODULE_PREFIX}_SRCS audin_ahi.c ahi_native.c)
++set(${MODULE_PREFIX}_LIBS winpr freerdp)
++include_directories(..)
++add_channel_client_subsystem_library(${MODULE_PREFIX} ${MODULE_NAME} ${CHANNEL_NAME} "" TRUE "")
+diff --git a/channels/audin/client/ahi/ahi_native.c b/channels/audin/client/ahi/ahi_native.c
+new file mode 100644
+index 0000000..097493d
+--- /dev/null
++++ b/channels/audin/client/ahi/ahi_native.c
+@@ -0,0 +1,50 @@
++/* Native AHI ABI only; no WinPR types in this translation unit. */
++#include "ahi_native.h"
++#include <devices/ahi.h>
++#include <proto/exec.h>
++#include <stdlib.h>
++struct ahi_capture { struct MsgPort *port; struct AHIRequest *io; int opened, pending; uint32_t rate; uint16_t channels; };
++struct ahi_capture *ahi_capture_open(uint32_t rate, uint16_t channels)
++{
++    if (rate < 8000 || rate > 96000 || (channels != 1 && channels != 2)) return NULL;
++    struct ahi_capture *c = calloc(1, sizeof(*c));
++    if (!c) return NULL;
++    c->port = CreateMsgPort();
++    if (c->port) c->io = (struct AHIRequest *)CreateIORequest(c->port, sizeof(*c->io));
++    if (!c->io) { ahi_capture_close(c); return NULL; }
++    c->io->ahir_Version = 4;
++    if (OpenDevice(AHINAME, 0, (struct IORequest *)c->io, 0)) { ahi_capture_close(c); return NULL; }
++    c->opened = 1; c->rate = rate; c->channels = channels;
++    c->io->ahir_Frequency = rate;
++    c->io->ahir_Type = channels == 1 ? AHIST_M16S : AHIST_S16S;
++    c->io->ahir_Std.io_Command = CMD_READ;
++    return c;
++}
++int ahi_capture_start(struct ahi_capture *c, void *buffer, size_t length)
++{
++    if (!c || c->pending || !buffer || !length || length > 65536) return 0;
++    /* CMD_READ converts ahir_Frequency to an internal ratio and trashes input fields.
++       Restore every request, retaining only the documented continuation offset. */
++    c->io->ahir_Frequency = c->rate;
++    c->io->ahir_Type = c->channels == 1 ? AHIST_M16S : AHIST_S16S;
++    c->io->ahir_Std.io_Error = 0;
++    c->io->ahir_Std.io_Data = buffer; c->io->ahir_Std.io_Length = length;
++    SendIO((struct IORequest *)c->io); c->pending = 1; return 1;
++}
++int ahi_capture_poll(struct ahi_capture *c, size_t *actual)
++{
++    if (!c || !c->pending || !actual) return -1;
++    if (!CheckIO((struct IORequest *)c->io)) return 0;
++    int error = WaitIO((struct IORequest *)c->io); c->pending = 0;
++    *actual = c->io->ahir_Std.io_Actual;
++    return error ? -1 : 1;
++}
++void ahi_capture_close(struct ahi_capture *c)
++{
++    if (!c) return;
++    if (c->pending) { AbortIO((struct IORequest *)c->io); WaitIO((struct IORequest *)c->io); }
++    if (c->opened) CloseDevice((struct IORequest *)c->io);
++    if (c->io) DeleteIORequest((struct IORequest *)c->io);
++    if (c->port) DeleteMsgPort(c->port);
++    free(c);
++}
+diff --git a/channels/audin/client/ahi/ahi_native.h b/channels/audin/client/ahi/ahi_native.h
+new file mode 100644
+index 0000000..6b713c3
+--- /dev/null
++++ b/channels/audin/client/ahi/ahi_native.h
+@@ -0,0 +1,10 @@
++#ifndef ADT_AHI_NATIVE_H
++#define ADT_AHI_NATIVE_H
++#include <stdint.h>
++#include <stddef.h>
++struct ahi_capture;
++struct ahi_capture *ahi_capture_open(uint32_t rate, uint16_t channels);
++int ahi_capture_start(struct ahi_capture *capture, void *buffer, size_t length);
++int ahi_capture_poll(struct ahi_capture *capture, size_t *actual);
++void ahi_capture_close(struct ahi_capture *capture);
++#endif
+diff --git a/channels/audin/client/ahi/audin_ahi.c b/channels/audin/client/ahi/audin_ahi.c
+new file mode 100644
+index 0000000..869de4a
+--- /dev/null
++++ b/channels/audin/client/ahi/audin_ahi.c
+@@ -0,0 +1,90 @@
++/* AHI microphone adapter. Capture starts only when audin is explicitly enabled. */
++#include <freerdp/config.h>
++#include <winpr/crt.h>
++#include <winpr/thread.h>
++#include <winpr/synch.h>
++#include <winpr/interlocked.h>
++#include "audin_main.h"
++#include "ahi_native.h"
++typedef struct {
++    IAudinDevice iface;
++    AUDIO_FORMAT format;
++    UINT32 frames;
++    HANDLE thread, ready;
++    LONG stopping;
++    UINT startup;
++    AudinReceive receive;
++    void *user;
++} AhiDevice;
++static BOOL supported(IAudinDevice *dev, const AUDIO_FORMAT *f)
++{
++    WINPR_UNUSED(dev);
++    return f && f->wFormatTag == WAVE_FORMAT_PCM && f->wBitsPerSample == 16 &&
++        (f->nChannels == 1 || f->nChannels == 2) && f->nSamplesPerSec >= 8000 &&
++        f->nSamplesPerSec <= 96000 && f->nBlockAlign == f->nChannels * 2 &&
++        f->nAvgBytesPerSec == f->nSamplesPerSec * f->nBlockAlign && f->cbSize == 0;
++}
++static UINT set_format(IAudinDevice *dev, const AUDIO_FORMAT *f, UINT32 frames)
++{
++    AhiDevice *a = (AhiDevice *)dev;
++    if (a->thread || !supported(dev, f) || !frames || frames > 16384) return ERROR_INVALID_PARAMETER;
++    a->format = *f; a->frames = frames; return CHANNEL_RC_OK;
++}
++static DWORD WINAPI capture_thread(void *arg)
++{
++    AhiDevice *a = arg;
++    size_t length = (size_t)a->frames * a->format.nBlockAlign;
++    BYTE *buffer = calloc(1, length);
++    struct ahi_capture *capture = buffer ? ahi_capture_open(a->format.nSamplesPerSec, a->format.nChannels) : NULL;
++    a->startup = capture ? CHANNEL_RC_OK : ERROR_NOT_SUPPORTED;
++    SetEvent(a->ready);
++    if (capture) {
++        while (!InterlockedCompareExchange(&a->stopping, 0, 0)) {
++            if (!ahi_capture_start(capture, buffer, length)) { WLog_ERR(TAG, "AHI capture request failed"); break; }
++            size_t actual = 0; int state = 0;
++            do {
++                if (InterlockedCompareExchange(&a->stopping, 0, 0)) goto done;
++                state = ahi_capture_poll(capture, &actual);
++                if (!state) Sleep(1);
++            } while (!state);
++            if (state < 0 || actual > length || actual % a->format.nBlockAlign) { WLog_ERR(TAG, "AHI capture completion invalid: state=%d bytes=%" PRIuz, state, actual); break; }
++            if (actual && a->receive(&a->format, buffer, actual, a->user) != CHANNEL_RC_OK) { WLog_ERR(TAG, "Microphone channel rejected captured PCM"); break; }
++        }
++    }
++done:
++    ahi_capture_close(capture);
++    if (buffer) { SecureZeroMemory(buffer, length); free(buffer); }
++    return 0;
++}
++static UINT close_capture(IAudinDevice *dev)
++{
++    AhiDevice *a = (AhiDevice *)dev;
++    (void)InterlockedExchange(&a->stopping, 1);
++    if (a->thread) { WaitForSingleObject(a->thread, INFINITE); CloseHandle(a->thread); a->thread = NULL; }
++    if (a->ready) { CloseHandle(a->ready); a->ready = NULL; }
++    a->receive = NULL; a->user = NULL; return CHANNEL_RC_OK;
++}
++static UINT open_capture(IAudinDevice *dev, AudinReceive receive, void *user)
++{
++    AhiDevice *a = (AhiDevice *)dev;
++    if (a->thread || !receive || !supported(dev, &a->format) || !a->frames) return ERROR_INVALID_PARAMETER;
++    a->receive = receive; a->user = user; a->startup = ERROR_INTERNAL_ERROR;
++    (void)InterlockedExchange(&a->stopping, 0);
++    a->ready = CreateEvent(NULL, TRUE, FALSE, NULL);
++    if (a->ready) a->thread = CreateThread(NULL, 0, capture_thread, a, 0, NULL);
++    if (!a->thread) { close_capture(dev); return ERROR_INTERNAL_ERROR; }
++    if (WaitForSingleObject(a->ready, 5000) != WAIT_OBJECT_0) { close_capture(dev); return ERROR_TIMEOUT; }
++    if (a->startup) { UINT error = a->startup; close_capture(dev); return error; }
++    return CHANNEL_RC_OK;
++}
++static UINT free_capture(IAudinDevice *dev) { close_capture(dev); free(dev); return CHANNEL_RC_OK; }
++FREERDP_ENTRY_POINT(UINT VCAPITYPE ahi_freerdp_audin_client_subsystem_entry(PFREERDP_AUDIN_DEVICE_ENTRY_POINTS entry))
++{
++    AhiDevice *a = calloc(1, sizeof(*a));
++    if (!a) return CHANNEL_RC_NO_MEMORY;
++    a->iface.Open = open_capture; a->iface.Close = close_capture;
++    a->iface.Free = free_capture; a->iface.SetFormat = set_format; a->iface.FormatSupported = supported;
++    UINT result = entry->pRegisterAudinDevice(entry->plugin, &a->iface);
++    if (result) free(a);
++    return result;
++}
+diff --git a/channels/audin/client/audin_main.c b/channels/audin/client/audin_main.c
+index c7aa974..189d47c 100644
+--- a/channels/audin/client/audin_main.c
++++ b/channels/audin/client/audin_main.c
+@@ -1010,6 +1010,9 @@ FREERDP_ENTRY_POINT(UINT VCAPITYPE audin_DVCPluginEntry(IDRDYNVC_ENTRY_POINTS* p
+ 	};
+ 	UINT error = CHANNEL_RC_INITIALIZATION_ERROR;
+ 	struct SubsystemEntry entries[] = {
++#if defined(__AROS__)
++        { "ahi", "" },
++#endif
+ #if defined(WITH_PULSE)
+ 		{ "pulse", "" },
+ #endif
+diff --git a/channels/drive/client/drive_file.c b/channels/drive/client/drive_file.c
+index b9cd2cd..d406c3e 100644
+--- a/channels/drive/client/drive_file.c
++++ b/channels/drive/client/drive_file.c
+@@ -43,6 +43,10 @@
+ #include <freerdp/channels/rdpdr.h>
+ 
+ #include "drive_file.h"
++#ifdef __AROS__
++#include "drive_path_aros.h"
++#include <sys/stat.h>
++#endif
+ 
+ #ifdef WITH_DEBUG_RDPDR
+ #define DEBUG_WSTR(msg, wstr)                                    \
+@@ -128,6 +132,26 @@ WINPR_ATTR_MALLOC(free, 1)
+ static WCHAR* drive_file_combine_fullpath(const WCHAR* base_path, const WCHAR* path,
+                                           size_t PathWCharLength)
+ {
++#ifdef __AROS__
++    WCHAR *native=drive_path_aros(base_path,path,PathWCharLength);
++    if (!native) { SetLastError(ERROR_ACCESS_DENIED); return NULL; }
++    char *text=ConvertWCharToUtf8Alloc(native,NULL);
++    if (!text) { free(native); return NULL; }
++    /* Do not follow links out of the explicitly shared tree. New final paths
++     * may not exist yet; existing components must not be symbolic links. */
++    BOOL safe=TRUE;
++    for (size_t i=0;;i++) {
++        if (text[i]!='/' && text[i]!=0) continue;
++        char saved=text[i]; text[i]=0; struct stat info;
++        int rc=lstat(text,&info);
++        if ((rc==0 && S_ISLNK(info.st_mode)) || (rc<0 && errno!=ENOENT)) safe=FALSE;
++        text[i]=saved;
++        if (!saved || !safe) break;
++    }
++    free(text);
++    if (!safe) { free(native); SetLastError(ERROR_ACCESS_DENIED); return NULL; }
++    return native;
++#else
+ 	BOOL ok = FALSE;
+ 	WCHAR* fullpath = nullptr;
+ 
+@@ -181,6 +205,7 @@ fail:
+ 		fullpath = nullptr;
+ 	}
+ 	return fullpath;
++#endif
+ }
+ 
+ WINPR_ATTR_NODISCARD
+diff --git a/channels/drive/client/drive_path_aros.h b/channels/drive/client/drive_path_aros.h
+new file mode 100644
+index 0000000..a915c45
+--- /dev/null
++++ b/channels/drive/client/drive_path_aros.h
+@@ -0,0 +1,39 @@
++/* AROS DOS gives empty path components parent-directory semantics. Never
++ * forward them, volume separators or dot components from a remote server. */
++#ifndef ADT_DRIVE_PATH_AROS_H
++#define ADT_DRIVE_PATH_AROS_H
++#include <stdlib.h>
++#include <string.h>
++static WCHAR *drive_path_aros(const WCHAR *base,const WCHAR *path,size_t length)
++{
++    if (!base || (!path && length)) return NULL;
++    size_t b=0; while (b<260 && base[b]) b++;
++    if (!b || b==260 || length>32768) return NULL;
++    while (b && (base[b-1]=='/' || base[b-1]=='\\')) b--;
++    if (!b) return NULL;
++    if (length && path[length-1]==0) length--;
++    size_t start=0;
++    if (length && (path[0]=='/' || path[0]=='\\')) start=1;
++    size_t end=length;
++    if (end>start && (path[end-1]=='/' || path[end-1]=='\\')) end--;
++    size_t component=start;
++    for (size_t i=start;i<=end;i++) {
++        if (i<end && (path[i]<32 || path[i]==127 || path[i]==':')) return NULL;
++        if (i==end || path[i]=='/' || path[i]=='\\') {
++            size_t n=i-component;
++            if (!n && end>start) return NULL;
++            if ((n==1 && path[component]=='.') ||
++                (n==2 && path[component]=='.' && path[component+1]=='.')) return NULL;
++            component=i+1;
++        }
++    }
++    /* Reject doubled root/trailing separators too. */
++    if (length>1 && ((path[0]=='/' || path[0]=='\\') && (path[1]=='/' || path[1]=='\\'))) return NULL;
++    if (end>start && (path[end-1]=='/' || path[end-1]=='\\')) return NULL;
++    size_t n=end-start, join=n && base[b-1]!=':';
++    WCHAR *result=calloc(b+join+n+1,sizeof(*result)); if (!result) return NULL;
++    memcpy(result,base,b*sizeof(*result)); if (join) result[b++]='/';
++    for (size_t i=0;i<n;i++) result[b+i]=path[start+i]=='\\' ? '/' : path[start+i];
++    return result;
++}
++#endif
+diff --git a/channels/printer/client/CMakeLists.txt b/channels/printer/client/CMakeLists.txt
+index f40f603..f2c98c3 100644
+--- a/channels/printer/client/CMakeLists.txt
++++ b/channels/printer/client/CMakeLists.txt
+@@ -33,3 +33,7 @@ endif()
+ if(ANDROID)
+   add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "android" "")
+ endif()
++
++if(CMAKE_SYSTEM_NAME STREQUAL "AROS")
++  add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "aros" "")
++endif()
+diff --git a/channels/printer/client/aros/CMakeLists.txt b/channels/printer/client/aros/CMakeLists.txt
+new file mode 100644
+index 0000000..e1a52c8
+--- /dev/null
++++ b/channels/printer/client/aros/CMakeLists.txt
+@@ -0,0 +1,5 @@
++define_channel_client_subsystem("printer" "aros" "")
++set(${MODULE_PREFIX}_SRCS printer_aros.c printer_native.c document_native.c)
++set(${MODULE_PREFIX}_LIBS winpr freerdp)
++include_directories(..)
++add_channel_client_subsystem_library(${MODULE_PREFIX} ${MODULE_NAME} ${CHANNEL_NAME} "" TRUE "")
+diff --git a/channels/printer/client/aros/document_native.c b/channels/printer/client/aros/document_native.c
+new file mode 100644
+index 0000000..49bec98
+--- /dev/null
++++ b/channels/printer/client/aros/document_native.c
+@@ -0,0 +1,87 @@
++/* Spool locally; render in a separate process through stock printer.device. */
++#include "document_native.h"
++#include <proto/dos.h>
++#include <proto/exec.h>
++#include <dos/dostags.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <inttypes.h>
++struct native_document_job { FILE *file; char path[160]; int slot; };
++/* One queued/active job prevents interleaving printer.device page streams. */
++static char pending[1][160];
++static unsigned sequence;
++static int renderer_path(char *path,size_t size)
++{
++    return NameFromLock(GetProgramDir(),(STRPTR)path,size) &&
++        AddPart((STRPTR)path,(CONST_STRPTR)"adt-rdp-render",size);
++}
++int native_document_available(void)
++{
++    char path[1024]; if (!renderer_path(path,sizeof(path))) return 0;
++    BPTR lock=Lock((CONST_STRPTR)path,ACCESS_READ); if (!lock) return 0;
++    UnLock(lock); return 1;
++}
++struct native_document_job *native_document_open(uint32_t id)
++{
++    int slot=-1;
++    for (int i=0;i<1;i++) {
++        if (pending[i][0]) {
++            BPTR lock=Lock((CONST_STRPTR)pending[i],ACCESS_READ);
++            if (lock) UnLock(lock); else if (IoErr()==ERROR_OBJECT_NOT_FOUND) pending[i][0]=0;
++        }
++        if (!pending[i][0] && slot<0) slot=i;
++    }
++    if (slot<0 || !native_document_available()) return NULL;
++    BPTR dir=CreateDir((CONST_STRPTR)"RAM:RemoteDesktopJobs");
++    if (dir) UnLock(dir); else if (IoErr()!=ERROR_OBJECT_EXISTS) return NULL;
++    struct native_document_job *job=calloc(1,sizeof(*job)); if (!job) return NULL;
++    job->slot=slot;
++    /* Generated paths contain only hex digits and hyphens; never remote names. */
++    for (unsigned attempt=0;attempt<100;attempt++) {
++        snprintf(job->path,sizeof(job->path),"RAM:RemoteDesktopJobs/%" PRIxPTR "-%x-%x.xps",
++                 (uintptr_t)FindTask(NULL),(unsigned)id,++sequence);
++        BPTR lock=Lock((CONST_STRPTR)job->path,ACCESS_READ);
++        if (lock) { UnLock(lock); continue; }
++        if (IoErr()!=ERROR_OBJECT_NOT_FOUND) break;
++        job->file=fopen(job->path,"wb"); break;
++    }
++    if (!job->file) { free(job); return NULL; }
++    strcpy(pending[slot],job->path); return job;
++}
++int native_document_write(struct native_document_job *job,const void *data,size_t length)
++{
++    return job && job->file && fwrite(data,1,length,job->file)==length;
++}
++void native_document_abort(struct native_document_job *job)
++{
++    if (!job) return;
++    if (job->file) fclose(job->file);
++    remove(job->path); pending[job->slot][0]=0; free(job);
++}
++int native_document_finish(struct native_document_job *job)
++{
++    if (!job) return 0;
++    int error=fclose(job->file); job->file=NULL;
++    char helper[1024],args[192],log[192];
++    if (error || !renderer_path(helper,sizeof(helper))) { native_document_abort(job); return 0; }
++    BPTR segment=LoadSeg((CONST_STRPTR)helper);
++    if (!segment) { native_document_abort(job); return 0; }
++    snprintf(args,sizeof(args),"--spool %s\n",job->path);
++    snprintf(log,sizeof(log),"%s.log",job->path);
++    BPTR input=Open((CONST_STRPTR)"NIL:",MODE_OLDFILE),output=Open((CONST_STRPTR)log,MODE_NEWFILE);
++    struct Process *process=NULL;
++    if (input && output)
++        process=CreateNewProcTags(NP_Seglist,segment,NP_FreeSeglist,TRUE,
++            NP_Name,(IPTR)"Remote Desktop print job",NP_Arguments,(IPTR)args,
++            NP_Cli,TRUE,NP_StackSize,8388608,NP_Input,input,NP_Output,output,
++            NP_CloseInput,TRUE,NP_CloseOutput,TRUE,NP_Error,output,NP_CloseError,FALSE,TAG_DONE);
++    if (!process) {
++        if (input) Close(input);
++        if (output) Close(output);
++        UnLoadSeg(segment);
++        native_document_abort(job); return 0;
++    }
++    printf("PRINT_JOB_QUEUED=%s LOG=%s\n",job->path,log); fflush(stdout);
++    free(job); return 1;
++}
+diff --git a/channels/printer/client/aros/document_native.h b/channels/printer/client/aros/document_native.h
+new file mode 100644
+index 0000000..af07239
+--- /dev/null
++++ b/channels/printer/client/aros/document_native.h
+@@ -0,0 +1,11 @@
++#ifndef ADT_DOCUMENT_NATIVE_H
++#define ADT_DOCUMENT_NATIVE_H
++#include <stddef.h>
++#include <stdint.h>
++struct native_document_job;
++int native_document_available(void);
++struct native_document_job *native_document_open(uint32_t id);
++int native_document_write(struct native_document_job *,const void *,size_t);
++int native_document_finish(struct native_document_job *);
++void native_document_abort(struct native_document_job *);
++#endif
+diff --git a/channels/printer/client/aros/printer_aros.c b/channels/printer/client/aros/printer_aros.c
+new file mode 100644
+index 0000000..4bfecef
+--- /dev/null
++++ b/channels/printer/client/aros/printer_aros.c
+@@ -0,0 +1,130 @@
++/* Explicit native printers: text device writes or queued document rendering. */
++#include <freerdp/config.h>
++#include <winpr/crt.h>
++#include <freerdp/client/printer.h>
++#include <freerdp/channels/log.h>
++#include "printer_native.h"
++#include "document_native.h"
++#define TAG CHANNELS_TAG("printer.client.aros")
++typedef struct { rdpPrinterDriver base; size_t refs, next_id; } Driver;
++typedef struct Job Job;
++typedef struct { rdpPrinter base; Job *job; } Printer;
++struct Job { rdpPrintJob base; struct native_print_job *native; struct native_document_job *document; size_t total; BOOL failed; BYTE magic[5]; size_t magic_size; };
++static UINT write_job(rdpPrintJob *base, const BYTE *bytes, size_t length)
++{
++    Job *job = (Job *)base;
++    size_t limit = base->printer->is_xps ? 33554432 : 8388608;
++    if (job->failed) return ERROR_WRITE_FAULT;
++    if ((!bytes && length) || length > 1048576 || length > limit - job->total) {
++        job->failed=TRUE; return ERROR_INVALID_DATA;
++    }
++    if (job->document) {
++        for (size_t i=0;i<length && job->magic_size<5;i++) job->magic[job->magic_size++]=bytes[i];
++        if (job->magic_size==5 && memcmp(job->magic,"%PDF-",5) && memcmp(job->magic,"PK\003\004",4)) {
++            job->failed=TRUE; return ERROR_NOT_SUPPORTED;
++        }
++        if (length && !native_document_write(job->document,bytes,length)) {
++            job->failed=TRUE; return ERROR_WRITE_FAULT;
++        }
++    } else {
++        for (size_t i=0;i<length;i++)
++            if (bytes[i]<32 && bytes[i]!='\t' && bytes[i]!='\r' && bytes[i]!='\n' && bytes[i]!='\f') {
++                job->failed=TRUE; return ERROR_NOT_SUPPORTED;
++            }
++        if (length && !native_print_write(job->native,bytes,length)) {
++            job->failed=TRUE; return ERROR_WRITE_FAULT;
++        }
++    }
++    job->total += length; return CHANNEL_RC_OK;
++}
++static void close_job(rdpPrintJob *base)
++{
++    Job *job = (Job *)base;
++    ((Printer *)base->printer)->job = NULL;
++    if (job->document) native_document_abort(job->document);
++    if (job->native) native_print_close(job->native);
++    free(job);
++}
++static UINT finish_job(rdpPrintJob *base)
++{
++    Job *job=(Job *)base;
++    UINT result=CHANNEL_RC_OK;
++    if (job->failed || (job->document && job->magic_size<5)) result=ERROR_INVALID_DATA;
++    else if (job->document) {
++        if (!native_document_finish(job->document)) result=ERROR_WRITE_FAULT;
++        job->document=NULL;
++    }
++    close_job(base); return result;
++}
++static rdpPrintJob *create_job(rdpPrinter *base, UINT32 id)
++{
++    Printer *printer = (Printer *)base;
++    if (printer->job) return NULL;
++    Job *job = calloc(1, sizeof(*job));
++    if (!job) return NULL;
++    if (base->is_xps) job->document = native_document_open(id);
++    else job->native = native_print_open(id);
++    if (!job->native && !job->document) { free(job); return NULL; }
++    job->base.id = id; job->base.printer = base;
++    job->base.Write = write_job; job->base.Close = close_job; job->base.Finish = finish_job;
++    printer->job = job; return &job->base;
++}
++static rdpPrintJob *find_job(rdpPrinter *base, UINT32 id)
++{
++    Job *job = ((Printer *)base)->job;
++    return job && job->base.id == id ? &job->base : NULL;
++}
++static void add_driver(rdpPrinterDriver *base) { ((Driver *)base)->refs++; }
++static void release_driver(rdpPrinterDriver *base) { if (--((Driver *)base)->refs == 0) free(base); }
++static void add_printer(rdpPrinter *base) { base->references++; }
++static void release_printer(rdpPrinter *base)
++{
++    if (--base->references) return;
++    if (((Printer *)base)->job) close_job(&((Printer *)base)->job->base);
++    release_driver(base->backend); free(base->name); free(base->driver); free(base);
++}
++static rdpPrinter *get_printer(rdpPrinterDriver *base, const char *name, const char *driver, BOOL def)
++{
++    BOOL document=driver && (!strcmp(driver,"ADT PDF/XPS printer") ||
++                              !strcmp(driver,"Microsoft XPS Document Writer"));
++    if (driver && strcmp(driver, "Generic / Text Only") && !document) {
++        WLog_ERR(TAG, "Unsupported printer driver; select Generic / Text Only or ADT PDF/XPS printer");
++        return NULL;
++    }
++    if (document && !native_document_available()) {
++        WLog_ERR(TAG,"Place adt-rdp-render beside RemoteDesktop to enable document printing"); return NULL;
++    }
++    Printer *p = calloc(1, sizeof(*p));
++    if (!p) return NULL;
++    p->base.name = _strdup(name && *name ? name : (document ? "AROS printer.device (documents)" : "AROS printer.device (text only)"));
++    p->base.driver = _strdup(document ? driver : "Generic / Text Only");
++    p->base.is_xps = document;
++    if (!p->base.name || !p->base.driver) { free(p->base.name); free(p->base.driver); free(p); return NULL; }
++    p->base.id = ++((Driver *)base)->next_id; p->base.backend = base; add_driver(base);
++    p->base.is_default = def; p->base.references = 1;
++    p->base.CreatePrintJob = create_job; p->base.FindPrintJob = find_job;
++    p->base.AddRef = add_printer; p->base.ReleaseRef = release_printer;
++    return &p->base;
++}
++static rdpPrinter **enumerate(rdpPrinterDriver *base)
++{
++    rdpPrinter **list = calloc(2, sizeof(*list));
++    if (!list) return NULL;
++    list[0] = get_printer(base, NULL, NULL, TRUE);
++    if (!list[0]) { free(list); return NULL; } return list;
++}
++static void release_list(rdpPrinter **list)
++{
++    if (!list) return;
++    for (size_t i = 0; list[i]; i++) release_printer(list[i]);
++    free(list);
++}
++FREERDP_ENTRY_POINT(UINT VCAPITYPE aros_freerdp_printer_client_subsystem_entry(void *arg))
++{
++    if (!arg) return ERROR_INVALID_PARAMETER;
++    Driver *d = calloc(1, sizeof(*d));
++    if (!d) return ERROR_OUTOFMEMORY;
++    d->refs = 1; d->base.EnumPrinters = enumerate; d->base.ReleaseEnumPrinters = release_list;
++    d->base.GetPrinter = get_printer; d->base.AddRef = add_driver; d->base.ReleaseRef = release_driver;
++    *(rdpPrinterDriver **)arg = &d->base; return CHANNEL_RC_OK;
++}
+diff --git a/channels/printer/client/aros/printer_native.c b/channels/printer/client/aros/printer_native.c
+new file mode 100644
+index 0000000..b1034dd
+--- /dev/null
++++ b/channels/printer/client/aros/printer_native.c
+@@ -0,0 +1,48 @@
++/* Stock printer.device is the only output path. Gutenprint remains its driver. */
++#include "printer_native.h"
++#include <devices/printer.h>
++#include <datatypes/datatypesclass.h>
++#include <proto/exec.h>
++#include <stdlib.h>
++#include <stdio.h>
++/* ADT job metadata extension; compatible with SDKs predating its header. */
++#ifndef PRD_SETJOBINFO
++#define PRD_SETJOBINFO (CMD_NONSTD + 13)
++#define PJIA_Application (TAG_USER + 0x80001)
++#define PJIA_Document (TAG_USER + 0x80002)
++#endif
++struct native_print_job { struct MsgPort *port; union printerIO *io; int opened; char title[64]; };
++struct native_print_job *native_print_open(uint32_t id)
++{
++    struct native_print_job *p = calloc(1, sizeof(*p));
++    if (!p) return NULL;
++    p->port = CreateMsgPort();
++    if (p->port) p->io = (union printerIO *)CreateIORequest(p->port, sizeof(*p->io));
++    if (!p->io) { native_print_close(p); return NULL; }
++    int error = OpenDevice("printer.device", 0, (struct IORequest *)p->io, 0);
++    if (error) { fprintf(stderr, "printer.device unit 0: open failed (%d); check printer preferences and configured driver\n", error); native_print_close(p); return NULL; }
++    p->opened = 1;
++    snprintf(p->title, sizeof(p->title), "Remote Desktop text job %u", (unsigned)id);
++    struct TagItem tags[] = {{PJIA_Application, (IPTR)"ADT Remote Desktop"},
++        {PJIA_Document, (IPTR)p->title}, {TAG_DONE, 0}};
++    p->io->ios.io_Command = PRD_SETJOBINFO; p->io->ios.io_Data = tags;
++    p->io->ios.io_Length = 0;
++    /* Older printer.device versions can still print without metadata. */
++    DoIO((struct IORequest *)p->io);
++    return p;
++}
++int native_print_write(struct native_print_job *p, const void *bytes, size_t length)
++{
++    if (!p || !bytes || length > 1048576) return 0;
++    p->io->ios.io_Command = CMD_WRITE; p->io->ios.io_Error = 0;
++    p->io->ios.io_Data = (void *)bytes; p->io->ios.io_Length = length;
++    return DoIO((struct IORequest *)p->io) == 0 && p->io->ios.io_Actual == length;
++}
++void native_print_close(struct native_print_job *p)
++{
++    if (!p) return;
++    if (p->opened) CloseDevice((struct IORequest *)p->io);
++    if (p->io) DeleteIORequest((struct IORequest *)p->io);
++    if (p->port) DeleteMsgPort(p->port);
++    free(p);
++}
+diff --git a/channels/printer/client/aros/printer_native.h b/channels/printer/client/aros/printer_native.h
+new file mode 100644
+index 0000000..490fe26
+--- /dev/null
++++ b/channels/printer/client/aros/printer_native.h
+@@ -0,0 +1,9 @@
++#ifndef ADT_PRINTER_NATIVE_H
++#define ADT_PRINTER_NATIVE_H
++#include <stdint.h>
++#include <stddef.h>
++struct native_print_job;
++struct native_print_job *native_print_open(uint32_t job);
++int native_print_write(struct native_print_job *job, const void *bytes, size_t length);
++void native_print_close(struct native_print_job *job);
++#endif
+diff --git a/channels/printer/client/printer_main.c b/channels/printer/client/printer_main.c
+index 6856d5d..ac52e97 100644
+--- a/channels/printer/client/printer_main.c
++++ b/channels/printer/client/printer_main.c
+@@ -108,6 +108,7 @@ static char* get_printer_config_path(const rdpSettings* settings, const WCHAR* n
+ 	{
+ 		if (!winpr_PathMakePath(config, nullptr))
+ 		{
++			WLog_WARN(TAG, "Printer cache directory unavailable: %s", config);
+ 			free(config);
+ 			config = nullptr;
+ 		}
+@@ -180,6 +181,8 @@ static BOOL printer_config_valid(const char* path)
+ 
+ static BOOL printer_read_setting(const char* path, prn_conf_t type, void** data, UINT32* length)
+ {
++	if (!path)
++		return FALSE;
+ 	DWORD lowSize = 0;
+ 	DWORD highSize = 0;
+ 	DWORD read = 0;
+@@ -352,8 +355,8 @@ static BOOL printer_load_from_config(const rdpSettings* settings, rdpPrinter* pr
+ 		PrinterNameLen = (UINT32)plen;
+ 	}
+ 
+-	if (!path)
+-		goto fail;
++	if (printer->is_xps)
++		flags |= RDPDR_PRINTER_ANNOUNCE_FLAG_XPSFORMAT;
+ 
+ 	if (printer->is_default)
+ 		flags |= RDPDR_PRINTER_ANNOUNCE_FLAG_DEFAULTPRINTER;
+@@ -529,7 +532,9 @@ static UINT printer_process_irp_close(PRINTER_DEVICE* printer_dev, IRP* irp)
+ 	}
+ 	else
+ 	{
+-		printjob->Close(printjob);
++		if (printjob->Finish) {
++			if (printjob->Finish(printjob)) irp->IoStatus = STATUS_UNSUCCESSFUL;
++		} else printjob->Close(printjob);
+ 	}
+ 
+ 	Stream_Zero(irp->output, 4); /* Padding(4) */
+@@ -908,10 +913,10 @@ static UINT printer_custom_component(DEVICE* device, UINT16 component, UINT16 pa
+ 				return ERROR_INVALID_DATA;
+ 
+ 			Stream_Read_UINT32(s, flags);
+-			WLog_ERR(TAG,
+-			         "Ignoring unhandled message PAKID_PRN_USING_XPS [printerID=%08" PRIx32
+-			         ", flags=%08" PRIx32 "]",
+-			         eventID, flags);
++            if (eventID != printer_dev->device.id) break;
++            if (!printer_dev->printer || !printer_dev->printer->is_xps) return ERROR_NOT_SUPPORTED;
++            WLog_INFO(TAG,"Printer %" PRIu32 " using XPS document mode",eventID);
++            (void)flags; /* Protocol requires ignoring this reserved field. */
+ 		}
+ 		break;
+ 
+@@ -1131,7 +1136,9 @@ FREERDP_ENTRY_POINT(
+ 	if (!driver && default_backend)
+ 	{
+ 		const char* backend =
+-#if defined(WITH_CUPS)
++#if defined(__AROS__)
++            "aros"
++#elif defined(WITH_CUPS)
+ 		    "cups"
+ #elif defined(_WIN32)
+ 		    "win"
+@@ -1168,9 +1175,9 @@ FREERDP_ENTRY_POINT(
+ 		WINPR_ASSERT(printer->ReleaseRef);
+ 		if (!printer_save_default_config(pEntryPoints->rdpcontext->settings, printer))
+ 		{
+-			error = CHANNEL_RC_INITIALIZATION_ERROR;
+-			printer->ReleaseRef(printer);
+-			goto fail;
++            /* Persistence is optional; the explicitly selected backend/driver
++             * is sufficient to announce this printer for the current session. */
++            WLog_WARN(TAG,"Printer settings cache unavailable; using explicit session configuration");
+ 		}
+ 
+ 		error = printer_register(pEntryPoints, printer);
+diff --git a/channels/rdpsnd/client/CMakeLists.txt b/channels/rdpsnd/client/CMakeLists.txt
+index 2101c7b..1cb4cad 100644
+--- a/channels/rdpsnd/client/CMakeLists.txt
++++ b/channels/rdpsnd/client/CMakeLists.txt
+@@ -60,3 +60,7 @@ if(WITH_SNDIO)
+ endif()
+ 
+ add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "fake" "")
++
++if(CMAKE_SYSTEM_NAME STREQUAL "AROS")
++  add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "ahi" "")
++endif()
+diff --git a/channels/rdpsnd/client/ahi/CMakeLists.txt b/channels/rdpsnd/client/ahi/CMakeLists.txt
+new file mode 100644
+index 0000000..93eecce
+--- /dev/null
++++ b/channels/rdpsnd/client/ahi/CMakeLists.txt
+@@ -0,0 +1,5 @@
++define_channel_client_subsystem("rdpsnd" "ahi" "")
++set(${MODULE_PREFIX}_SRCS rdpsnd_ahi.c ahi_output.c)
++set(${MODULE_PREFIX}_LIBS winpr freerdp)
++include_directories(..)
++add_channel_client_subsystem_library(${MODULE_PREFIX} ${MODULE_NAME} ${CHANNEL_NAME} "" TRUE "")
+diff --git a/channels/rdpsnd/client/ahi/ahi_output.c b/channels/rdpsnd/client/ahi/ahi_output.c
+new file mode 100644
+index 0000000..5f733b9
+--- /dev/null
++++ b/channels/rdpsnd/client/ahi/ahi_output.c
+@@ -0,0 +1,47 @@
++/* AHI playback bridge, compiled using only native AROS types. */
++#include "ahi_output.h"
++#include <devices/ahi.h>
++#include <proto/exec.h>
++#include <stdlib.h>
++#include <string.h>
++struct ahi_output { struct MsgPort *port; struct AHIRequest *io; uint16_t channels; int opened; };
++struct ahi_output *ahi_output_open(uint32_t rate, uint16_t channels)
++{
++    if (rate < 8000 || rate > 96000 || (channels != 1 && channels != 2)) return NULL;
++    struct ahi_output *a = calloc(1, sizeof(*a));
++    if (!a) return NULL;
++    a->port = CreateMsgPort();
++    if (a->port) a->io = (struct AHIRequest *)CreateIORequest(a->port, sizeof(*a->io));
++    if (!a->io) { ahi_output_close(a); return NULL; }
++    a->io->ahir_Version = 4;
++    if (OpenDevice(AHINAME, 0, (struct IORequest *)a->io, 0)) { ahi_output_close(a); return NULL; }
++    a->opened = 1; a->channels = channels;
++    a->io->ahir_Frequency = rate;
++    a->io->ahir_Type = channels == 1 ? AHIST_M16S : AHIST_S16S;
++    a->io->ahir_Volume = 0x10000; a->io->ahir_Position = 0x8000;
++    return a;
++}
++int ahi_output_play(struct ahi_output *a, const void *data, size_t size, uint32_t volume)
++{
++    if (!a || !data || !size || size > 1048576 || size % (a->channels * 2)) return 0;
++    int16_t *samples = malloc(size);
++    if (!samples) return 0;
++    memcpy(samples, data, size);
++    for (size_t i = 0; i < size / 2; i++) {
++        uint32_t level = a->channels == 2 && (i & 1) ? volume >> 16 : volume & 0xffff;
++        samples[i] = (int16_t)(((int32_t)samples[i] * (int32_t)level) / 65535);
++    }
++    a->io->ahir_Std.io_Command = CMD_WRITE;
++    a->io->ahir_Std.io_Data = samples; a->io->ahir_Std.io_Length = size;
++    a->io->ahir_Std.io_Offset = 0;
++    int error = DoIO((struct IORequest *)a->io);
++    free(samples); return error == 0;
++}
++void ahi_output_close(struct ahi_output *a)
++{
++    if (!a) return;
++    if (a->opened) CloseDevice((struct IORequest *)a->io);
++    if (a->io) DeleteIORequest((struct IORequest *)a->io);
++    if (a->port) DeleteMsgPort(a->port);
++    free(a);
++}
+diff --git a/channels/rdpsnd/client/ahi/ahi_output.h b/channels/rdpsnd/client/ahi/ahi_output.h
+new file mode 100644
+index 0000000..cb0fb7c
+--- /dev/null
++++ b/channels/rdpsnd/client/ahi/ahi_output.h
+@@ -0,0 +1,9 @@
++#ifndef ADT_AHI_OUTPUT_H
++#define ADT_AHI_OUTPUT_H
++#include <stdint.h>
++#include <stddef.h>
++struct ahi_output;
++struct ahi_output *ahi_output_open(uint32_t rate, uint16_t channels);
++int ahi_output_play(struct ahi_output *output, const void *data, size_t size, uint32_t volume);
++void ahi_output_close(struct ahi_output *output);
++#endif
+diff --git a/channels/rdpsnd/client/ahi/rdpsnd_ahi.c b/channels/rdpsnd/client/ahi/rdpsnd_ahi.c
+new file mode 100644
+index 0000000..fbe2d99
+--- /dev/null
++++ b/channels/rdpsnd/client/ahi/rdpsnd_ahi.c
+@@ -0,0 +1,52 @@
++#include <freerdp/config.h>
++#include <winpr/crt.h>
++#include "rdpsnd_main.h"
++#include "ahi_output.h"
++typedef struct {
++    rdpsndDevicePlugin iface;
++    struct ahi_output *output;
++    UINT32 volume;
++} AhiOutput;
++static BOOL supported(rdpsndDevicePlugin *dev, const AUDIO_FORMAT *f)
++{
++    WINPR_UNUSED(dev);
++    return f && f->wFormatTag == WAVE_FORMAT_PCM && f->wBitsPerSample == 16 &&
++        (f->nChannels == 1 || f->nChannels == 2) && f->nSamplesPerSec >= 8000 &&
++        f->nSamplesPerSec <= 96000 && f->nBlockAlign == f->nChannels * 2 &&
++        f->nAvgBytesPerSec == f->nSamplesPerSec * f->nBlockAlign && f->cbSize == 0;
++}
++static void close_output(rdpsndDevicePlugin *dev)
++{
++    AhiOutput *a = (AhiOutput *)dev;
++    ahi_output_close(a->output); a->output = NULL;
++}
++static BOOL open_output(rdpsndDevicePlugin *dev, const AUDIO_FORMAT *f, UINT32 latency)
++{
++    WINPR_UNUSED(latency);
++    if (!supported(dev, f)) return FALSE;
++    AhiOutput *a = (AhiOutput *)dev;
++    close_output(dev);
++    a->output = ahi_output_open(f->nSamplesPerSec, f->nChannels);
++    if (!a->output) WLog_ERR(TAG, "Cannot open AHI playback unit 0");
++    return a->output != NULL;
++}
++static UINT32 get_volume(rdpsndDevicePlugin *dev) { return ((AhiOutput *)dev)->volume; }
++static BOOL set_volume(rdpsndDevicePlugin *dev, UINT32 volume) { ((AhiOutput *)dev)->volume = volume; return TRUE; }
++static UINT play(rdpsndDevicePlugin *dev, const BYTE *data, size_t size)
++{
++    AhiOutput *a = (AhiOutput *)dev;
++    if (!ahi_output_play(a->output, data, size, a->volume)) WLog_ERR(TAG, "AHI playback failed");
++    return 0; /* synchronous playback has no queued samples on return */
++}
++static void free_output(rdpsndDevicePlugin *dev) { close_output(dev); free(dev); }
++FREERDP_ENTRY_POINT(UINT VCAPITYPE ahi_freerdp_rdpsnd_client_subsystem_entry(PFREERDP_RDPSND_DEVICE_ENTRY_POINTS entry))
++{
++    AhiOutput *a = calloc(1, sizeof(*a));
++    if (!a) return CHANNEL_RC_NO_MEMORY;
++    a->volume = 0xffffffff;
++    a->iface.FormatSupported = supported; a->iface.Open = open_output;
++    a->iface.Close = close_output; a->iface.Free = free_output;
++    a->iface.GetVolume = get_volume; a->iface.SetVolume = set_volume; a->iface.Play = play;
++    entry->pRegisterRdpsndDevice(entry->rdpsnd, &a->iface);
++    return CHANNEL_RC_OK;
++}
+diff --git a/channels/rdpsnd/client/rdpsnd_main.c b/channels/rdpsnd/client/rdpsnd_main.c
+index 1ca9676..da4abd0 100644
+--- a/channels/rdpsnd/client/rdpsnd_main.c
++++ b/channels/rdpsnd/client/rdpsnd_main.c
+@@ -1069,6 +1069,9 @@ static UINT rdpsnd_process_connect(rdpsndPlugin* rdpsnd)
+ #if defined(WITH_OPENSLES)
+ 		{ "opensles", "" },
+ #endif
++#if defined(__AROS__)
++        { "ahi", "" },
++#endif
+ #if defined(WITH_PULSE)
+ 		{ "pulse", "" },
+ #endif
+diff --git a/client/AROS/clipboard.c b/client/AROS/clipboard.c
+new file mode 100644
+index 0000000..afb95e4
+--- /dev/null
++++ b/client/AROS/clipboard.c
+@@ -0,0 +1,100 @@
++#include <winpr/crt.h>
++#include <winpr/clipboard.h>
++#include <winpr/string.h>
++#include <winpr/sysinfo.h>
++#include "tf_freerdp.h"
++#include "native.h"
++#include "clipboard.h"
++static UINT announce(CliprdrClientContext *clip)
++{
++    CLIPRDR_FORMAT format = {CF_UNICODETEXT, NULL};
++    CLIPRDR_FORMAT_LIST list = {{CB_FORMAT_LIST, 0, 0}, 1, &format};
++    return clip->ClientFormatList(clip, &list);
++}
++static UINT ready(CliprdrClientContext *clip, const CLIPRDR_MONITOR_READY *event)
++{
++    WINPR_UNUSED(event);
++    tfContext *tf = clip->custom;
++    CLIPRDR_GENERAL_CAPABILITY_SET general = {CB_CAPSTYPE_GENERAL, 12, CB_CAPS_VERSION_2, CB_USE_LONG_FORMAT_NAMES};
++    CLIPRDR_CAPABILITIES caps = {{CB_CLIP_CAPS, 0, 0}, 1, (CLIPRDR_CAPABILITY_SET *)&general};
++    UINT result = clip->ClientCapabilities(clip, &caps);
++    if (result) return result;
++    EnterCriticalSection(&tf->clip_lock); tf->clip_ready = TRUE; LeaveCriticalSection(&tf->clip_lock);
++    return announce(clip);
++}
++static UINT formats(CliprdrClientContext *clip, const CLIPRDR_FORMAT_LIST *list)
++{
++    CLIPRDR_FORMAT_LIST_RESPONSE response = {{CB_FORMAT_LIST_RESPONSE, CB_RESPONSE_OK, 0}};
++    UINT result = clip->ClientFormatListResponse(clip, &response);
++    if (result) return result;
++    for (UINT32 i = 0; i < list->numFormats; i++) {
++        if (list->formats[i].formatId == CF_UNICODETEXT) {
++            CLIPRDR_FORMAT_DATA_REQUEST request = {{CB_FORMAT_DATA_REQUEST, 0, 0}, CF_UNICODETEXT};
++            return clip->ClientFormatDataRequest(clip, &request);
++        }
++    }
++    return CHANNEL_RC_OK;
++}
++static UINT request_data(CliprdrClientContext *clip, const CLIPRDR_FORMAT_DATA_REQUEST *request)
++{
++    CLIPRDR_FORMAT_DATA_RESPONSE response = {{CB_FORMAT_DATA_RESPONSE, CB_RESPONSE_FAIL, 0}, NULL};
++    char *text = NULL; WCHAR *wide = NULL; size_t length = 0;
++    if (request->requestedFormatId == CF_UNICODETEXT) {
++        text = native_clipboard_read();
++        if (text) wide = ConvertUtf8ToWCharAlloc(text, &length);
++        if (wide && length <= 1048576) {
++            response.common.msgFlags = CB_RESPONSE_OK;
++            response.common.dataLen = (UINT32)((length + 1) * sizeof(WCHAR));
++            response.requestedFormatData = (const BYTE *)wide;
++        }
++    }
++    UINT result = clip->ClientFormatDataResponse(clip, &response);
++    free(wide); free(text); return result;
++}
++static UINT receive_data(CliprdrClientContext *clip, const CLIPRDR_FORMAT_DATA_RESPONSE *response)
++{
++    if (!(response->common.msgFlags & CB_RESPONSE_OK)) return CHANNEL_RC_OK;
++    size_t bytes = response->common.dataLen;
++    if (!response->requestedFormatData || bytes < 2 || bytes > 2097152 || (bytes & 1)) return ERROR_INVALID_DATA;
++    WCHAR *wide = calloc(1, bytes + 2);
++    if (!wide) return ERROR_OUTOFMEMORY;
++    memcpy(wide, response->requestedFormatData, bytes);
++    char *text = ConvertWCharToUtf8Alloc(wide, NULL); free(wide);
++    if (!text) return ERROR_INVALID_DATA;
++    tfContext *tf = clip->custom;
++    EnterCriticalSection(&tf->clip_lock);
++    int stored = native_clipboard_write(text);
++    if (stored) { free(tf->clip_last); tf->clip_last = text; text = NULL; }
++    LeaveCriticalSection(&tf->clip_lock);
++    free(text); return stored ? CHANNEL_RC_OK : ERROR_WRITE_FAULT;
++}
++void adt_clipboard_attach(tfContext *tf, CliprdrClientContext *clip)
++{
++    EnterCriticalSection(&tf->clip_lock);
++    tf->clip = clip; clip->custom = tf;
++    clip->MonitorReady = ready; clip->ServerFormatList = formats;
++    clip->ServerFormatDataRequest = request_data; clip->ServerFormatDataResponse = receive_data;
++    LeaveCriticalSection(&tf->clip_lock);
++}
++void adt_clipboard_detach(tfContext *tf)
++{
++    EnterCriticalSection(&tf->clip_lock);
++    tf->clip = NULL; tf->clip_ready = FALSE;
++    free(tf->clip_last); tf->clip_last = NULL;
++    LeaveCriticalSection(&tf->clip_lock);
++}
++void adt_clipboard_poll(tfContext *tf)
++{
++    UINT64 now = GetTickCount64();
++    if (now - tf->clip_polled < 500) return;
++    tf->clip_polled = now;
++    EnterCriticalSection(&tf->clip_lock);
++    if (tf->clip && tf->clip_ready) {
++        char *text = native_clipboard_read();
++        if (text && (!tf->clip_last || strcmp(text, tf->clip_last))) {
++            if (announce(tf->clip) == CHANNEL_RC_OK) { free(tf->clip_last); tf->clip_last = text; text = NULL; }
++        }
++        free(text);
++    }
++    LeaveCriticalSection(&tf->clip_lock);
++}
+diff --git a/client/AROS/clipboard.h b/client/AROS/clipboard.h
+new file mode 100644
+index 0000000..514e9fd
+--- /dev/null
++++ b/client/AROS/clipboard.h
+@@ -0,0 +1,7 @@
++#ifndef ADT_CLIPBOARD_H
++#define ADT_CLIPBOARD_H
++#include "tf_freerdp.h"
++void adt_clipboard_attach(tfContext *tf, CliprdrClientContext *clip);
++void adt_clipboard_detach(tfContext *tf);
++void adt_clipboard_poll(tfContext *tf);
++#endif
+diff --git a/client/AROS/clipboard_native.c b/client/AROS/clipboard_native.c
+new file mode 100644
+index 0000000..63eaf50
+--- /dev/null
++++ b/client/AROS/clipboard_native.c
+@@ -0,0 +1,56 @@
++#include <exec/types.h>
++#include <libraries/iffparse.h>
++#include <datatypes/textclass.h>
++#include <proto/iffparse.h>
++#include <stdlib.h>
++#include <string.h>
++#include "native.h"
++char *native_clipboard_read(void)
++{
++    char *text = NULL;
++    struct IFFHandle *iff = AllocIFF();
++    if (!iff) return NULL;
++    iff->iff_Stream = (IPTR)OpenClipboard(0);
++    if (iff->iff_Stream) {
++        InitIFFasClip(iff);
++        if (!OpenIFF(iff, IFFF_READ)) {
++            if (!StopChunk(iff, ID_FTXT, ID_CHRS) && !ParseIFF(iff, IFFPARSE_SCAN)) {
++                struct ContextNode *chunk = CurrentChunk(iff);
++                if (chunk && chunk->cn_Type == ID_FTXT && chunk->cn_ID == ID_CHRS &&
++                    chunk->cn_Size >= 0 && chunk->cn_Size <= 1048576) {
++                    text = calloc(1, (size_t)chunk->cn_Size + 1);
++                    if (text && ReadChunkBytes(iff, text, chunk->cn_Size) != chunk->cn_Size) {
++                        free(text); text = NULL;
++                    }
++                }
++            }
++            CloseIFF(iff);
++        }
++        CloseClipboard((struct ClipboardHandle *)iff->iff_Stream);
++    }
++    FreeIFF(iff); return text;
++}
++int native_clipboard_write(const char *text)
++{
++    if (!text || strlen(text) > 1048576) return 0;
++    int result = 0;
++    struct IFFHandle *iff = AllocIFF();
++    if (!iff) return 0;
++    iff->iff_Stream = (IPTR)OpenClipboard(0);
++    if (iff->iff_Stream) {
++        InitIFFasClip(iff);
++        if (!OpenIFF(iff, IFFF_WRITE)) {
++            if (!PushChunk(iff, ID_FTXT, ID_FORM, IFFSIZE_UNKNOWN)) {
++                if (!PushChunk(iff, ID_FTXT, ID_CHRS, IFFSIZE_UNKNOWN)) {
++                    size_t size = strlen(text);
++                    result = WriteChunkBytes(iff, (void *)text, size) == size;
++                    if (PopChunk(iff)) result = 0;
++                }
++                if (PopChunk(iff)) result = 0;
++            }
++            CloseIFF(iff);
++        }
++        CloseClipboard((struct ClipboardHandle *)iff->iff_Stream);
++    }
++    FreeIFF(iff); return result;
++}
+diff --git a/client/AROS/display.c b/client/AROS/display.c
+new file mode 100644
+index 0000000..d11df31
+--- /dev/null
++++ b/client/AROS/display.c
+@@ -0,0 +1,48 @@
++#include "display.h"
++#include <winpr/sysinfo.h>
++#include <freerdp/log.h>
++static UINT capabilities(DispClientContext *disp, UINT32 monitors, UINT32 a, UINT32 b)
++{
++    tfContext *tf=disp->custom;
++    if (!tf) return CHANNEL_RC_OK;
++    EnterCriticalSection(&tf->clip_lock);
++    tf->disp_area=(UINT64)a*b;
++    tf->disp_ready=monitors>0 && tf->disp_area>=40000;
++    LeaveCriticalSection(&tf->clip_lock);
++    return CHANNEL_RC_OK;
++}
++void adt_display_attach(tfContext *tf, DispClientContext *disp)
++{
++    if (!disp) return;
++    EnterCriticalSection(&tf->clip_lock);
++    tf->disp=disp; tf->disp_ready=FALSE;
++    disp->custom=tf; disp->DisplayControlCaps=capabilities;
++    LeaveCriticalSection(&tf->clip_lock);
++}
++void adt_display_detach(tfContext *tf)
++{
++    EnterCriticalSection(&tf->clip_lock);
++    if (tf->disp) { tf->disp->custom=NULL; tf->disp->DisplayControlCaps=NULL; }
++    tf->disp=NULL; tf->disp_ready=FALSE;
++    LeaveCriticalSection(&tf->clip_lock);
++}
++void adt_display_resize(tfContext *tf, UINT32 width, UINT32 height)
++{
++    if (!freerdp_settings_get_bool(tf->common.context.settings, FreeRDP_DynamicResolutionUpdate)) return;
++    if (width<200 || width>8192 || height<200 || height>8192) return;
++    tf->resize_width=width & ~1U; tf->resize_height=height; tf->resize_changed=GetTickCount64();
++}
++void adt_display_poll(tfContext *tf)
++{
++    if (!tf->resize_width || GetTickCount64()-tf->resize_changed<250) return;
++    EnterCriticalSection(&tf->clip_lock);
++    if (tf->disp && tf->disp_ready && (UINT64)tf->resize_width*tf->resize_height<=tf->disp_area) {
++        DISPLAY_CONTROL_MONITOR_LAYOUT m={0};
++        m.Flags=DISPLAY_CONTROL_MONITOR_PRIMARY; m.Width=tf->resize_width; m.Height=tf->resize_height;
++        m.PhysicalWidth=300; m.PhysicalHeight=200; m.DesktopScaleFactor=100; m.DeviceScaleFactor=100;
++        UINT rc=tf->disp->SendMonitorLayout(tf->disp,1,&m);
++        WLog_INFO("com.freerdp.client.aros", "Display resize %ux%u status=%u",m.Width,m.Height,rc);
++        tf->resize_width=0;
++    }
++    LeaveCriticalSection(&tf->clip_lock);
++}
+diff --git a/client/AROS/display.h b/client/AROS/display.h
+new file mode 100644
+index 0000000..bef74d7
+--- /dev/null
++++ b/client/AROS/display.h
+@@ -0,0 +1,8 @@
++#ifndef ADT_RDP_DISPLAY_H
++#define ADT_RDP_DISPLAY_H
++#include "tf_freerdp.h"
++void adt_display_attach(tfContext *tf, DispClientContext *disp);
++void adt_display_detach(tfContext *tf);
++void adt_display_resize(tfContext *tf, UINT32 width, UINT32 height);
++void adt_display_poll(tfContext *tf);
++#endif
+diff --git a/client/AROS/input.c b/client/AROS/input.c
+new file mode 100644
+index 0000000..84d17d0
+--- /dev/null
++++ b/client/AROS/input.c
+@@ -0,0 +1,104 @@
++#include "input.h"
++uint16_t adt_raw_scancode(uint32_t raw)
++{
++    static const uint16_t codes[128] = {
++        [0x00] = 0x029,
++        [0x01] = 0x002,
++        [0x02] = 0x003,
++        [0x03] = 0x004,
++        [0x04] = 0x005,
++        [0x05] = 0x006,
++        [0x06] = 0x007,
++        [0x07] = 0x008,
++        [0x08] = 0x009,
++        [0x09] = 0x00a,
++        [0x0a] = 0x00b,
++        [0x0b] = 0x00c,
++        [0x0c] = 0x00d,
++        [0x0d] = 0x02b,
++        [0x10] = 0x010,
++        [0x11] = 0x011,
++        [0x12] = 0x012,
++        [0x13] = 0x013,
++        [0x14] = 0x014,
++        [0x15] = 0x015,
++        [0x16] = 0x016,
++        [0x17] = 0x017,
++        [0x18] = 0x018,
++        [0x19] = 0x019,
++        [0x1a] = 0x01a,
++        [0x1b] = 0x01b,
++        [0x20] = 0x01e,
++        [0x21] = 0x01f,
++        [0x22] = 0x020,
++        [0x23] = 0x021,
++        [0x24] = 0x022,
++        [0x25] = 0x023,
++        [0x26] = 0x024,
++        [0x27] = 0x025,
++        [0x28] = 0x026,
++        [0x29] = 0x027,
++        [0x2a] = 0x028,
++        [0x30] = 0x056,
++        [0x31] = 0x02c,
++        [0x32] = 0x02d,
++        [0x33] = 0x02e,
++        [0x34] = 0x02f,
++        [0x35] = 0x030,
++        [0x36] = 0x031,
++        [0x37] = 0x032,
++        [0x38] = 0x033,
++        [0x39] = 0x034,
++        [0x3a] = 0x035,
++        [0x40] = 0x039,
++        [0x41] = 0x00e,
++        [0x42] = 0x00f,
++        [0x43] = 0x11c,
++        [0x44] = 0x01c,
++        [0x45] = 0x001,
++        [0x46] = 0x153,
++        [0x4b] = 0x057,
++        [0x4c] = 0x148,
++        [0x4d] = 0x150,
++        [0x4e] = 0x14d,
++        [0x4f] = 0x14b,
++        [0x50] = 0x03b,
++        [0x51] = 0x03c,
++        [0x52] = 0x03d,
++        [0x53] = 0x03e,
++        [0x54] = 0x03f,
++        [0x55] = 0x040,
++        [0x56] = 0x041,
++        [0x57] = 0x042,
++        [0x58] = 0x043,
++        [0x59] = 0x044,
++        [0x60] = 0x02a,
++        [0x61] = 0x036,
++        [0x62] = 0x03a,
++        [0x63] = 0x01d,
++        [0x64] = 0x038,
++        [0x65] = 0x138,
++        [0x66] = 0x15b,
++        [0x67] = 0x15c,
++        [0x6f] = 0x058,
++        [0x0f] = 0x052,
++        [0x1d] = 0x04f,
++        [0x1e] = 0x050,
++        [0x1f] = 0x051,
++        [0x2d] = 0x04b,
++        [0x2e] = 0x04c,
++        [0x2f] = 0x04d,
++        [0x3c] = 0x053,
++        [0x3d] = 0x047,
++        [0x3e] = 0x048,
++        [0x3f] = 0x049,
++        [0x4a] = 0x04a,
++        [0x5e] = 0x04e,
++        [0x5c] = 0x135,
++        [0x5d] = 0x037,
++        [0x6b] = 0x046,
++        [0x6c] = 0x137,
++        [0x6d] = 0x045,
++    };
++    return raw <= 255 ? codes[raw & 127] : 0;
++}
+diff --git a/client/AROS/input.h b/client/AROS/input.h
+new file mode 100644
+index 0000000..b3a3a13
+--- /dev/null
++++ b/client/AROS/input.h
+@@ -0,0 +1,5 @@
++#ifndef ADT_RDP_INPUT_H
++#define ADT_RDP_INPUT_H
++#include <stdint.h>
++uint16_t adt_raw_scancode(uint32_t raw);
++#endif
+diff --git a/client/AROS/make-icon.c b/client/AROS/make-icon.c
+new file mode 100644
+index 0000000..5e653eb
+--- /dev/null
++++ b/client/AROS/make-icon.c
+@@ -0,0 +1,37 @@
++/* Generate a native tool icon with the stack size used during qualification. */
++#include <proto/icon.h>
++#include <workbench/workbench.h>
++#include <stdio.h>
++#include <string.h>
++
++int main(int argc, char **argv)
++{
++    if (argc < 2) { puts("Usage: MakeIcon program [HEX]"); return 20; }
++    struct DiskObject *icon = GetDefDiskObject(WBTOOL);
++    if (!icon) return 20;
++    icon->do_StackSize = 4194304;
++    int ok = PutDiskObject(argv[1], icon);
++    FreeDiskObject(icon);
++    if (!ok) return 20;
++    icon = GetDiskObject(argv[1]);
++    if (!icon) return 20;
++    ok = icon->do_StackSize == 4194304;
++    FreeDiskObject(icon);
++    if (!ok) return 20;
++    puts("ICON_STACK=4194304");
++    if (argc > 2 && !strcmp(argv[2], "HEX")) {
++        char path[1024];
++        if (snprintf(path, sizeof(path), "%s.info", argv[1]) >= (int)sizeof(path)) return 20;
++        FILE *f = fopen(path, "rb");
++        if (!f) return 20;
++        unsigned char bytes[64]; size_t n;
++        while ((n = fread(bytes, 1, sizeof(bytes), f)) != 0) {
++            fputs("ICON_HEX=", stdout);
++            for (size_t i = 0; i < n; i++) printf("%02x", bytes[i]);
++            putchar('\n');
++        }
++        ok = !ferror(f); fclose(f);
++        if (!ok) return 20;
++    }
++    return 0;
++}
+diff --git a/client/AROS/native.c b/client/AROS/native.c
+new file mode 100644
+index 0000000..1339307
+--- /dev/null
++++ b/client/AROS/native.c
+@@ -0,0 +1,411 @@
++/* ADT AROS native desktop backend. */
++#include "native.h"
++#include "profile.h"
++#include "vault.h"
++#include <sys/stat.h>
++#include <stdlib.h>
++#include <intuition/intuition.h>
++#include <proto/exec.h>
++#include <proto/dos.h>
++#include <proto/intuition.h>
++#include <proto/cybergraphics.h>
++#include <cybergraphx/cybergraphics.h>
++int native_desktop_size(uint32_t *width, uint32_t *height)
++{
++    struct Screen *screen = LockPubScreen(NULL);
++    if (!screen) return 0;
++    *width = screen->Width > 340 ? screen->Width - 20 : 320;
++    *height = screen->Height > 280 ? screen->Height - 40 : 240;
++    UnlockPubScreen(NULL, screen); return 1;
++}
++int native_screen_size(uint32_t *width, uint32_t *height)
++{
++    struct Screen *screen=LockPubScreen(NULL); if (!screen) return 0;
++    *width=screen->Width; *height=screen->Height; UnlockPubScreen(NULL,screen); return 1;
++}
++struct native_window { struct Window *window; int fullscreen, resize; uint32_t saved_width, saved_height; };
++static struct Window *open_desktop(uint32_t width, uint32_t height, int fullscreen, int resize)
++{
++    struct Screen *screen = LockPubScreen(NULL);
++    if (!screen) return NULL;
++    if (fullscreen) { width = screen->Width; height = screen->Height; }
++    struct Window *w = OpenWindowTags(NULL, WA_Title, (IPTR)(fullscreen ? NULL : "ADT Remote Desktop - Ctrl+Alt+Enter: fullscreen"),
++        WA_PubScreen, (IPTR)screen, WA_Left, 0, WA_Top, 0,
++        WA_InnerWidth, width, WA_InnerHeight, height,
++        WA_Borderless, fullscreen, WA_DragBar, !fullscreen, WA_DepthGadget, !fullscreen,
++        WA_CloseGadget, !fullscreen, WA_SizeGadget, resize && !fullscreen,
++        WA_MinWidth, 200, WA_MinHeight, 200, WA_MaxWidth, screen->Width, WA_MaxHeight, screen->Height,
++        WA_Activate, TRUE, WA_ReportMouse, TRUE,
++        WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_RAWKEY | IDCMP_MOUSEBUTTONS |
++                  IDCMP_MOUSEMOVE | IDCMP_REFRESHWINDOW | IDCMP_INACTIVEWINDOW | IDCMP_NEWSIZE,
++        TAG_DONE);
++    UnlockPubScreen(NULL, screen); return w;
++}
++struct native_window *native_open(uint32_t width, uint32_t height, int fullscreen, int resize)
++{
++    struct native_window *n = calloc(1, sizeof(*n));
++    if (!n) return NULL;
++    n->saved_width=width; n->saved_height=height; n->fullscreen=fullscreen; n->resize=resize;
++    if (fullscreen) native_desktop_size(&n->saved_width,&n->saved_height);
++    n->window=open_desktop(width,height,fullscreen,resize);
++    if (!n->window) { free(n); return NULL; }
++    return n;
++}
++int native_toggle_fullscreen(struct native_window *n, uint32_t *width, uint32_t *height)
++{
++    if (!n || !n->window) return 0;
++    if (!n->fullscreen) {
++        n->saved_width=n->window->Width-n->window->BorderLeft-n->window->BorderRight;
++        n->saved_height=n->window->Height-n->window->BorderTop-n->window->BorderBottom;
++    }
++    struct Window *next=open_desktop(n->saved_width,n->saved_height,!n->fullscreen,n->resize);
++    if (!next) return 0;
++    struct Message *m; while ((m=GetMsg(n->window->UserPort))) ReplyMsg(m);
++    CloseWindow(n->window); n->window=next; n->fullscreen=!n->fullscreen;
++    *width=next->Width-next->BorderLeft-next->BorderRight;
++    *height=next->Height-next->BorderTop-next->BorderBottom;
++    return 1;
++}
++void native_close(struct native_window *n)
++{
++    if (!n) return;
++    if (n->window) {
++        struct Message *message;
++        while ((message = GetMsg(n->window->UserPort))) ReplyMsg(message);
++        CloseWindow(n->window);
++    }
++    free(n);
++}
++int native_poll(struct native_window *n, struct native_event *event)
++{
++    struct IntuiMessage *msg = (struct IntuiMessage *)GetMsg(n->window->UserPort);
++    if (!msg) return 0;
++    event->kind = 0; event->code = msg->Code; event->qualifier = msg->Qualifier;
++    event->x = msg->MouseX - n->window->BorderLeft;
++    event->y = msg->MouseY - n->window->BorderTop;
++    switch (msg->Class) {
++    case IDCMP_CLOSEWINDOW: event->kind = 1; break;
++    case IDCMP_INACTIVEWINDOW: event->kind = 6; break;
++    case IDCMP_NEWSIZE:
++        event->kind=7;
++        event->x=n->window->Width-n->window->BorderLeft-n->window->BorderRight;
++        event->y=n->window->Height-n->window->BorderTop-n->window->BorderBottom;
++        break;
++    case IDCMP_RAWKEY: event->kind = 2; break;
++    case IDCMP_MOUSEMOVE: event->kind = 3; break;
++    case IDCMP_MOUSEBUTTONS: event->kind = 4; break;
++    case IDCMP_REFRESHWINDOW:
++        BeginRefresh(n->window); EndRefresh(n->window, TRUE);
++        event->kind = 5; break;
++    }
++    ReplyMsg((struct Message *)msg);
++    return 1;
++}
++int native_paint(struct native_window *n, const void *pixels, uint32_t width,
++                 uint32_t height, uint32_t stride)
++{
++    if (!n || !pixels || width > 65535 || height > 65535 || stride > 65535) return 0;
++    uint32_t w = n->window->Width - n->window->BorderLeft - n->window->BorderRight;
++    uint32_t h = n->window->Height - n->window->BorderTop - n->window->BorderBottom;
++    if (width < w) w = width;
++    if (height < h) h = height;
++    WritePixelArray((void *)pixels, 0, 0, stride, n->window->RPort,
++        n->window->BorderLeft, n->window->BorderTop, w, h, RECTFMT_BGRA32);
++    return 1;
++}
++
++#include <stdio.h>
++#include <string.h>
++#include <libraries/mui.h>
++#include <proto/muimaster.h>
++#include <clib/alib_protos.h>
++/* MUI owns the masked field only while this modal dialog is open. */
++static Object *field(const char *text, int secret)
++{
++    return MUI_NewObject(MUIC_String, MUIA_Frame, MUIV_Frame_String,
++        MUIA_String_MaxLen, 512, MUIA_String_Secret, secret,
++        MUIA_String_Contents, (IPTR)(text ? text : ""), TAG_DONE);
++}
++static Object *label(const char *text)
++{
++    return MUI_NewObject(MUIC_Text, MUIA_Text_Contents, (IPTR)text, TAG_DONE);
++}
++static void clear_secret(char *secret)
++{
++    if (!secret) return;
++    volatile char *q = secret; size_t n = strlen(secret);
++    while (n--) *q++ = 0;
++    free(secret);
++}
++static const char *field_text(Object *o)
++{
++    IPTR value=0; GetAttr(MUIA_String_Contents,o,&value); return value ? (const char *)value : "";
++}
++void native_error(const char *message)
++{
++    struct EasyStruct easy={sizeof(easy),0,"Remote Desktop settings","%s","OK"};
++    IPTR args[]={(IPTR)message}; EasyRequestArgs(NULL,&easy,NULL,(RAWARG)args);
++}
++/* The unlocking password exists only in masked widgets and temporary memory. */
++static void wipe_field(Object *object)
++{
++    char *text=(char *)field_text(object);volatile char *q=text;size_t n=strlen(text);
++    while(n--)*q++=0;
++    SetAttrs(object,MUIA_String_Contents,(IPTR)"",TAG_DONE);
++}
++static int unlock_password(int saving,char output[512])
++{
++    output[0]=0;
++    Object *first=field("",1),*second=saving?field("",1):NULL;
++    Object *accept=MUI_MakeObject(MUIO_Button,(IPTR)(saving?"Save":"Unlock"));
++    Object *cancel=MUI_MakeObject(MUIO_Button,(IPTR)"Cancel");
++    Object *fields=MUI_NewObject(MUIC_Group,MUIA_Group_Columns,2,
++        MUIA_Group_Child,(IPTR)label("Master password"),MUIA_Group_Child,(IPTR)first,TAG_DONE);
++    if(saving){DoMethod(fields,OM_ADDMEMBER,(IPTR)label("Confirm master password"));DoMethod(fields,OM_ADDMEMBER,(IPTR)second);}
++    Object *buttons=MUI_NewObject(MUIC_Group,MUIA_Group_Horiz,TRUE,
++        MUIA_Group_Child,(IPTR)accept,MUIA_Group_Child,(IPTR)cancel,TAG_DONE);
++    Object *group=MUI_NewObject(MUIC_Group,MUIA_Group_Child,(IPTR)fields,MUIA_Group_Child,(IPTR)buttons,TAG_DONE);
++    Object *win=MUI_NewObject(MUIC_Window,MUIA_Window_Title,(IPTR)(saving?"Save password":"Unlock saved password"),
++        MUIA_Window_Width,400,MUIA_Window_RootObject,(IPTR)group,TAG_DONE);
++    Object *app=MUI_NewObject(MUIC_Application,MUIA_Application_Title,(IPTR)"Remote Desktop",MUIA_Application_Window,(IPTR)win,TAG_DONE);
++    if(!app){if(win)MUI_DisposeObject(win);else if(group)MUI_DisposeObject(group);return 0;}
++    DoMethod(accept,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,1);
++    DoMethod(cancel,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,2);
++    DoMethod(win,MUIM_Notify,MUIA_Window_CloseRequest,TRUE,(IPTR)app,2,MUIM_Application_ReturnID,2);
++    SetAttrs(win,MUIA_Window_Open,TRUE,TAG_DONE);
++    IPTR opened=0;GetAttr(MUIA_Window_Open,win,&opened);int result=0;
++    while(opened){
++        ULONG signals=0;IPTR id=DoMethod(app,MUIM_Application_NewInput,(IPTR)&signals);
++        if(id==1){
++            const char *text=field_text(first);size_t n=strlen(text);
++            if(!n || n>511){native_error("Enter a master password to protect the saved password.");continue;}
++            if(saving && strcmp(text,field_text(second))){native_error("The master passwords do not match.");continue;}
++            memcpy(output,text,n+1);result=1;break;
++        }
++        if(id==2 || id==MUIV_Application_ReturnID_Quit)break;
++        if(signals && (Wait(signals|SIGBREAKF_CTRL_C)&SIGBREAKF_CTRL_C))break;
++    }
++    wipe_field(first);if(second)wipe_field(second);
++    SetAttrs(win,MUIA_Window_Open,FALSE,TAG_DONE);MUI_DisposeObject(app);return result;
++}
++static void wipe_buffer(char *buffer,size_t size)
++{
++    volatile char *p=buffer;while(size--)*p++=0;
++}
++static int directory_path(const char *text,char output[260])
++{
++    output[0]=0;
++    if (!*text) return 1;
++    if (strlen(text)>259 || strchr(text,',')) return 0;
++    BPTR lock=Lock((CONST_STRPTR)text,ACCESS_READ); if (!lock) return 0;
++    struct FileInfoBlock *info=AllocDosObject(DOS_FIB,NULL);
++    int ok=info && Examine(lock,info) && info->fib_DirEntryType>0 &&
++        NameFromLock(lock,(STRPTR)output,260) && !strchr(output,',');
++    if (info) FreeDosObject(DOS_FIB,info);
++    UnLock(lock); return ok;
++}
++static int native_form(char **host, char **user, char **password, char **domain, int editable, struct native_options *options)
++{
++    Object *server = field(*host, 0);
++    if (server && !editable) SetAttrs(server, MUIA_Disabled, TRUE, TAG_DONE);
++    Object *u = field(*user, 0), *p = field("", 1), *d = field(*domain, 0);
++    Object *ok = MUI_MakeObject(MUIO_Button, (IPTR)"Connect");
++    Object *cancel = MUI_MakeObject(MUIO_Button, (IPTR)"Cancel");
++    if (!server || !u || !p || !d || !ok || !cancel) {
++        if (server) MUI_DisposeObject(server);
++        if (u) MUI_DisposeObject(u); if (p) MUI_DisposeObject(p);
++        if (d) MUI_DisposeObject(d); if (ok) MUI_DisposeObject(ok);
++        if (cancel) MUI_DisposeObject(cancel); return 0;
++    }
++    Object *checks[7] = {0};
++    Object *profile_name=NULL, *pin=NULL, *load=NULL, *save=NULL, *profiles=NULL, *directory=NULL;
++    Object *remember=NULL;
++    Object *sharing = NULL;
++    if (options) {
++        for (unsigned i = 0; i < 7; i++) checks[i] = MUI_MakeObject(MUIO_Checkmark, (IPTR)NULL);
++        if (!checks[0] || !checks[1] || !checks[2] || !checks[3] || !checks[4] || !checks[5] || !checks[6]) {
++            for (unsigned i = 0; i < 7; i++) if (checks[i]) MUI_DisposeObject(checks[i]);
++            MUI_DisposeObject(server); MUI_DisposeObject(u); MUI_DisposeObject(p);
++            MUI_DisposeObject(d); MUI_DisposeObject(ok); MUI_DisposeObject(cancel); return 0;
++        }
++        sharing = MUI_NewObject(MUIC_Group, MUIA_Group_Columns, 2,
++            MUIA_Group_Child, (IPTR)checks[0], MUIA_Group_Child, (IPTR)label("Share text clipboard"),
++            MUIA_Group_Child, (IPTR)checks[1], MUIA_Group_Child, (IPTR)label("Play remote audio"),
++            MUIA_Group_Child, (IPTR)checks[2], MUIA_Group_Child, (IPTR)label("Share microphone"),
++            MUIA_Group_Child, (IPTR)checks[3], MUIA_Group_Child, (IPTR)label("Share printer (text only)"),
++            MUIA_Group_Child, (IPTR)checks[4], MUIA_Group_Child, (IPTR)label("Fullscreen (Ctrl+Alt+Enter)"),
++            MUIA_Group_Child, (IPTR)checks[5], MUIA_Group_Child, (IPTR)label("Resize remote desktop"),
++            MUIA_Group_Child, (IPTR)checks[6], MUIA_Group_Child, (IPTR)label("Share printer (PDF/XPS documents)"), TAG_DONE);
++        remember=MUI_MakeObject(MUIO_Checkmark,(IPTR)NULL);
++        DoMethod(sharing,OM_ADDMEMBER,(IPTR)remember);
++        DoMethod(sharing,OM_ADDMEMBER,(IPTR)label("Remember password"));
++        profile_name=field("default",0); pin=field("",0); directory=field("",0);
++        load=MUI_MakeObject(MUIO_Button,(IPTR)"Load profile");
++        save=MUI_MakeObject(MUIO_Button,(IPTR)"Save profile");
++        profiles=MUI_NewObject(MUIC_Group,MUIA_Group_Columns,2,
++            MUIA_Group_Child,(IPTR)label("Profile name"),MUIA_Group_Child,(IPTR)profile_name,
++            MUIA_Group_Child,(IPTR)load,MUIA_Group_Child,(IPTR)save,
++            MUIA_Group_Child,(IPTR)label("SHA-256 pin (optional)"),MUIA_Group_Child,(IPTR)pin,
++            MUIA_Group_Child,(IPTR)label("Shared folder (blank = off)"),MUIA_Group_Child,(IPTR)directory,TAG_DONE);
++    }
++    if (!sharing) sharing = MUI_NewObject(MUIC_Group, TAG_DONE);
++    if (!profiles) profiles = MUI_NewObject(MUIC_Group, TAG_DONE);
++    Object *fields = MUI_NewObject(MUIC_Group, MUIA_Group_Columns, 2,
++        MUIA_Group_Child, (IPTR)label("Server"), MUIA_Group_Child, (IPTR)server,
++        MUIA_Group_Child, (IPTR)label("Username"), MUIA_Group_Child, (IPTR)u,
++        MUIA_Group_Child, (IPTR)label("Password"), MUIA_Group_Child, (IPTR)p,
++        MUIA_Group_Child, (IPTR)label("Domain (optional)"), MUIA_Group_Child, (IPTR)d, TAG_DONE);
++    Object *actions=MUI_NewObject(MUIC_Group, MUIA_Group_Horiz, TRUE,
++        MUIA_Group_Child,(IPTR)ok, MUIA_Group_Child,(IPTR)cancel, TAG_DONE);
++    Object *group=MUI_NewObject(MUIC_Group,
++        MUIA_Group_Child,(IPTR)profiles,
++        MUIA_Group_Child,(IPTR)fields,
++        MUIA_Group_Child, (IPTR)sharing,
++        MUIA_Group_Child, (IPTR)actions, TAG_DONE);
++    Object *win = MUI_NewObject(MUIC_Window, MUIA_Window_Title, (IPTR)"Remote Desktop login",
++        MUIA_Window_Width, 520, MUIA_Window_RootObject, (IPTR)group, TAG_DONE);
++    Object *app = MUI_NewObject(MUIC_Application, MUIA_Application_Title,
++        (IPTR)"Remote Desktop", MUIA_Application_Window, (IPTR)win, TAG_DONE);
++    if (!app) { if (win) MUI_DisposeObject(win); else if (group) MUI_DisposeObject(group); return 0; }
++    DoMethod(ok, MUIM_Notify, MUIA_Pressed, FALSE, (IPTR)app, 2, MUIM_Application_ReturnID, 1);
++    DoMethod(cancel, MUIM_Notify, MUIA_Pressed, FALSE, (IPTR)app, 2, MUIM_Application_ReturnID, 2);
++    DoMethod(win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, (IPTR)app, 2, MUIM_Application_ReturnID, 2);
++    if (options) {
++        DoMethod(load,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,3);
++        DoMethod(save,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,4);
++    }
++    SetAttrs(win, MUIA_Window_Open, TRUE, TAG_DONE);
++    IPTR opened = 0; GetAttr(MUIA_Window_Open, win, &opened);
++    int result = 0;
++    while (opened) {
++        ULONG signals = 0; IPTR id = DoMethod(app, MUIM_Application_NewInput, (IPTR)&signals);
++        char canonical_directory[260]={0};
++        if (options && (id==1 || id==4)) {
++            IPTR text_print=0, document_print=0;
++            GetAttr(MUIA_Selected,checks[3],&text_print);GetAttr(MUIA_Selected,checks[6],&document_print);
++            if (text_print && document_print) { native_error("Choose either text or document printer sharing."); continue; }
++            if (!directory_path(field_text(directory),canonical_directory)) {
++                native_error("Choose an existing shared folder without commas, or leave it blank to disable folder sharing."); continue;
++            }
++        }
++        if (options && (id==3 || id==4)) {
++            const char *name=field_text(profile_name);
++            if (!adt_profile_name_valid(name)) { native_error("Use 1-48 letters, digits, underscores or hyphens for a profile name."); continue; }
++            char path[128]; snprintf(path,sizeof(path),"PROGDIR:Profiles/%s.conf",name);
++            struct adt_profile settings={0};
++            if (id==3) {
++                if (!adt_profile_load(path,&settings)) { native_error("Cannot load profile: missing file or invalid settings."); continue; }
++                char loaded_password[512]={0},unlock[512]={0};
++                if(*settings.password_blob){
++                    if(!unlock_password(0,unlock))continue;
++                    int unlocked=adt_password_open(&settings,unlock,loaded_password);
++                    wipe_buffer(unlock,sizeof(unlock));
++                    if(!unlocked){wipe_buffer(loaded_password,sizeof(loaded_password));native_error("Cannot unlock the saved password.\nCheck the master password or restore an unchanged profile.");continue;}
++                }
++                char *old_secret=(char *)field_text(p);
++                volatile char *wipe=old_secret; size_t left=strlen(old_secret);
++                while (left--) *wipe++=0;
++                SetAttrs(p,MUIA_String_Contents,(IPTR)loaded_password,TAG_DONE);
++                wipe_buffer(loaded_password,sizeof(loaded_password));
++                SetAttrs(remember,MUIA_Selected,!!*settings.password_blob,TAG_DONE);
++                SetAttrs(server,MUIA_String_Contents,(IPTR)settings.host,TAG_DONE);
++                SetAttrs(u,MUIA_String_Contents,(IPTR)settings.user,TAG_DONE);
++                SetAttrs(d,MUIA_String_Contents,(IPTR)settings.domain,TAG_DONE);
++                SetAttrs(pin,MUIA_String_Contents,(IPTR)settings.options.fingerprint,TAG_DONE);
++                SetAttrs(directory,MUIA_String_Contents,(IPTR)settings.options.directory,TAG_DONE);
++                int values[]={settings.options.clipboard,settings.options.sound,settings.options.microphone,
++                    settings.options.printer,settings.options.fullscreen,settings.options.resize,settings.options.documents};
++                for (unsigned i=0;i<7;i++) SetAttrs(checks[i],MUIA_Selected,values[i],TAG_DONE);
++                native_error(*settings.password_blob ? "Profile and saved password loaded." : "Profile loaded. Enter your password to connect.");
++            } else {
++                snprintf(settings.host,sizeof(settings.host),"%s",field_text(server));
++                snprintf(settings.user,sizeof(settings.user),"%s",field_text(u));
++                snprintf(settings.domain,sizeof(settings.domain),"%s",field_text(d));
++                const char *fingerprint=field_text(pin);
++                if (strlen(fingerprint)>64) { native_error("A SHA-256 pin must contain exactly 64 hexadecimal digits."); continue; }
++                strcpy(settings.options.fingerprint,fingerprint);
++                strcpy(settings.options.directory,canonical_directory);
++                IPTR selected[7]={0}; for (unsigned i=0;i<7;i++) GetAttr(MUIA_Selected,checks[i],&selected[i]);
++                settings.options.clipboard=!!selected[0]; settings.options.sound=!!selected[1];
++                settings.options.microphone=!!selected[2]; settings.options.printer=!!selected[3];
++                settings.options.fullscreen=!!selected[4]; settings.options.resize=!!selected[5]; settings.options.documents=!!selected[6];
++                IPTR save_password=0;GetAttr(MUIA_Selected,remember,&save_password);
++                if(save_password){
++                    char unlock[512]={0};if(!unlock_password(1,unlock))continue;
++                    int sealed=adt_password_seal(&settings,unlock,field_text(p),settings.password_blob);
++                    wipe_buffer(unlock,sizeof(unlock));
++                    if(!sealed){native_error("Cannot save the password. The existing profile has not been changed.");continue;}
++                }
++                mkdir("PROGDIR:Profiles",0700);
++                native_error(adt_profile_save(path,&settings) ? "Profile saved." : "Cannot save settings. Check the pin and that the application folder is writable.");
++            }
++            continue;
++        }
++        if (id == 1) {
++            if (options) {
++                const char *fingerprint=field_text(pin); size_t n=strlen(fingerprint);
++                int valid=!n || n==64;
++                for (size_t i=0;valid && i<n;i++) if (!strchr("0123456789abcdefABCDEF",fingerprint[i])) valid=0;
++                if (!valid) { native_error("A SHA-256 pin must contain exactly 64 hexadecimal digits."); continue; }
++                strcpy(options->fingerprint,fingerprint);
++                strcpy(options->directory,canonical_directory);
++            }
++            IPTR ut = 0, pt = 0, dt = 0, ht = 0;
++            GetAttr(MUIA_String_Contents, server, &ht);
++            if (!ht || !*(char *)ht) continue;
++            GetAttr(MUIA_String_Contents, u, &ut); GetAttr(MUIA_String_Contents, p, &pt);
++            GetAttr(MUIA_String_Contents, d, &dt);
++            char *nh = strdup((char *)ht);
++            char *nu = strdup((char *)ut), *np = strdup((char *)pt), *nd = strdup((char *)dt);
++            if (nh && nu && np && nd) {
++                free(*host); *host = nh;
++                free(*user); clear_secret(*password); free(*domain);
++                *user = nu; *password = np; *domain = nd; result = 1;
++                if (options) {
++                    IPTR selected[7] = {0};
++                    for (unsigned i = 0; i < 7; i++) GetAttr(MUIA_Selected, checks[i], &selected[i]);
++                    options->clipboard = selected[0] != 0; options->sound = selected[1] != 0;
++                    options->microphone = selected[2] != 0; options->printer = selected[3] != 0;
++                    options->fullscreen = selected[4] != 0; options->resize = selected[5] != 0; options->documents = selected[6] != 0;
++                }
++            } else { free(nh); free(nu); clear_secret(np); free(nd); }
++            break;
++        }
++        if (id == 2 || id == MUIV_Application_ReturnID_Quit) break;
++        if (signals && (Wait(signals | SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C)) break;
++    }
++    /* Wipe the widget buffer before MUI releases its storage. */
++    IPTR secret = 0; GetAttr(MUIA_String_Contents, p, &secret);
++    if (secret) { volatile char *q = (char *)secret; size_t n = strlen((char *)secret); while (n--) *q++ = 0; }
++    SetAttrs(win, MUIA_Window_Open, FALSE, TAG_DONE);
++    MUI_DisposeObject(app);
++    return result;
++}
++
++int native_credentials(const char *host, char **user, char **password, char **domain)
++{
++    char *copy = strdup(host ? host : "");
++    if (!copy) return 0;
++    int result = native_form(&copy, user, password, domain, 0, NULL);
++    free(copy); return result;
++}
++int native_connection(char **host, char **user, char **password, char **domain, struct native_options *options)
++{
++    return native_form(host, user, password, domain, 1, options);
++}
++
++int native_confirm_certificate(const char *host, uint16_t port, const char *name,
++                               const char *fingerprint)
++{
++    if (!host || !fingerprint || strlen(fingerprint) > 128) return 0;
++    char text[1024];
++    snprintf(text, sizeof(text),
++        "Certificate validation failed.\nServer: %.160s:%u\nCertificate name: %.160s\n"
++        "Fingerprint:\n%.48s\n%.80s\n"
++        "Verify this fingerprint independently before accepting.",
++        host, (unsigned)port, name ? name : "", fingerprint,
++        strlen(fingerprint) > 48 ? fingerprint + 48 : "");
++    struct EasyStruct easy = { sizeof(easy), 0, "Remote Desktop certificate", "%s", "Accept once|Reject" };
++    IPTR args[] = {(IPTR)text};
++    return EasyRequestArgs(NULL, &easy, NULL, (RAWARG)args) == 1;
++}
+diff --git a/client/AROS/native.h b/client/AROS/native.h
+new file mode 100644
+index 0000000..58a3416
+--- /dev/null
++++ b/client/AROS/native.h
+@@ -0,0 +1,22 @@
++/* Native ABI boundary: do not include WinPR or Exec headers here. */
++#ifndef ADT_RDP_NATIVE_H
++#define ADT_RDP_NATIVE_H
++#include <stdint.h>
++struct native_window;
++struct native_event { uint32_t kind, code, qualifier; int32_t x, y; };
++int native_desktop_size(uint32_t *width, uint32_t *height);
++int native_screen_size(uint32_t *width, uint32_t *height);
++void native_error(const char *message);
++struct native_window *native_open(uint32_t width, uint32_t height, int fullscreen, int resize);
++int native_toggle_fullscreen(struct native_window *window, uint32_t *width, uint32_t *height);
++void native_close(struct native_window *window);
++int native_poll(struct native_window *window, struct native_event *event);
++int native_paint(struct native_window *window, const void *pixels, uint32_t width,
++                 uint32_t height, uint32_t stride);
++int native_credentials(const char *host, char **user, char **password, char **domain);
++struct native_options { int clipboard, sound, microphone, printer, fullscreen, resize, documents; char fingerprint[65]; char directory[260]; };
++int native_connection(char **host, char **user, char **password, char **domain, struct native_options *options);
++int native_confirm_certificate(const char *host, uint16_t port, const char *name, const char *fingerprint);
++char *native_clipboard_read(void);
++int native_clipboard_write(const char *text);
++#endif
+diff --git a/client/AROS/profile.c b/client/AROS/profile.c
+new file mode 100644
+index 0000000..8a9837e
+--- /dev/null
++++ b/client/AROS/profile.c
+@@ -0,0 +1,98 @@
++#include "profile.h"
++#include <stdio.h>
++#include <string.h>
++#include <ctype.h>
++#include <errno.h>
++#include <unistd.h>
++int adt_profile_name_valid(const char *s)
++{
++    if (!s || !*s || strlen(s) > 48) return 0;
++    for (; *s; s++) if (!isalnum((unsigned char)*s) && *s != '-' && *s != '_') return 0;
++    return 1;
++}
++static int text_valid(const char *s, size_t n)
++{
++    size_t i;
++    for (i = 0; i < n && s[i]; i++) if ((unsigned char)s[i] < 32 || (unsigned char)s[i] == 127) return 0;
++    return i < n;
++}
++static int valid(const struct adt_profile *p)
++{
++    if (!text_valid(p->host, sizeof(p->host)) || !text_valid(p->user, sizeof(p->user)) ||
++        !text_valid(p->domain, sizeof(p->domain)) || !text_valid(p->options.fingerprint, sizeof(p->options.fingerprint))) return 0;
++    if (!text_valid(p->options.directory,sizeof(p->options.directory)) || strchr(p->options.directory,',') ||
++        (p->options.printer && p->options.documents)) return 0;
++    size_t secret_len=strnlen(p->password_blob,sizeof(p->password_blob));
++    if(secret_len && (secret_len<96 || secret_len>1118 || secret_len%2))return 0;
++    for(size_t i=0;i<secret_len;i++)if(!strchr("0123456789abcdef",p->password_blob[i]))return 0;
++    if (*p->options.fingerprint) {
++        if (strlen(p->options.fingerprint) != 64) return 0;
++        for (unsigned i = 0; i < 64; i++) if (!isxdigit((unsigned char)p->options.fingerprint[i])) return 0;
++    }
++    return 1;
++}
++int adt_profile_load(const char *path, struct adt_profile *out)
++{
++    FILE *f = fopen(path, "rb"); if (!f) return 0;
++    struct adt_profile p = {0}; char line[1300]; unsigned seen = 0; int ok = 1;
++    while (fgets(line, sizeof(line), f)) {
++        size_t n = strlen(line);
++        if (!n || line[n-1] != '\n') { ok = 0; break; }
++        line[--n] = 0; if (n && line[n-1] == '\r') line[--n] = 0;
++        char *value = strchr(line, '='); if (!value) { ok = 0; break; } *value++ = 0;
++        unsigned bit = 0; char *dst = NULL; size_t cap = 0; int *flag = NULL;
++        if (!strcmp(line, "host")) { bit=1; dst=p.host; cap=sizeof(p.host); }
++        else if (!strcmp(line, "user")) { bit=2; dst=p.user; cap=sizeof(p.user); }
++        else if (!strcmp(line, "domain")) { bit=4; dst=p.domain; cap=sizeof(p.domain); }
++        else if (!strcmp(line, "fingerprint")) { bit=8; dst=p.options.fingerprint; cap=sizeof(p.options.fingerprint); }
++        else if (!strcmp(line, "clipboard")) { bit=16; flag=&p.options.clipboard; }
++        else if (!strcmp(line, "sound")) { bit=32; flag=&p.options.sound; }
++        else if (!strcmp(line, "microphone")) { bit=64; flag=&p.options.microphone; }
++        else if (!strcmp(line, "printer")) { bit=128; flag=&p.options.printer; }
++        else if (!strcmp(line, "fullscreen")) { bit=256; flag=&p.options.fullscreen; }
++        else if (!strcmp(line, "resize")) { bit=512; flag=&p.options.resize; }
++        else if (!strcmp(line, "documents")) { bit=1024; flag=&p.options.documents; }
++        else if (!strcmp(line, "directory")) { bit=2048; dst=p.options.directory; cap=sizeof(p.options.directory); }
++        else if (!strcmp(line,"password_encrypted")) { bit=4096; dst=p.password_blob; cap=sizeof(p.password_blob); }
++        else { ok=0; break; } /* Reject plaintext passwords and unsupported settings. */
++        if (seen & bit) { ok=0; break; } seen |= bit;
++        if (dst) { if (strlen(value) >= cap) { ok=0; break; } strcpy(dst, value); }
++        else { if (strcmp(value, "0") && strcmp(value, "1")) { ok=0; break; } *flag=*value-'0'; }
++    }
++    if (ferror(f)) ok=0;
++    fclose(f);
++    if (!ok || (seen & 1023) != 1023 || !valid(&p)) return 0;
++    *out=p; return 1;
++}
++int adt_profile_save(const char *path, const struct adt_profile *p)
++{
++    if (!valid(p)) return 0;
++    char temp[1024], backup[1024];
++    if (snprintf(temp,sizeof(temp),"%s.%lu.tmp",path,(unsigned long)getpid()) >= (int)sizeof(temp) ||
++        snprintf(backup,sizeof(backup),"%s.bak",path) >= (int)sizeof(backup)) return 0;
++    FILE *f=fopen(temp,"wb"); if (!f) return 0;
++    int ok=fprintf(f,"host=%s\nuser=%s\ndomain=%s\nfingerprint=%s\nclipboard=%d\nsound=%d\nmicrophone=%d\nprinter=%d\nfullscreen=%d\nresize=%d\ndocuments=%d\ndirectory=%s\n",
++        p->host,p->user,p->domain,p->options.fingerprint,!!p->options.clipboard,!!p->options.sound,
++        !!p->options.microphone,!!p->options.printer,!!p->options.fullscreen,!!p->options.resize,!!p->options.documents,p->options.directory) > 0;
++    if(ok && *p->password_blob)ok=fprintf(f,"password_encrypted=%s\n",p->password_blob)>0;
++    if (fclose(f)) ok=0;
++    if (!ok) { remove(temp); return 0; }
++    /* AROS stdio rename deletes an existing target before Rename(). Preserve
++     * the old file first, and retain it as .bak even after a successful save. */
++    FILE *old=fopen(path,"rb"); int existed=old!=NULL;
++    if (old) fclose(old);
++    else if (errno!=ENOENT) { remove(temp); return 0; }
++    struct adt_profile prior={0};
++    int forgetting=existed && !*p->password_blob && adt_profile_load(path,&prior) && *prior.password_blob;
++    if (existed && rename(path,backup)) { remove(temp); return 0; }
++    if (rename(temp,path)==0) {
++        /* Opting out must not retain the old encrypted password in our backup. */
++        if(forgetting && remove(backup))return 0;
++        return 1;
++    }
++    if (existed) {
++        /* On a further disk failure the backup remains available for recovery. */
++        int restored=rename(backup,path); (void)restored;
++    }
++    remove(temp); return 0;
++}
+diff --git a/client/AROS/profile.h b/client/AROS/profile.h
+new file mode 100644
+index 0000000..c9da906
+--- /dev/null
++++ b/client/AROS/profile.h
+@@ -0,0 +1,13 @@
++/* Profiles contain settings and optional authenticated ciphertext, never plaintext passwords. */
++#ifndef ADT_RDP_PROFILE_H
++#define ADT_RDP_PROFILE_H
++#include "native.h"
++struct adt_profile {
++    char host[512], user[512], domain[512];
++    struct native_options options;
++    char password_blob[1200];
++};
++int adt_profile_name_valid(const char *name);
++int adt_profile_load(const char *path, struct adt_profile *profile);
++int adt_profile_save(const char *path, const struct adt_profile *profile);
++#endif
+diff --git a/client/AROS/tf_channels.c b/client/AROS/tf_channels.c
+new file mode 100644
+index 0000000..5bbe85b
+--- /dev/null
++++ b/client/AROS/tf_channels.c
+@@ -0,0 +1,81 @@
++/**
++ * FreeRDP: A Remote Desktop Protocol Implementation
++ * Sample Client Channels
++ *
++ * Copyright 2018 Armin Novak <armin.novak@thincast.com>
++ * Copyright 2018 Thincast Technologies GmbH
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include <freerdp/config.h>
++
++#include <winpr/assert.h>
++#include <freerdp/gdi/gfx.h>
++
++#include <freerdp/client/rdpei.h>
++#include <freerdp/client/rail.h>
++#include <freerdp/client/cliprdr.h>
++#include <freerdp/client/rdpgfx.h>
++#include <freerdp/client/encomsp.h>
++
++#include "tf_channels.h"
++#include "clipboard.h"
++#include "display.h"
++#include "tf_freerdp.h"
++
++void tf_OnChannelConnectedEventHandler(void* context, const ChannelConnectedEventArgs* e)
++{
++	tfContext* tf = (tfContext*)context;
++
++	WINPR_ASSERT(tf);
++	WINPR_ASSERT(e);
++
++	if (strcmp(e->name, RAIL_SVC_CHANNEL_NAME) == 0)
++	{
++	}
++	else if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
++	{
++		CliprdrClientContext* clip = (CliprdrClientContext*)e->pInterface;
++		if (clip)
++			adt_clipboard_attach(tf, clip);
++	}
++	else if (!strcmp(e->name, DISP_DVC_CHANNEL_NAME))
++        adt_display_attach(tf, (DispClientContext *)e->pInterface);
++	else
++		freerdp_client_OnChannelConnectedEventHandler(&tf->common, e);
++}
++
++void tf_OnChannelDisconnectedEventHandler(void* context, const ChannelDisconnectedEventArgs* e)
++{
++	tfContext* tf = (tfContext*)context;
++
++	WINPR_ASSERT(tf);
++	WINPR_ASSERT(e);
++
++	if (strcmp(e->name, RAIL_SVC_CHANNEL_NAME) == 0)
++	{
++	}
++	else if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
++	{
++		CliprdrClientContext* clip = (CliprdrClientContext*)e->pInterface;
++		/* A prior channel can fail before clipboard initialization completes. */
++		adt_clipboard_detach(tf);
++		if (clip)
++			clip->custom = nullptr;
++	}
++	else if (!strcmp(e->name, DISP_DVC_CHANNEL_NAME))
++        adt_display_detach(tf);
++	else
++		freerdp_client_OnChannelDisconnectedEventHandler(&tf->common, e);
++}
+diff --git a/client/AROS/tf_channels.h b/client/AROS/tf_channels.h
+new file mode 100644
+index 0000000..d00a5c2
+--- /dev/null
++++ b/client/AROS/tf_channels.h
+@@ -0,0 +1,33 @@
++/**
++ * FreeRDP: A Remote Desktop Protocol Implementation
++ * Sample Client Channels
++ *
++ * Copyright 2018 Armin Novak <armin.novak@thincast.com>
++ * Copyright 2018 Thincast Technologies GmbH
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef FREERDP_CLIENT_SAMPLE_CHANNELS_H
++#define FREERDP_CLIENT_SAMPLE_CHANNELS_H
++
++#include <freerdp/freerdp.h>
++#include <freerdp/client/channels.h>
++
++int tf_on_channel_connected(freerdp* instance, const char* name, void* pInterface);
++int tf_on_channel_disconnected(freerdp* instance, const char* name, void* pInterface);
++
++void tf_OnChannelConnectedEventHandler(void* context, const ChannelConnectedEventArgs* e);
++void tf_OnChannelDisconnectedEventHandler(void* context, const ChannelDisconnectedEventArgs* e);
++
++#endif /* FREERDP_CLIENT_SAMPLE_CHANNELS_H */
+diff --git a/client/AROS/tf_freerdp.c b/client/AROS/tf_freerdp.c
+new file mode 100644
+index 0000000..ad8f76d
+--- /dev/null
++++ b/client/AROS/tf_freerdp.c
+@@ -0,0 +1,668 @@
++/**
++ * FreeRDP: A Remote Desktop Protocol Implementation
++ * FreeRDP Test UI
++ *
++ * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
++ * Copyright 2016,2018 Armin Novak <armin.novak@thincast.com>
++ * Copyright 2016,2018 Thincast Technologies GmbH
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include <freerdp/config.h>
++
++#include <errno.h>
++#include <stdio.h>
++#include <string.h>
++
++#include <freerdp/freerdp.h>
++#include <freerdp/constants.h>
++#include <freerdp/gdi/gdi.h>
++#include <freerdp/streamdump.h>
++#include <freerdp/utils/signal.h>
++
++#include <freerdp/client/file.h>
++#include <freerdp/client/cmdline.h>
++#include <freerdp/client/cliprdr.h>
++#include <freerdp/client/channels.h>
++#include <freerdp/client/aad_helper.h>
++#include <freerdp/channels/channels.h>
++
++#include <winpr/crt.h>
++#include <winpr/assert.h>
++#include <winpr/synch.h>
++#include <winpr/pool.h>
++#include <freerdp/log.h>
++#include <freerdp/utils/helpers.h>
++#include <freerdp/build-config.h>
++#include <freerdp/version.h>
++
++#include "native.h"
++#include "clipboard.h"
++#include "input.h"
++#include "display.h"
++#include "tf_channels.h"
++#include "tf_freerdp.h"
++
++#define TAG CLIENT_TAG("aros")
++
++/* This function is called whenever a new frame starts.
++ * It can be used to reset invalidated areas. */
++static BOOL tf_begin_paint(rdpContext* context)
++{
++	rdpGdi* gdi = nullptr;
++
++	WINPR_ASSERT(context);
++
++	gdi = context->gdi;
++	WINPR_ASSERT(gdi);
++	WINPR_ASSERT(gdi->primary);
++	WINPR_ASSERT(gdi->primary->hdc);
++	WINPR_ASSERT(gdi->primary->hdc->hwnd);
++	WINPR_ASSERT(gdi->primary->hdc->hwnd->invalid);
++	gdi->primary->hdc->hwnd->invalid->null = TRUE;
++	return TRUE;
++}
++
++/* This function is called when the library completed composing a new
++ * frame. Read out the changed areas and blit them to your output device.
++ * The image buffer will have the format specified by gdi_init
++ */
++static BOOL tf_end_paint(rdpContext* context)
++{
++	rdpGdi* gdi = nullptr;
++
++	WINPR_ASSERT(context);
++
++	gdi = context->gdi;
++	WINPR_ASSERT(gdi);
++	WINPR_ASSERT(gdi->primary);
++
++	HGDI_DC hdc = gdi->primary->hdc;
++	WINPR_ASSERT(hdc);
++	if (!hdc->hwnd)
++		return TRUE;
++
++	HGDI_WND hwnd = hdc->hwnd;
++	WINPR_ASSERT(hwnd->invalid || (hwnd->ninvalid == 0));
++
++	if (hwnd->invalid->null)
++		return TRUE;
++
++	return native_paint(((tfContext*)context)->window, gdi->primary_buffer,
++	                    gdi->width, gdi->height, gdi->stride);
++}
++
++static BOOL tf_desktop_resize(rdpContext* context)
++{
++	rdpGdi* gdi = nullptr;
++	rdpSettings* settings = nullptr;
++
++	WINPR_ASSERT(context);
++
++	settings = context->settings;
++	WINPR_ASSERT(settings);
++
++	gdi = context->gdi;
++    WLog_INFO(TAG,"Server desktop resize %ux%u",
++        freerdp_settings_get_uint32(settings,FreeRDP_DesktopWidth),
++        freerdp_settings_get_uint32(settings,FreeRDP_DesktopHeight));
++	return gdi_resize(gdi, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth),
++	                  freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight));
++}
++
++/* This function is called to output a System BEEP */
++static BOOL tf_play_sound(rdpContext* context, const PLAY_SOUND_UPDATE* play_sound)
++{
++	/* TODO: Implement */
++	WINPR_UNUSED(context);
++	WINPR_UNUSED(play_sound);
++	return TRUE;
++}
++
++/* This function is called to update the keyboard indocator LED */
++static BOOL tf_keyboard_set_indicators(rdpContext* context, UINT16 led_flags)
++{
++	/* TODO: Set local keyboard indicator LED status */
++	WINPR_UNUSED(context);
++	WINPR_UNUSED(led_flags);
++	return TRUE;
++}
++
++/* This function is called to set the IME state */
++static BOOL tf_keyboard_set_ime_status(rdpContext* context, UINT16 imeId, UINT32 imeState,
++                                       UINT32 imeConvMode)
++{
++	if (!context)
++		return FALSE;
++
++	WLog_WARN(TAG,
++	          "KeyboardSetImeStatus(unitId=%04" PRIx16 ", imeState=%08" PRIx32
++	          ", imeConvMode=%08" PRIx32 ") ignored",
++	          imeId, imeState, imeConvMode);
++	return TRUE;
++}
++
++/* Called before a connection is established.
++ * Set all configuration options to support and load channels here. */
++static int native_reject_unpinned_certificate(freerdp* instance, const BYTE* pem,
++    size_t length, const char* hostname, UINT16 port, DWORD flags)
++{
++    WINPR_UNUSED(instance); WINPR_UNUSED(pem); WINPR_UNUSED(length);
++    WINPR_UNUSED(hostname); WINPR_UNUSED(port); WINPR_UNUSED(flags);
++    WLog_ERR(TAG, "Certificate does not match the explicit fingerprint; connection rejected");
++    return 0;
++}
++
++static BOOL tf_pre_connect(freerdp* instance)
++{
++	rdpSettings* settings = nullptr;
++
++	WINPR_ASSERT(instance);
++	WINPR_ASSERT(instance->context);
++
++	settings = instance->context->settings;
++	WINPR_ASSERT(settings);
++
++    if (freerdp_settings_get_bool(settings, FreeRDP_Fullscreen)) {
++        uint32_t width=0,height=0;
++        if (!native_screen_size(&width,&height) ||
++            !freerdp_settings_set_uint32(settings,FreeRDP_DesktopWidth,width) ||
++            !freerdp_settings_set_uint32(settings,FreeRDP_DesktopHeight,height)) return FALSE;
++    }
++
++    /* This SDK's OpenSSL is built without thread support. Printer cache hashing
++     * and TLS must stay on the session task; native DOS handles are task-owned
++     * too. Use the upstream synchronous static-channel path on AROS. */
++    if (!freerdp_settings_set_bool(settings, FreeRDP_SynchronousStaticChannels, TRUE))
++        return FALSE;
++
++    /* FreeRDP checks accepted fingerprints before external certificate management.
++     * Make an explicit pin exclusive: neither CA trust nor a prompt may override
++     * a mismatch. Without a pin, retain normal validation and accept-once UI. */
++    const char* pins = freerdp_settings_get_string(settings, FreeRDP_CertificateAcceptedFingerprints);
++    if (pins && *pins) {
++        if (!freerdp_settings_set_bool(settings, FreeRDP_ExternalCertificateManagement, TRUE))
++            return FALSE;
++        instance->VerifyX509Certificate = native_reject_unpinned_certificate;
++    }
++
++	/* If the callbacks provide the PEM all certificate options can be extracted, otherwise
++	 * only the certificate fingerprint is available. */
++	if (!freerdp_settings_set_bool(settings, FreeRDP_CertificateCallbackPreferPEM, FALSE))
++		return FALSE;
++
++	/* Optional OS identifier sent to server */
++	if (!freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_UNIX))
++		return FALSE;
++	if (!freerdp_settings_set_uint32(settings, FreeRDP_OsMinorType, OSMINORTYPE_NATIVE_XSERVER))
++		return FALSE;
++	/* OrderSupport is initialized at this point.
++	 * Only override it if you plan to implement custom order
++	 * callbacks or deactivate certain features. */
++	/* Register the channel listeners.
++	 * They are required to set up / tear down channels if they are loaded. */
++	if (PubSub_SubscribeChannelConnected(instance->context->pubSub,
++	                                     tf_OnChannelConnectedEventHandler) < 0)
++		return FALSE;
++	if (PubSub_SubscribeChannelDisconnected(instance->context->pubSub,
++	                                        tf_OnChannelDisconnectedEventHandler) < 0)
++		return FALSE;
++
++	/* TODO: Any code your client requires */
++	return TRUE;
++}
++
++/* Called after a RDP connection was successfully established.
++ * Settings might have changed during negotiation of client / server feature
++ * support.
++ *
++ * Set up local framebuffers and paing callbacks.
++ * If required, register pointer callbacks to change the local mouse cursor
++ * when hovering over the RDP window
++ */
++static BOOL tf_post_connect(freerdp* instance)
++{
++	rdpContext* context = nullptr;
++
++	if (!gdi_init(instance, PIXEL_FORMAT_BGRA32))
++		return FALSE;
++
++	context = instance->context;
++	WINPR_ASSERT(context);
++	WINPR_ASSERT(context->update);
++
++	/* Decode into the software framebuffer for CyberGraphX presentation. */
++	if (!freerdp_settings_set_bool(context->settings, FreeRDP_DeactivateClientDecoding, FALSE))
++		return FALSE;
++
++	((tfContext*)context)->window = native_open(context->gdi->width, context->gdi->height,
++        freerdp_settings_get_bool(context->settings, FreeRDP_Fullscreen),
++        freerdp_settings_get_bool(context->settings, FreeRDP_DynamicResolutionUpdate));
++	if (!((tfContext*)context)->window)
++		return FALSE;
++
++	context->update->BeginPaint = tf_begin_paint;
++	context->update->EndPaint = tf_end_paint;
++	context->update->PlaySound = tf_play_sound;
++	context->update->DesktopResize = tf_desktop_resize;
++	context->update->SetKeyboardIndicators = tf_keyboard_set_indicators;
++	context->update->SetKeyboardImeStatus = tf_keyboard_set_ime_status;
++	return TRUE;
++}
++
++/* This function is called whether a session ends by failure or success.
++ * Clean up everything allocated by pre_connect and post_connect.
++ */
++static void tf_post_disconnect(freerdp* instance)
++{
++	tfContext* context = nullptr;
++
++	if (!instance)
++		return;
++
++	if (!instance->context)
++		return;
++
++	context = (tfContext*)instance->context;
++	PubSub_UnsubscribeChannelConnected(instance->context->pubSub,
++	                                   tf_OnChannelConnectedEventHandler);
++	PubSub_UnsubscribeChannelDisconnected(instance->context->pubSub,
++	                                      tf_OnChannelDisconnectedEventHandler);
++	WLog_DBG(TAG, "Closing native window");
++	native_close(context->window);
++	context->window = NULL;
++	WLog_DBG(TAG, "Freeing graphics context");
++	gdi_free(instance);
++	WLog_DBG(TAG, "Graphics context freed");
++	/* TODO : Clean up custom stuff */
++	WINPR_UNUSED(context);
++}
++
++/* RDP main loop.
++ * Connects RDP, loops while running and handles event and dispatch, cleans up
++ * after the connection ends. */
++static DWORD WINAPI tf_client_thread_proc(LPVOID arg)
++{
++	freerdp* instance = (freerdp*)arg;
++	DWORD nCount = 0;
++	DWORD status = 0;
++	DWORD result = 0;
++	HANDLE handles[MAXIMUM_WAIT_OBJECTS] = WINPR_C_ARRAY_INIT;
++	BOOL rc = freerdp_connect(instance);
++
++	WINPR_ASSERT(instance->context);
++	WINPR_ASSERT(instance->context->settings);
++	if (freerdp_settings_get_bool(instance->context->settings, FreeRDP_AuthenticationOnly))
++	{
++		result = freerdp_get_last_error(instance->context);
++		freerdp_abort_connect_context(instance->context);
++		WLog_ERR(TAG, "Authentication only, exit status 0x%08" PRIx32 "", result);
++		goto disconnect;
++	}
++
++	if (!rc)
++	{
++		result = freerdp_get_last_error(instance->context);
++		WLog_ERR(TAG, "connection failure 0x%08" PRIx32, result);
++		goto disconnect;
++	}
++
++	while (!freerdp_shall_disconnect_context(instance->context))
++	{
++		adt_clipboard_poll((tfContext*)instance->context);
++        adt_display_poll((tfContext*)instance->context);
++		struct native_event ev;
++		while (native_poll(((tfContext*)instance->context)->window, &ev))
++		{
++			if (ev.kind == 1)
++				goto disconnect;
++			if (ev.kind == 6) {
++				for (unsigned k = 0; k < 128; k++) {
++					if (((tfContext*)instance->context)->keys[k])
++						freerdp_input_send_keyboard_event_ex(instance->context->input,
++						    FALSE, FALSE, adt_raw_scancode(k));
++					((tfContext*)instance->context)->keys[k] = FALSE;
++				}
++				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON1, 0, 0);
++				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON2, 0, 0);
++				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON3, 0, 0);
++			}
++			if (ev.kind == 7) {
++                adt_display_resize((tfContext*)instance->context, ev.x, ev.y);
++                ev.kind=5;
++            }
++            if (ev.kind == 2) {
++                tfContext *tf=(tfContext*)instance->context;
++                if (ev.code==0xc4 && tf->fullscreen_key) { tf->fullscreen_key=FALSE; continue; }
++                if (ev.code==0x44 && tf->keys[0x63] && (tf->keys[0x64] || tf->keys[0x65])) {
++                    for (unsigned k=0; k<128; k++) {
++                        if (tf->keys[k]) freerdp_input_send_keyboard_event_ex(instance->context->input,FALSE,FALSE,adt_raw_scancode(k));
++                        tf->keys[k]=FALSE;
++                    }
++                    freerdp_input_send_mouse_event(instance->context->input,PTR_FLAGS_BUTTON1,0,0);
++                    freerdp_input_send_mouse_event(instance->context->input,PTR_FLAGS_BUTTON2,0,0);
++                    freerdp_input_send_mouse_event(instance->context->input,PTR_FLAGS_BUTTON3,0,0);
++                    tf->fullscreen_key=TRUE;
++                    uint32_t width=0,height=0;
++                    if (native_toggle_fullscreen(tf->window,&width,&height)) {
++                        adt_display_resize(tf,width,height);
++                        rdpGdi *g=instance->context->gdi;
++                        native_paint(tf->window,g->primary_buffer,g->width,g->height,g->stride);
++                    }
++                    continue;
++                }
++				if (ev.code >= 0x7a && ev.code <= 0x7d) {
++					UINT16 flags = ev.code < 0x7c ? PTR_FLAGS_WHEEL : PTR_FLAGS_HWHEEL;
++					flags |= (ev.code == 0x7b || ev.code == 0x7c) ?
++					    PTR_FLAGS_WHEEL_NEGATIVE | 0x88 : 120;
++					freerdp_input_send_mouse_event(instance->context->input, flags, 0, 0);
++				}
++				UINT16 code = adt_raw_scancode(ev.code);
++				if (code) {
++					((tfContext*)instance->context)->keys[ev.code & 127] = !(ev.code & 128);
++					freerdp_input_send_keyboard_event_ex(instance->context->input,
++					    !(ev.code & 0x80), FALSE, code);
++				}
++			}
++			if (ev.kind == 3 || ev.kind == 4) {
++				if (ev.x < 0) ev.x = 0;
++				if (ev.y < 0) ev.y = 0;
++				if (ev.x >= instance->context->gdi->width) ev.x = instance->context->gdi->width - 1;
++				if (ev.y >= instance->context->gdi->height) ev.y = instance->context->gdi->height - 1;
++				UINT16 flags = PTR_FLAGS_MOVE;
++				if (ev.kind == 4) {
++					flags = 0;
++					switch (ev.code & 0x7f) {
++					case 0x68: flags = PTR_FLAGS_BUTTON1; break;
++					case 0x69: flags = PTR_FLAGS_BUTTON2; break;
++					case 0x6a: flags = PTR_FLAGS_BUTTON3; break;
++					}
++					if (flags && !(ev.code & 0x80)) flags |= PTR_FLAGS_DOWN;
++				}
++				if (flags) freerdp_input_send_mouse_event(instance->context->input,
++				    flags, (UINT16)ev.x, (UINT16)ev.y);
++			}
++			if (ev.kind == 5)
++			{
++				rdpGdi* g = instance->context->gdi;
++				native_paint(((tfContext*)instance->context)->window,
++				             g->primary_buffer, g->width, g->height, g->stride);
++			}
++		}
++		nCount = freerdp_get_event_handles(instance->context, handles, ARRAYSIZE(handles));
++
++		if (nCount == 0)
++		{
++			WLog_ERR(TAG, "freerdp_get_event_handles failed");
++            result=ERROR_INTERNAL_ERROR;
++			break;
++		}
++
++		status = WaitForMultipleObjects(nCount, handles, FALSE, 10);
++
++		if (status == WAIT_FAILED)
++		{
++			WLog_ERR(TAG, "WaitForMultipleObjects failed with %" PRIu32 "", status);
++            result=ERROR_INTERNAL_ERROR;
++			break;
++		}
++
++		if (!freerdp_check_event_handles(instance->context))
++		{
++			if (freerdp_get_last_error(instance->context) == FREERDP_ERROR_SUCCESS)
++				WLog_ERR(TAG, "Failed to check FreeRDP event handles");
++
++            result=freerdp_get_last_error(instance->context);
++            if (!result) result=ERROR_INTERNAL_ERROR;
++			break;
++		}
++	}
++    if (!result) result=freerdp_get_last_error(instance->context);
++
++disconnect:
++	WLog_INFO(TAG, "Disconnecting session");
++	freerdp_disconnect(instance);
++	WLog_INFO(TAG, "Session disconnected");
++	return result;
++}
++
++/* Optional global initializer.
++ * Here we just register a signal handler to print out stack traces
++ * if available. */
++static BOOL tf_client_global_init(void)
++{
++	return freerdp_handle_signals() == 0;
++}
++
++/* Optional global tear down */
++static void tf_client_global_uninit(void)
++{
++}
++
++static int tf_logon_error_info(freerdp* instance, UINT32 data, UINT32 type)
++{
++	tfContext* tf = nullptr;
++	const char* str_data = freerdp_get_logon_error_info_data(data);
++	const char* str_type = freerdp_get_logon_error_info_type(type);
++
++	if (!instance || !instance->context)
++		return -1;
++
++	tf = (tfContext*)instance->context;
++	WLog_INFO(TAG, "Logon Error Info %s [%s]", str_data, str_type);
++	WINPR_UNUSED(tf);
++
++	return 1;
++}
++
++static DWORD native_verify_certificate(freerdp* instance, const char* host, UINT16 port,
++    const char* name, const char* subject, const char* issuer, const char* fingerprint, DWORD flags)
++{
++    WINPR_UNUSED(instance); WINPR_UNUSED(subject); WINPR_UNUSED(issuer);
++    if (flags & VERIFY_CERT_FLAG_FP_IS_PEM) return 0;
++    return native_confirm_certificate(host, port, name, fingerprint) ? 2 : 0;
++}
++static DWORD native_changed_certificate(freerdp* instance, const char* host, UINT16 port,
++    const char* name, const char* subject, const char* issuer, const char* fingerprint,
++    const char* oldsubject, const char* oldissuer, const char* oldfingerprint, DWORD flags)
++{
++    WINPR_UNUSED(instance); WINPR_UNUSED(host); WINPR_UNUSED(port); WINPR_UNUSED(name);
++    WINPR_UNUSED(subject); WINPR_UNUSED(issuer); WINPR_UNUSED(fingerprint);
++    WINPR_UNUSED(oldsubject); WINPR_UNUSED(oldissuer); WINPR_UNUSED(oldfingerprint); WINPR_UNUSED(flags);
++    WLog_ERR(TAG, "Stored certificate changed; connection rejected");
++    return 0;
++}
++
++static BOOL native_authenticate(freerdp* instance, char** user, char** password,
++                                char** domain, rdp_auth_reason reason)
++{
++    WINPR_UNUSED(reason);
++    return native_credentials(freerdp_settings_get_string(instance->context->settings,
++                              FreeRDP_ServerHostname), user, password, domain);
++}
++
++static BOOL tf_client_new(freerdp* instance, rdpContext* context)
++{
++	tfContext* tf = (tfContext*)context;
++
++	if (!instance || !context)
++		return FALSE;
++
++	if (!InitializeCriticalSectionEx(&tf->clip_lock, 0, 0)) return FALSE;
++	tf->clip_lock_initialized = TRUE;
++	instance->VerifyCertificateEx = native_verify_certificate;
++	instance->VerifyChangedCertificateEx = native_changed_certificate;
++	instance->AuthenticateEx = native_authenticate;
++	instance->PreConnect = tf_pre_connect;
++	instance->PostConnect = tf_post_connect;
++	instance->PostDisconnect = tf_post_disconnect;
++	instance->LogonErrorInfo = tf_logon_error_info;
++	instance->GetAccessToken = client_failsafe_get_access_token;
++	/* TODO: Client display set up */
++	WINPR_UNUSED(tf);
++	return TRUE;
++}
++
++static void tf_client_free(freerdp* instance, rdpContext* context)
++{
++	tfContext* tf = (tfContext*)instance->context;
++
++	if (!context)
++		return;
++
++	if (tf->clip_lock_initialized) { adt_clipboard_detach(tf); DeleteCriticalSection(&tf->clip_lock); tf->clip_lock_initialized = FALSE; }
++	WINPR_UNUSED(tf);
++}
++
++static int tf_client_start(rdpContext* context)
++{
++	/* TODO: Start client related stuff */
++	WINPR_UNUSED(context);
++	return 0;
++}
++
++static int tf_client_stop(rdpContext* context)
++{
++	/* TODO: Stop client related stuff */
++	WINPR_UNUSED(context);
++	return 0;
++}
++
++static int RdpClientEntry(RDP_CLIENT_ENTRY_POINTS* pEntryPoints)
++{
++	WINPR_ASSERT(pEntryPoints);
++
++	ZeroMemory(pEntryPoints, sizeof(RDP_CLIENT_ENTRY_POINTS));
++	pEntryPoints->Version = RDP_CLIENT_INTERFACE_VERSION;
++	pEntryPoints->Size = sizeof(RDP_CLIENT_ENTRY_POINTS_V1);
++	pEntryPoints->GlobalInit = tf_client_global_init;
++	pEntryPoints->GlobalUninit = tf_client_global_uninit;
++	pEntryPoints->ContextSize = sizeof(tfContext);
++	pEntryPoints->ClientNew = tf_client_new;
++	pEntryPoints->ClientFree = tf_client_free;
++	pEntryPoints->ClientStart = tf_client_start;
++	pEntryPoints->ClientStop = tf_client_stop;
++	return 0;
++}
++
++int main(int argc, char* argv[])
++{
++    /* Workbench passes its startup message in argv with argc == 0. */
++    char* workbench_argv[] = { "adt-rdp", NULL };
++    if (argc == 0) { argc = 1; argv = workbench_argv; }
++	/* Serial/file logs must retain the last shutdown stage if a native call blocks. */
++	setvbuf(stdout, NULL, _IONBF, 0);
++	setvbuf(stderr, NULL, _IONBF, 0);
++	int rc = -1;
++	RDP_CLIENT_ENTRY_POINTS clientEntryPoints = WINPR_C_ARRAY_INIT;
++
++	/*
++	 * Set custom application details at first thing in main.
++	 * This will initialize a new namespace within FreeRDP and WinPR.
++	 * As a result all configuration files will be searched in different locations.
++	 *
++	 * The location is <prefix>/<vendor>/<product> or <prefix>/<vendor>/<product><version> for
++	 * config file search directories. An example for a system wide configuration file would be
++	 * /etc/FreeRDP/TFreeRDP3/ or ~/.config//FreeRDP/TFreeRDP3/ for user config files.
++	 *
++	 * Consult \ref GetKnownPath for <prefix> locations on different operating systems
++	 */
++	if (!freerdp_setApplicationDetails(FREERDP_VENDOR_STRING, "RemoteDesktop", FREERDP_VERSION_MAJOR))
++		return -1;
++
++	RdpClientEntry(&clientEntryPoints);
++	rdpContext* context = freerdp_client_context_new(&clientEntryPoints);
++
++	if (!context)
++		goto fail;
++
++	if (!freerdp_settings_set_bool(context->settings, FreeRDP_RdpSecurity, FALSE) ||
++	    !freerdp_settings_set_bool(context->settings, FreeRDP_RedirectClipboard, FALSE))
++		goto fail;
++	if (argc == 1) {
++        uint32_t width = 0, height = 0;
++        if (native_desktop_size(&width, &height)) {
++            if (!freerdp_settings_set_uint32(context->settings, FreeRDP_DesktopWidth, width) ||
++                !freerdp_settings_set_uint32(context->settings, FreeRDP_DesktopHeight, height)) goto fail;
++        }
++		char *host = _strdup(""), *user = NULL, *password = NULL, *domain = NULL;
++		struct native_options native_options = {0};
++		if (!native_connection(&host, &user, &password, &domain, &native_options)) {
++			free(host); free(user); free(password); free(domain); rc = 0; goto fail;
++		}
++		char target[520];
++		snprintf(target, sizeof(target), "/v:%s", host);
++		char *options[11] = { argv[0], target };
++        char fingerprint[100], directory[300];
++        int count = 2;
++        if (native_options.clipboard) options[count++] = "+clipboard";
++        if (native_options.sound) options[count++] = "/sound:sys:ahi";
++        if (native_options.microphone) options[count++] = "/microphone:sys:ahi";
++        if (native_options.printer) options[count++] = "/printer:AROS-text,Generic / Text Only";
++        if (native_options.documents) options[count++] = "/printer:AROS-documents,ADT PDF/XPS printer,default";
++        if (*native_options.directory) {
++            snprintf(directory,sizeof(directory),"/drive:Local,%s",native_options.directory); options[count++]=directory;
++        }
++        if (native_options.fullscreen) options[count++] = "/f";
++        if (native_options.resize) options[count++] = "+dynamic-resolution";
++        if (*native_options.fingerprint) {
++            snprintf(fingerprint,sizeof(fingerprint),"/cert:fingerprint:sha256:%s",native_options.fingerprint);
++            options[count++]=fingerprint;
++        }
++        int status = freerdp_client_settings_parse_command_line(context->settings, count, options, FALSE);
++		BOOL configured = !status &&
++		    freerdp_settings_set_string(context->settings, FreeRDP_Username, user) &&
++		    freerdp_settings_set_string(context->settings, FreeRDP_Password, password) &&
++		    freerdp_settings_set_string(context->settings, FreeRDP_Domain, domain);
++		if (password) SecureZeroMemory(password, strlen(password));
++		free(host); free(user); free(password); free(domain);
++		if (!configured) goto fail;
++	}
++	else
++	{
++		const int status =
++		    freerdp_client_settings_parse_command_line(context->settings, argc, argv, FALSE);
++		if (status)
++		{
++			rc = freerdp_client_settings_command_line_status_print(context->settings, status, argc,
++			                                                       argv);
++			goto fail;
++		}
++	}
++
++	if (!stream_dump_register_handlers(context, CONNECTION_STATE_MCS_CREATE_REQUEST, FALSE))
++		goto fail;
++
++	if (freerdp_client_start(context) != 0)
++		goto fail;
++
++	{
++		const DWORD res = tf_client_thread_proc(context->instance);
++		rc = res == FREERDP_ERROR_LOGOFF_BY_USER ? 0 : (int)res;
++	}
++
++	if (freerdp_client_stop(context) != 0)
++		rc = -1;
++
++fail:
++	WLog_DBG(TAG, "Freeing client context");
++	freerdp_client_context_free(context);
++	winpr_aros_shutdown_default_threadpool();
++	WLog_INFO(TAG, "Client stopped (status %d)", rc);
++    if (argc==1 && rc) {
++        char message[192]; snprintf(message,sizeof(message),"Connection failed (0x%08x).\nCheck the server, credentials and certificate fingerprint.",(unsigned)rc);
++        native_error(message);
++    }
++	return rc;
++}
+diff --git a/client/AROS/tf_freerdp.h b/client/AROS/tf_freerdp.h
+new file mode 100644
+index 0000000..7e5ad77
+--- /dev/null
++++ b/client/AROS/tf_freerdp.h
+@@ -0,0 +1,50 @@
++/**
++ * FreeRDP: A Remote Desktop Protocol Implementation
++ * Sample Client
++ *
++ * Copyright 2018 Armin Novak <armin.novak@thincast.com>
++ * Copyright 2018 Thincast Technologies GmbH
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef FREERDP_CLIENT_SAMPLE_H
++#define FREERDP_CLIENT_SAMPLE_H
++
++#include <freerdp/freerdp.h>
++#include <freerdp/client/rdpei.h>
++#include <freerdp/client/rail.h>
++#include <freerdp/client/cliprdr.h>
++#include <freerdp/client/rdpgfx.h>
++#include <freerdp/client/disp.h>
++
++typedef struct
++{
++	rdpClientContext common;
++
++	struct native_window* window;
++	BOOL keys[128];
++	CRITICAL_SECTION clip_lock;
++	BOOL clip_lock_initialized, clip_ready;
++	CliprdrClientContext *clip;
++	char *clip_last;
++	UINT64 clip_polled;
++    DispClientContext *disp;
++    BOOL disp_ready;
++    UINT64 disp_area, resize_changed;
++    UINT32 resize_width, resize_height;
++    BOOL fullscreen_key;
++	/* Channels */
++} tfContext;
++
++#endif /* FREERDP_CLIENT_SAMPLE_H */
+diff --git a/client/AROS/vault.c b/client/AROS/vault.c
+new file mode 100644
+index 0000000..b9933d4
+--- /dev/null
++++ b/client/AROS/vault.c
+@@ -0,0 +1,77 @@
++#include "vault.h"
++#include <openssl/evp.h>
++#include <openssl/rand.h>
++#include <openssl/crypto.h>
++#include <string.h>
++/* RDP1 | salt16 | nonce12 | tag16 | ciphertext (0..511 bytes), hex encoded.
++ * Fixed work factor prevents a modified file selecting unbounded KDF work.
++ * Endpoint/account fields are authenticated so editing them cannot silently
++ * send a recovered password to another server or account. */
++#define HEADER 48
++#define ITERATIONS 210000
++static int aad(EVP_CIPHER_CTX *ctx,const struct adt_profile *p,int seal)
++{
++    const char *fields[]={p->host,p->user,p->domain,p->options.fingerprint};int n;
++    for(unsigned i=0;i<4;i++) {
++        size_t len=strnlen(fields[i],512)+1;
++        if(len>512)return 0;
++        if(seal ? !EVP_EncryptUpdate(ctx,NULL,&n,(const unsigned char*)fields[i],(int)len)
++                : !EVP_DecryptUpdate(ctx,NULL,&n,(const unsigned char*)fields[i],(int)len))return 0;
++    }
++    return 1;
++}
++static int key_for(const char *unlock,const unsigned char *salt,unsigned char key[32])
++{
++    size_t n=unlock?strlen(unlock):0;
++    return n && n<=511 && PKCS5_PBKDF2_HMAC(unlock,(int)n,salt,16,ITERATIONS,EVP_sha256(),32,key);
++}
++int adt_password_seal(const struct adt_profile *p,const char *unlock,const char *password,char output[1200])
++{
++    unsigned char blob[HEADER+512]={0},key[32]={0};int n=0,end=0,ok=0;
++    EVP_CIPHER_CTX *ctx=EVP_CIPHER_CTX_new();output[0]=0;
++    size_t length=password?strlen(password):512;
++    if(!ctx || length>511)goto done;
++    memcpy(blob,"RDP1",4);
++    if(RAND_bytes(blob+4,28)!=1 || !key_for(unlock,blob+4,key) ||
++       !EVP_EncryptInit_ex(ctx,EVP_aes_256_gcm(),NULL,NULL,NULL) ||
++       !EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_SET_IVLEN,12,NULL) ||
++       !EVP_EncryptInit_ex(ctx,NULL,NULL,key,blob+20) || !aad(ctx,p,1) ||
++       !EVP_EncryptUpdate(ctx,blob+HEADER,&n,(const unsigned char*)password,(int)length) ||
++       !EVP_EncryptFinal_ex(ctx,blob+HEADER+n,&end) || n+end!=(int)length ||
++       !EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_GET_TAG,16,blob+32))goto done;
++    static const char hex[]="0123456789abcdef";
++    for(size_t i=0;i<HEADER+length;i++){output[2*i]=hex[blob[i]>>4];output[2*i+1]=hex[blob[i]&15];}
++    output[2*(HEADER+length)]=0;ok=1;
++ done:
++    EVP_CIPHER_CTX_free(ctx);OPENSSL_cleanse(key,sizeof(key));OPENSSL_cleanse(blob,sizeof(blob));return ok;
++}
++static int nibble(char c)
++{
++    if(c>='0' && c<='9')return c-'0';
++    if(c>='a' && c<='f')return c-'a'+10;
++    return -1;
++}
++int adt_password_open(const struct adt_profile *p,const char *unlock,char password[512])
++{
++    unsigned char blob[HEADER+512]={0},key[32]={0},plain[512]={0};int n=0,end=0,ok=0;
++    EVP_CIPHER_CTX *ctx=EVP_CIPHER_CTX_new();password[0]=0;
++    size_t length=strnlen(p->password_blob,sizeof(p->password_blob));
++    if(!ctx || length<HEADER*2 || length>2*(HEADER+511) || length%2)goto done;
++    for(size_t i=0;i<length/2;i++){
++        int a=nibble(p->password_blob[2*i]),b=nibble(p->password_blob[2*i+1]);
++        if(a<0 || b<0)goto done;
++        blob[i]=(unsigned char)((a<<4)|b);
++    }
++    length=length/2-HEADER;
++    if(memcmp(blob,"RDP1",4) || !key_for(unlock,blob+4,key) ||
++       !EVP_DecryptInit_ex(ctx,EVP_aes_256_gcm(),NULL,NULL,NULL) ||
++       !EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_SET_IVLEN,12,NULL) ||
++       !EVP_DecryptInit_ex(ctx,NULL,NULL,key,blob+20) || !aad(ctx,p,0) ||
++       !EVP_DecryptUpdate(ctx,plain,&n,blob+HEADER,(int)length) ||
++       !EVP_CIPHER_CTX_ctrl(ctx,EVP_CTRL_GCM_SET_TAG,16,blob+32) ||
++       !EVP_DecryptFinal_ex(ctx,plain+n,&end) || n+end!=(int)length ||
++       memchr(plain,0,length))goto done;
++    memcpy(password,plain,length);password[length]=0;ok=1;
++ done:
++    EVP_CIPHER_CTX_free(ctx);OPENSSL_cleanse(key,sizeof(key));OPENSSL_cleanse(blob,sizeof(blob));OPENSSL_cleanse(plain,sizeof(plain));return ok;
++}
+diff --git a/client/AROS/vault.h b/client/AROS/vault.h
+new file mode 100644
+index 0000000..7b4697e
+--- /dev/null
++++ b/client/AROS/vault.h
+@@ -0,0 +1,9 @@
++#ifndef ADT_RDP_VAULT_H
++#define ADT_RDP_VAULT_H
++#include "profile.h"
++/* Versioned authenticated ciphertext; no plaintext or encryption key in profiles. */
++int adt_password_seal(const struct adt_profile *profile, const char *unlock,
++                      const char *password, char output[1200]);
++int adt_password_open(const struct adt_profile *profile, const char *unlock,
++                      char password[512]);
++#endif
+diff --git a/client/CMakeLists.txt b/client/CMakeLists.txt
+index 1a6fefb..2aebdc1 100644
+--- a/client/CMakeLists.txt
++++ b/client/CMakeLists.txt
+@@ -36,6 +36,10 @@ if(FREERDP_VENDOR AND WITH_CLIENT)
+     endif()
+   endif()
+ 
++  if(CMAKE_SYSTEM_NAME STREQUAL "AROS")
++    add_subdirectory(AROS)
++  endif()
++
+   if(WITH_CLIENT_SDL)
+     add_subdirectory(SDL)
+   endif()
+diff --git a/include/freerdp/client/printer.h b/include/freerdp/client/printer.h
+index dd8cc38..303b1c1 100644
+--- a/include/freerdp/client/printer.h
++++ b/include/freerdp/client/printer.h
+@@ -77,11 +77,13 @@ extern "C"
+ 		ALIGN64 WINPR_ATTR_NODISCARD pcFindPrintJob FindPrintJob;
+ 		ALIGN64 pcReferencePrinter AddRef;
+ 		ALIGN64 pcReferencePrinter ReleaseRef;
+-		UINT64 reserved[54];
++		ALIGN64 BOOL is_xps; /* backend accepts complete XPS documents */
++		UINT64 reserved[53];
+ 	};
+ 
+ 	typedef UINT (*pcWritePrintJob)(rdpPrintJob* printjob, const BYTE* data, size_t size);
+ 	typedef void (*pcClosePrintJob)(rdpPrintJob* printjob);
++	typedef UINT (*pcFinishPrintJob)(rdpPrintJob* printjob);
+ 
+ 	struct rdp_print_job
+ 	{
+@@ -91,7 +93,9 @@ extern "C"
+ 		ALIGN64 WINPR_ATTR_NODISCARD pcWritePrintJob Write;
+ 		ALIGN64 pcClosePrintJob Close;
+ 
+-		UINT64 reserved[60];
++		/* Optional: consumes the job and reports spool acceptance; Close aborts it. */
++		ALIGN64 pcFinishPrintJob Finish;
++		UINT64 reserved[59];
+ 	};
+ 
+ #ifdef __cplusplus
+diff --git a/libfreerdp/utils/passphrase.c b/libfreerdp/utils/passphrase.c
+index cd8ac76..2ad8173 100644
+--- a/libfreerdp/utils/passphrase.c
++++ b/libfreerdp/utils/passphrase.c
+@@ -200,6 +200,16 @@ static void replace_char(char* buffer, WINPR_ATTR_UNUSED size_t buffer_len, cons
+ const char* freerdp_passphrase_read_tty(rdpContext* context, const char* prompt, char* buf,
+                                         size_t bufsiz, int from_stdin)
+ {
++#ifdef __AROS__
++	/* Native clients must supply a masked credential dialog. */
++	WINPR_UNUSED(context);
++	WINPR_UNUSED(prompt);
++	WINPR_UNUSED(from_stdin);
++	if (buf && bufsiz)
++		buf[0] = 0;
++	errno = ENOSYS;
++	return nullptr;
++#else
+ 	BOOL terminal_needs_reset = FALSE;
+ 	char term_name[L_ctermid] = WINPR_C_ARRAY_INIT;
+ 
+@@ -301,6 +311,7 @@ error:
+ }
+ 
+ 	return nullptr;
++#endif
+ }
+ 
+ static const char* freerdp_passphrase_read_askpass(const char* prompt, char* buf, size_t bufsiz,
+@@ -355,6 +366,11 @@ static void restore_terminal(void)
+ 
+ BOOL set_terminal_nonblock(int ifd, BOOL nonblock)
+ {
++#ifdef __AROS__
++	WINPR_UNUSED(ifd);
++	WINPR_UNUSED(nonblock);
++	return FALSE;
++#else
+ 	static int fd = -1;
+ 	static bool registered = false;
+ 	static int orig = 0;
+@@ -426,6 +442,7 @@ BOOL set_terminal_nonblock(int ifd, BOOL nonblock)
+ 		fd = -1;
+ 	}
+ 	return TRUE;
++#endif
+ }
+ 
+ int freerdp_interruptible_getc(rdpContext* context, FILE* stream)
+diff --git a/libfreerdp/utils/signal.c b/libfreerdp/utils/signal.c
+index c956ee4..5f369db 100644
+--- a/libfreerdp/utils/signal.c
++++ b/libfreerdp/utils/signal.c
+@@ -35,6 +35,20 @@
+ const char* strsignal(int signum);
+ #endif
+ 
++#ifdef __AROS__
++static const char* strsignal(int signum)
++{
++	switch (signum)
++	{
++		case SIGINT: return "Interrupt";
++		case SIGTERM: return "Terminated";
++		case SIGABRT: return "Aborted";
++		case SIGSEGV: return "Invalid memory access";
++		default: return "Signal";
++	}
++}
++#endif
++
+ BOOL fsig_handlers_registered = FALSE;
+ 
+ typedef struct
+diff --git a/libfreerdp/utils/signal_posix.c b/libfreerdp/utils/signal_posix.c
+index 98f4a4a..a7015bf 100644
+--- a/libfreerdp/utils/signal_posix.c
++++ b/libfreerdp/utils/signal_posix.c
+@@ -1,3 +1,4 @@
++#include <winpr/wtypes.h>
+ #include <pthread.h>
+ #include <stddef.h>
+ #include <errno.h>
+@@ -49,7 +50,11 @@ static void fatal_handler(int signum)
+ 	{
+ 		recursive = TRUE;
+ 		// NOLINTNEXTLINE(concurrency-mt-unsafe)
++#ifdef __AROS__
++		WLog_ERR(TAG, "Caught signal [%d]", signum);
++#else
+ 		WLog_ERR(TAG, "Caught signal '%s' [%d]", strsignal(signum), signum);
++#endif
+ 
+ 		winpr_log_backtrace(TAG, WLOG_ERROR, 20);
+ 	}
+diff --git a/winpr/include/winpr/pool.h b/winpr/include/winpr/pool.h
+index 09c69d5..7556b72 100644
+--- a/winpr/include/winpr/pool.h
++++ b/winpr/include/winpr/pool.h
+@@ -295,6 +295,12 @@ extern "C"
+ 	}
+ #endif
+ 
++#ifdef __AROS__
++/* Call from the main task after all pool clients and work have been released.
++ * No concurrent work submissions or pool users may remain. Idempotent. */
++WINPR_API VOID winpr_aros_shutdown_default_threadpool(void);
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/winpr/include/winpr/wtypes.h b/winpr/include/winpr/wtypes.h
+index 21948fa..81dd210 100644
+--- a/winpr/include/winpr/wtypes.h
++++ b/winpr/include/winpr/wtypes.h
+@@ -22,6 +22,23 @@
+ #ifndef WINPR_WTYPES_H
+ #define WINPR_WTYPES_H
+ 
++/* AROS socket/pthread headers expose Exec's WORD/BYTE/BOOL, whose
++ * signedness/width differs from the Windows ABI. Keep those native types
++ * private; the UI adapter uses a separate translation unit with native headers. */
++#ifdef __AROS__
++#define WORD AROS_WORD
++#define BYTE AROS_BYTE
++#define BOOL AROS_BOOL
++#include <exec/types.h>
++#include <pthread.h>
++#include <netdb.h>
++#include <proto/miami.h>
++#undef BOOL
++#undef BYTE
++#undef WORD
++#undef IsListEmpty
++#endif
++
+ #include <assert.h>
+ 
+ #include <winpr/config.h>
+diff --git a/winpr/libwinpr/CMakeLists.txt b/winpr/libwinpr/CMakeLists.txt
+index 1df61c5..b5b7fb8 100644
+--- a/winpr/libwinpr/CMakeLists.txt
++++ b/winpr/libwinpr/CMakeLists.txt
+@@ -125,6 +125,10 @@ if(NOT OPENBSD)
+   set(CMAKE_REQUIRED_LIBRARIES rt)
+ endif()
+ 
++if(CMAKE_SYSTEM_NAME STREQUAL "AROS")
++  winpr_library_add_private(miami net)
++endif()
++
+ find_package(uriparser)
+ option(WITH_URIPARSER "use uriparser library to handle URIs" ${uriparser_FOUND})
+ if(WITH_URIPARSER)
+diff --git a/winpr/libwinpr/comm/CMakeLists.txt b/winpr/libwinpr/comm/CMakeLists.txt
+index c959bd4..0340e34 100644
+--- a/winpr/libwinpr/comm/CMakeLists.txt
++++ b/winpr/libwinpr/comm/CMakeLists.txt
+@@ -20,7 +20,7 @@ set(MODULE_PREFIX "WINPR_COMM")
+ 
+ if(NOT WIN32)
+   set(${MODULE_PREFIX}_SRCS comm.c comm.h)
+-  if(NOT EMSCRIPTEN AND NOT APPLE)
++  if(NOT EMSCRIPTEN AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "AROS")
+     winpr_definition_add(WINPR_HAVE_SERIAL_SUPPORT)
+     list(
+       APPEND
+diff --git a/winpr/libwinpr/crt/string.c b/winpr/libwinpr/crt/string.c
+index 35e7981..07151fe 100644
+--- a/winpr/libwinpr/crt/string.c
++++ b/winpr/libwinpr/crt/string.c
+@@ -859,7 +859,43 @@ char* StrSep(char** stringp, const char* delim)
+ 
+ INT64 GetLine(char** lineptr, size_t* size, FILE* stream)
+ {
+-#if defined(_WIN32)
++#if defined(__AROS__)
++	size_t used = 0;
++	if (!lineptr || !size || !stream)
++	{
++		errno = EINVAL;
++		return -1;
++	}
++	if (!*lineptr)
++		*size = 0;
++	for (;;)
++	{
++		if (*size - used < 2)
++		{
++			if (*size > SIZE_MAX / 2)
++			{
++				errno = ENOMEM;
++				return -1;
++			}
++			const size_t capacity = *size ? *size * 2 : 128;
++			char* next = realloc(*lineptr, capacity);
++			if (!next)
++				return -1;
++			*lineptr = next;
++			*size = capacity;
++		}
++		const int ch = fgetc(stream);
++		if (ch == EOF)
++		{
++			(*lineptr)[used] = 0;
++			return (used && !ferror(stream)) ? (INT64)used : -1;
++		}
++		(*lineptr)[used++] = (char)ch;
++		(*lineptr)[used] = 0;
++		if (ch == '\n')
++			return (INT64)used;
++	}
++#elif defined(_WIN32)
+ 	char c;
+ 	char* n;
+ 	size_t step = 32;
+diff --git a/winpr/libwinpr/file/file.c b/winpr/libwinpr/file/file.c
+index b7cc91c..efffe9f 100644
+--- a/winpr/libwinpr/file/file.c
++++ b/winpr/libwinpr/file/file.c
+@@ -600,7 +600,7 @@ static INT64 FileTimeToUS(const FILETIME* ft)
+ 	return tmp;
+ }
+ 
+-#if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 200809L)
++#if defined(_POSIX_C_SOURCE) && (_POSIX_C_SOURCE >= 200809L) && !defined(__AROS__)
+ static struct timespec filetimeToTimespec(const FILETIME* ftime)
+ {
+ 	WINPR_ASSERT(ftime);
+@@ -640,7 +640,7 @@ static BOOL FileSetFileTime(HANDLE hFile, WINPR_ATTR_UNUSED const FILETIME* lpCr
+ 
+ 	return TRUE;
+ }
+-#elif defined(__APPLE__) || defined(ANDROID) || defined(__FreeBSD__) || defined(KFREEBSD)
++#elif defined(__APPLE__) || defined(ANDROID) || defined(__FreeBSD__) || defined(KFREEBSD) || defined(__AROS__)
+ static struct timeval filetimeToTimeval(const FILETIME* ftime)
+ {
+ 	WINPR_ASSERT(ftime);
+@@ -661,6 +661,9 @@ static struct timeval statToTimeval(const struct stat* sval, BOOL modification)
+ #else
+ 	TIMESPEC_TO_TIMEVAL(&tv, modification ? &sval->st_mtimespec : &sval->st_atimespec);
+ #endif
++#elif defined(__AROS__)
++	tv.tv_sec = modification ? sval->st_mtime : sval->st_atime;
++	tv.tv_usec = 0;
+ #elif defined(ANDROID)
+ 	tv.tv_sec = modification ? sval->st_mtime : sval->st_atime;
+ 	tv.tv_usec = (modification ? sval->st_mtimensec : sval->st_atimensec) / 1000UL;
+diff --git a/winpr/libwinpr/io/device.c b/winpr/libwinpr/io/device.c
+index 5c826b2..e06c697 100644
+--- a/winpr/libwinpr/io/device.c
++++ b/winpr/libwinpr/io/device.c
+@@ -126,6 +126,13 @@ NTSTATUS _IoCreateDeviceEx(WINPR_ATTR_UNUSED PDRIVER_OBJECT_EX DriverObject,
+                            WINPR_ATTR_UNUSED ULONG DeviceCharacteristics,
+                            WINPR_ATTR_UNUSED BOOLEAN Exclusive, PDEVICE_OBJECT_EX* DeviceObject)
+ {
++#ifdef __AROS__
++	/* POSIX filesystem FIFOs are unavailable; never create a fake device. */
++	WINPR_UNUSED(DeviceName);
++	if (DeviceObject)
++		*DeviceObject = nullptr;
++	return STATUS_NOT_SUPPORTED;
++#else
+ 	int status = 0;
+ 	char* DeviceBasePath = nullptr;
+ 	DEVICE_OBJECT_EX* pDeviceObjectEx = nullptr;
+@@ -211,6 +218,7 @@ NTSTATUS _IoCreateDeviceEx(WINPR_ATTR_UNUSED PDRIVER_OBJECT_EX DriverObject,
+ 
+ 	*((ULONG_PTR*)(DeviceObject)) = (ULONG_PTR)pDeviceObjectEx;
+ 	return STATUS_SUCCESS;
++#endif
+ }
+ 
+ /**
+diff --git a/winpr/libwinpr/library/library.c b/winpr/libwinpr/library/library.c
+index b177d17..1072834 100644
+--- a/winpr/libwinpr/library/library.c
++++ b/winpr/libwinpr/library/library.c
+@@ -66,7 +66,9 @@
+ 
+ #ifndef _WIN32
+ 
++#ifndef __AROS__
+ #include <dlfcn.h>
++#endif
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+@@ -116,7 +118,11 @@ HMODULE LoadLibraryA(LPCSTR lpLibFileName)
+ 	if (!lpLibFileName)
+ 		return nullptr;
+ 
+-#if defined(_UWP)
++#if defined(__AROS__)
++	/* AROS builds link channel providers statically; dlopen is unavailable. */
++	SetLastError(ERROR_NOT_SUPPORTED);
++	return nullptr;
++#elif defined(_UWP)
+ 	int status;
+ 	HMODULE hModule = nullptr;
+ 	WCHAR* filenameW = nullptr;
+@@ -187,6 +193,12 @@ HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
+ 
+ FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+ {
++#ifdef __AROS__
++	WINPR_UNUSED(hModule);
++	WINPR_UNUSED(lpProcName);
++	SetLastError(ERROR_NOT_SUPPORTED);
++	return nullptr;
++#else
+ 	FARPROC proc = nullptr;
+ 	proc = dlsym(hModule, lpProcName);
+ 
+@@ -198,19 +210,32 @@ FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+ 	}
+ 
+ 	return proc;
++#endif
+ }
+ 
+ BOOL FreeLibrary(HMODULE hLibModule)
+ {
++#ifdef __AROS__
++	WINPR_UNUSED(hLibModule);
++	SetLastError(ERROR_NOT_SUPPORTED);
++	return FALSE;
++#else
+ 	int status = 0;
+ 	status = dlclose(hLibModule);
+ 
+ 	return (status == 0);
++#endif
+ }
+ 
+ HMODULE GetModuleHandleA(LPCSTR lpModuleName)
+ {
++#ifdef __AROS__
++	WINPR_UNUSED(lpModuleName);
++	SetLastError(ERROR_NOT_SUPPORTED);
++	return nullptr;
++#else
+ 	return dlopen(lpModuleName, RTLD_NOLOAD | RTLD_LOCAL | RTLD_LAZY);
++#endif
+ }
+ 
+ HMODULE GetModuleHandleW(LPCWSTR lpModuleName)
+diff --git a/winpr/libwinpr/path/shell.c b/winpr/libwinpr/path/shell.c
+index b5dac5c..646b955 100644
+--- a/winpr/libwinpr/path/shell.c
++++ b/winpr/libwinpr/path/shell.c
+@@ -116,6 +116,8 @@ static char* GetPath_HOME(void)
+ 	char* path = nullptr;
+ #ifdef _WIN32
+ 	path = GetEnvAlloc("UserProfile");
++#elif defined(__AROS__)
++	path = _strdup("PROGDIR:");
+ #elif defined(__IOS__)
+ 	path = ios_get_home();
+ #else
+@@ -129,6 +131,8 @@ static char* GetPath_TEMP(void)
+ 	char* path = nullptr;
+ #ifdef _WIN32
+ 	path = GetEnvAlloc("TEMP");
++#elif defined(__AROS__)
++	path = _strdup("T:");
+ #elif defined(__IOS__)
+ 	path = ios_get_temp();
+ #else
+@@ -144,7 +148,9 @@ static char* GetPath_TEMP(void)
+ static char* GetPath_XDG_DATA_HOME(void)
+ {
+ 	char* path = nullptr;
+-#if defined(WIN32) || defined(__IOS__)
++#if defined(__AROS__)
++	path = _strdup("ENVARC:RemoteDesktop");
++#elif defined(WIN32) || defined(__IOS__)
+ 	path = GetPath_XDG_CONFIG_HOME();
+ #else
+ 	size_t size = 0;
+@@ -189,6 +195,8 @@ static char* GetPath_XDG_CONFIG_HOME(void)
+ 
+ 	path = win_get_known_folder(&FOLDERID_RoamingAppData, TRUE);
+ 
++#elif defined(__AROS__)
++	path = _strdup("ENVARC:RemoteDesktop");
+ #elif defined(__IOS__)
+ 	path = ios_get_data();
+ #else
+@@ -237,6 +245,8 @@ static char* GetPath_SYSTEM_CONFIG_HOME(void)
+ 
+ 	path = win_get_known_folder(&FOLDERID_ProgramData, FALSE);
+ 
++#elif defined(__AROS__)
++	path = _strdup("ENVARC:RemoteDesktop");
+ #elif defined(__IOS__)
+ 	path = ios_get_data();
+ #else
+@@ -263,6 +273,8 @@ static char* GetPath_XDG_CACHE_HOME(void)
+ 
+ 		free(home);
+ 	}
++#elif defined(__AROS__)
++	path = _strdup("T:RemoteDesktop/cache");
+ #elif defined(__IOS__)
+ 	path = ios_get_cache();
+ #else
+@@ -307,6 +319,8 @@ char* GetPath_XDG_RUNTIME_DIR(void)
+ 
+ 	path = win_get_known_folder(&FOLDERID_LocalAppData, TRUE);
+ 
++#elif defined(__AROS__)
++	path = _strdup("T:RemoteDesktop/runtime");
+ #else
+ 	/**
+ 	 * There is a single base directory relative to which user-specific runtime files and other file
+@@ -558,6 +572,38 @@ BOOL PathMakePathA(LPCSTR path, WINPR_ATTR_UNUSED LPSECURITY_ATTRIBUTES lpAttrib
+ 	return FALSE;
+ #elif defined(_WIN32)
+ 	return (SHCreateDirectoryExA(nullptr, path, lpAttributes) == ERROR_SUCCESS);
++#elif defined(__AROS__)
++	/* AROS absolute paths are assign:relative/path. Never mkdir the assign. */
++	const char* colon = path ? strchr(path, ':') : nullptr;
++	if (!colon || colon == path || memchr(path, '/', (size_t)(colon - path)))
++		return FALSE;
++	char* dup = _strdup(path);
++	if (!dup)
++		return FALSE;
++	BOOL result = TRUE;
++	char* part = dup + (colon - path) + 1;
++	/* Accept the hybrid assign:/path spelling produced by path appenders. */
++	if (*part == '/')
++		memmove(part, part + 1, strlen(part));
++	while (*part)
++	{
++		char* end = strchr(part, '/');
++		if (end)
++			*end = '\0';
++		struct stat st;
++		if ((mkdir(dup, 0700) != 0) &&
++		    ((errno != EEXIST) || (stat(dup, &st) != 0) || !S_ISDIR(st.st_mode)))
++		{
++			result = FALSE;
++			break;
++		}
++		if (!end)
++			break;
++		*end = '/';
++		part = end + 1;
++	}
++	free(dup);
++	return result;
+ #else
+ 	const char delim = PathGetSeparatorA(PATH_STYLE_NATIVE);
+ 	char* dup = nullptr;
+@@ -611,6 +657,13 @@ BOOL PathMakePathW(LPCWSTR path, WINPR_ATTR_UNUSED LPSECURITY_ATTRIBUTES lpAttri
+ 	return FALSE;
+ #elif defined(_WIN32)
+ 	return (SHCreateDirectoryExW(nullptr, path, lpAttributes) == ERROR_SUCCESS);
++#elif defined(__AROS__)
++	char* utf8 = ConvertWCharToUtf8Alloc(path, nullptr);
++	if (!utf8)
++		return FALSE;
++	BOOL result = PathMakePathA(utf8, lpAttributes);
++	free(utf8);
++	return result;
+ #else
+ 	const WCHAR wdelim = PathGetSeparatorW(PATH_STYLE_NATIVE);
+ 	const char delim = PathGetSeparatorA(PATH_STYLE_NATIVE);
+diff --git a/winpr/libwinpr/pool/pool.c b/winpr/libwinpr/pool/pool.c
+index f361488..8e391f6 100644
+--- a/winpr/libwinpr/pool/pool.c
++++ b/winpr/libwinpr/pool/pool.c
+@@ -169,6 +169,16 @@ PTP_POOL GetDefaultThreadpool(void)
+ 	return pool;
+ }
+ 
++#ifdef __AROS__
++VOID winpr_aros_shutdown_default_threadpool(void)
++{
++	/* AROS waits for every pthread before unloading the executable. The
++	 * process-wide pool otherwise leaves idle workers waiting forever. */
++	if (DEFAULT_POOL.Threads)
++		winpr_CloseThreadpool(&DEFAULT_POOL);
++}
++#endif
++
+ PTP_POOL winpr_CreateThreadpool(PVOID reserved)
+ {
+ 	PTP_POOL pool = nullptr;
+diff --git a/winpr/libwinpr/synch/event.c b/winpr/libwinpr/synch/event.c
+index fd659e9..dc8b332 100644
+--- a/winpr/libwinpr/synch/event.c
++++ b/winpr/libwinpr/synch/event.c
+@@ -93,9 +93,58 @@ static BOOL set_non_blocking_fd(int fd)
+ 	return fcntl(fd, F_SETFL, flags | O_NONBLOCK) >= 0;
+ }
+ 
++#ifdef __AROS__
++typedef struct aros_event_state {
++    int token;
++    BOOL signaled;
++    struct aros_event_state* next;
++} AROS_EVENT_STATE;
++static pthread_mutex_t aros_event_lock = PTHREAD_MUTEX_INITIALIZER;
++static AROS_EVENT_STATE* aros_events;
++static int aros_next_event = WINPR_AROS_EVENT_BASE;
++static BOOL aros_event_change(int token, int value)
++{
++    BOOL result = FALSE;
++    pthread_mutex_lock(&aros_event_lock);
++    for (AROS_EVENT_STATE* state = aros_events; state; state = state->next) {
++        if (state->token != token) continue;
++        if (value >= 0) state->signaled = value != 0;
++        result = value >= 0 ? TRUE : state->signaled;
++        break;
++    }
++    pthread_mutex_unlock(&aros_event_lock);
++    return result;
++}
++BOOL winpr_aros_event_ready(int token) { return aros_event_change(token, -1); }
++static BOOL aros_event_init(WINPR_EVENT_IMPL* event)
++{
++    AROS_EVENT_STATE* state = calloc(1, sizeof(*state));
++    if (!state) return FALSE;
++    pthread_mutex_lock(&aros_event_lock);
++    if (aros_next_event == INT_MAX) {
++        pthread_mutex_unlock(&aros_event_lock); free(state); return FALSE;
++    }
++    state->token = aros_next_event++;
++    state->next = aros_events; aros_events = state;
++    event->fds[0] = state->token; event->fds[1] = -1;
++    pthread_mutex_unlock(&aros_event_lock);
++    return TRUE;
++}
++static void aros_event_uninit(int token)
++{
++    pthread_mutex_lock(&aros_event_lock);
++    AROS_EVENT_STATE** link = &aros_events;
++    while (*link && (*link)->token != token) link = &(*link)->next;
++    if (*link) { AROS_EVENT_STATE* state = *link; *link = state->next; free(state); }
++    pthread_mutex_unlock(&aros_event_lock);
++}
++#endif
++
+ BOOL winpr_event_init(WINPR_EVENT_IMPL* event)
+ {
+-#ifdef WINPR_HAVE_SYS_EVENTFD_H
++#if defined(__AROS__)
++	return aros_event_init(event);
++#elif defined(WINPR_HAVE_SYS_EVENTFD_H)
+ 	event->fds[1] = -1;
+ 	event->fds[0] = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+ 
+@@ -148,6 +197,9 @@ void winpr_event_init_from_fd(WINPR_EVENT_IMPL* event, int fd)
+ 
+ BOOL winpr_event_set(WINPR_EVENT_IMPL* event)
+ {
++#ifdef __AROS__
++	if (event->fds[0] >= WINPR_AROS_EVENT_BASE) return aros_event_change(event->fds[0], 1);
++#endif
+ 	SSIZE_T ret = 0;
+ 	do
+ 	{
+@@ -164,6 +216,9 @@ BOOL winpr_event_set(WINPR_EVENT_IMPL* event)
+ 
+ BOOL winpr_event_reset(WINPR_EVENT_IMPL* event)
+ {
++#ifdef __AROS__
++	if (event->fds[0] >= WINPR_AROS_EVENT_BASE) return aros_event_change(event->fds[0], 0);
++#endif
+ 	SSIZE_T ret = 0;
+ 	do
+ 	{
+@@ -184,6 +239,11 @@ BOOL winpr_event_reset(WINPR_EVENT_IMPL* event)
+ 
+ void winpr_event_uninit(WINPR_EVENT_IMPL* event)
+ {
++#ifdef __AROS__
++    if (event->fds[0] >= WINPR_AROS_EVENT_BASE) {
++        aros_event_uninit(event->fds[0]); event->fds[0] = event->fds[1] = -1; return;
++    }
++#endif
+ 	if (event->fds[0] >= 0)
+ 	{
+ 		close(event->fds[0]);
+@@ -512,7 +572,11 @@ int SetEventFileDescriptor(HANDLE hEvent, int FileDescriptor, ULONG mode)
+ 	event = (WINPR_EVENT*)Object;
+ 
+ 	if (!event->bAttached && event->impl.fds[0] >= 0 && event->impl.fds[0] != FileDescriptor)
++#ifdef __AROS__
++        winpr_event_uninit(&event->impl);
++#else
+ 		close(event->impl.fds[0]);
++#endif
+ 
+ 	event->bAttached = TRUE;
+ 	event->common.Mode = mode;
+diff --git a/winpr/libwinpr/synch/event.h b/winpr/libwinpr/synch/event.h
+index 0f57374..cbe2f46 100644
+--- a/winpr/libwinpr/synch/event.h
++++ b/winpr/libwinpr/synch/event.h
+@@ -54,4 +54,11 @@ BOOL winpr_event_set(WINPR_EVENT_IMPL* event);
+ BOOL winpr_event_reset(WINPR_EVENT_IMPL* event);
+ void winpr_event_uninit(WINPR_EVENT_IMPL* event);
+ 
++
++#ifdef __AROS__
++/* Internal wait tokens occupy a namespace outside native file descriptors. */
++#define WINPR_AROS_EVENT_BASE 65536
++BOOL winpr_aros_event_ready(int token);
++#endif
++
+ #endif /* WINPR_LIBWINPR_SYNCH_EVENT_H_ */
+diff --git a/winpr/libwinpr/synch/pollset.c b/winpr/libwinpr/synch/pollset.c
+index 3b9b685..5da5852 100644
+--- a/winpr/libwinpr/synch/pollset.c
++++ b/winpr/libwinpr/synch/pollset.c
+@@ -2,6 +2,9 @@
+ #include <errno.h>
+ 
+ #include "pollset.h"
++#ifdef __AROS__
++#include "event.h"
++#endif
+ #include <winpr/handle.h>
+ #include <winpr/sysinfo.h>
+ #include <winpr/assert.h>
+@@ -88,6 +91,15 @@ void pollset_reset(WINPR_POLL_SET* set)
+ BOOL pollset_add(WINPR_POLL_SET* set, int fd, ULONG mode)
+ {
+ 	WINPR_ASSERT(set);
++#ifdef __AROS__
++    if (set->fillIndex >= set->size || fd < 0) return FALSE;
++    if (fd >= WINPR_AROS_EVENT_BASE) {
++        FdIndex* item = &set->fdIndex[set->fillIndex++];
++        item->fd = fd; item->mode = mode; item->ready = FALSE;
++        return TRUE;
++    }
++    if (fd >= FD_SETSIZE) return FALSE;
++#endif
+ #ifdef WINPR_HAVE_POLL_H
+ 	struct pollfd* item = nullptr;
+ 	if (set->fillIndex == set->size)
+@@ -134,6 +146,28 @@ int pollset_poll(WINPR_POLL_SET* set, DWORD dwMilliseconds)
+ 	else
+ 		dueTime = now + dwMilliseconds;
+ 
++#ifdef __AROS__
++    for (;;) {
++        int ready = 0;
++        set->rset = set->rset_base; set->wset = set->wset_base;
++        if (set->nread || set->nwrite) {
++            struct timeval immediate = { 0, 0 };
++            ready = select(set->maxFd + 1, set->nread ? &set->rset : NULL,
++                           set->nwrite ? &set->wset : NULL, NULL, &immediate);
++            if (ready < 0 && errno != EINTR) return -1;
++            if (ready < 0) ready = 0;
++        }
++        for (size_t i = 0; i < set->fillIndex; i++) {
++            FdIndex* item = &set->fdIndex[i];
++            if (item->fd >= WINPR_AROS_EVENT_BASE) {
++                item->ready = winpr_aros_event_ready(item->fd);
++                if (item->ready) ready++;
++            }
++        }
++        if (ready || GetTickCount64() >= dueTime) return ready;
++        Sleep(1);
++    }
++#endif
+ #ifdef WINPR_HAVE_POLL_H
+ 	int timeout = 0;
+ 
+@@ -236,6 +270,9 @@ BOOL pollset_isSignaled(WINPR_POLL_SET* set, size_t idx)
+ 	return !!(set->pollset[idx].revents & set->pollset[idx].events);
+ #else
+ 	FdIndex* fdIndex = &set->fdIndex[idx];
++#ifdef __AROS__
++    if (fdIndex->fd >= WINPR_AROS_EVENT_BASE) return fdIndex->ready;
++#endif
+ 	if (fdIndex->fd < 0)
+ 		return FALSE;
+ 
+@@ -263,6 +300,9 @@ BOOL pollset_isReadSignaled(WINPR_POLL_SET* set, size_t idx)
+ 	return !!(set->pollset[idx].revents & POLLIN);
+ #else
+ 	FdIndex* fdIndex = &set->fdIndex[idx];
++#ifdef __AROS__
++    if (fdIndex->fd >= WINPR_AROS_EVENT_BASE) return fdIndex->ready;
++#endif
+ 	if (fdIndex->fd < 0)
+ 		return FALSE;
+ 
+@@ -284,6 +324,9 @@ BOOL pollset_isWriteSignaled(WINPR_POLL_SET* set, size_t idx)
+ 	return !!(set->pollset[idx].revents & POLLOUT);
+ #else
+ 	FdIndex* fdIndex = &set->fdIndex[idx];
++#ifdef __AROS__
++    if (fdIndex->fd >= WINPR_AROS_EVENT_BASE) return fdIndex->ready;
++#endif
+ 	if (fdIndex->fd < 0)
+ 		return FALSE;
+ 
+diff --git a/winpr/libwinpr/synch/pollset.h b/winpr/libwinpr/synch/pollset.h
+index dc0df44..faa3cd4 100644
+--- a/winpr/libwinpr/synch/pollset.h
++++ b/winpr/libwinpr/synch/pollset.h
+@@ -35,6 +35,9 @@ typedef struct
+ {
+ 	int fd;
+ 	ULONG mode;
++#ifdef __AROS__
++	BOOL ready;
++#endif
+ } FdIndex;
+ #endif
+ 
+diff --git a/winpr/libwinpr/sysinfo/CMakeLists.txt b/winpr/libwinpr/sysinfo/CMakeLists.txt
+index 7a226df..ebed07b 100644
+--- a/winpr/libwinpr/sysinfo/CMakeLists.txt
++++ b/winpr/libwinpr/sysinfo/CMakeLists.txt
+@@ -21,7 +21,7 @@ endif()
+ 
+ winpr_module_add(sysinfo.c)
+ 
+-if((NOT WIN32) AND (NOT APPLE) AND (NOT ANDROID) AND (NOT OPENBSD))
++if((NOT WIN32) AND (NOT APPLE) AND (NOT ANDROID) AND (NOT OPENBSD) AND (NOT CMAKE_SYSTEM_NAME STREQUAL "AROS"))
+   winpr_library_add_private(rt)
+ endif()
+ 
+diff --git a/winpr/libwinpr/thread/process.c b/winpr/libwinpr/thread/process.c
+index 390e126..bc9b87a 100644
+--- a/winpr/libwinpr/thread/process.c
++++ b/winpr/libwinpr/thread/process.c
+@@ -160,6 +160,20 @@ static BOOL CreateProcessExA(HANDLE hToken, WINPR_ATTR_UNUSED DWORD dwLogonFlags
+                              LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo,
+                              LPPROCESS_INFORMATION lpProcessInformation)
+ {
++#ifdef __AROS__
++	/* No fork/exec emulation: native frontend owns launching and dialogs. */
++	WINPR_UNUSED(hToken);
++	WINPR_UNUSED(lpApplicationName);
++	WINPR_UNUSED(bInheritHandles);
++	WINPR_UNUSED(dwCreationFlags);
++	WINPR_UNUSED(lpEnvironment);
++	WINPR_UNUSED(lpCurrentDirectory);
++	WINPR_UNUSED(lpStartupInfo);
++	if (lpProcessInformation)
++		memset(lpProcessInformation, 0, sizeof(*lpProcessInformation));
++	SetLastError(ERROR_NOT_SUPPORTED);
++	return FALSE;
++#else
+ 	pid_t pid = 0;
+ 	int numArgs = 0;
+ 	LPSTR* pArgs = nullptr;
+@@ -479,6 +493,7 @@ finish:
+ 	}
+ 
+ 	return ret;
++#endif
+ }
+ 
+ BOOL CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine,
+diff --git a/winpr/libwinpr/thread/thread.c b/winpr/libwinpr/thread/thread.c
+index 583b961..ebef483 100644
+--- a/winpr/libwinpr/thread/thread.c
++++ b/winpr/libwinpr/thread/thread.c
+@@ -285,7 +285,10 @@ static BOOL mux_condition_bundle_wait(mux_condition_bundle* bundle, const char*
+ 			         winpr_strerror(r, ebuffer, sizeof(ebuffer)));
+ 			switch (r)
+ 			{
++
++#ifdef ENOTRECOVERABLE
+ 				case ENOTRECOVERABLE:
++#endif
+ 				case EPERM:
+ 				case ETIMEDOUT:
+ 				case EINVAL:
+@@ -914,6 +917,9 @@ DWORD GetCurrentThreadId(VOID)
+ 	return WINPR_CXX_COMPAT_CAST(DWORD, getthrid());
+ #elif defined(__linux__)
+ 	return WINPR_CXX_COMPAT_CAST(DWORD, syscall(SYS_gettid));
++#elif defined(__AROS__)
++	/* ADT pthread_t is a 32-bit thread identifier, not a pointer. */
++	return (DWORD)pthread_self();
+ #else
+ 	pthread_t tid = pthread_self();
+ 	/* Since pthread_t can be 64-bits on some systems, take just the    */
+diff --git a/winpr/libwinpr/winsock/winsock.c b/winpr/libwinpr/winsock/winsock.c
+index 154af8b..1831252 100644
+--- a/winpr/libwinpr/winsock/winsock.c
++++ b/winpr/libwinpr/winsock/winsock.c
+@@ -442,7 +442,11 @@ void WSASetLastError(int iError)
+ 			break;
+ 
+ 		case WSAETOOMANYREFS:
++#ifdef ETOOMANYREFS
+ 			errno = ETOOMANYREFS;
++#else
++			errno = EINVAL;
++#endif
+ 			break;
+ 
+ 		case WSAETIMEDOUT:
+@@ -492,7 +496,11 @@ void WSASetLastError(int iError)
+ 			break;
+ 
+ 		case WSAEREMOTE:
++#ifdef EREMOTE
+ 			errno = EREMOTE;
++#else
++			errno = EINVAL;
++#endif
+ 			break;
+ 		default:
+ 			break;
+@@ -628,9 +636,11 @@ int WSAGetLastError(void)
+ 			iError = WSAESHUTDOWN;
+ 			break;
+ 
++#ifdef ETOOMANYREFS
+ 		case ETOOMANYREFS:
+ 			iError = WSAETOOMANYREFS;
+ 			break;
++#endif
+ 
+ 		case ETIMEDOUT:
+ 			iError = WSAETIMEDOUT;
+@@ -678,9 +688,11 @@ int WSAGetLastError(void)
+ 			iError = WSAESTALE;
+ 			break;
+ 
++#ifdef EREMOTE
+ 		case EREMOTE:
+ 			iError = WSAEREMOTE;
+ 			break;
++#endif
+ 			/* Special cases */
+ #if (EAGAIN != EWOULDBLOCK)
+ 
+diff --git a/client/AROS/CMakeLists.txt b/client/AROS/CMakeLists.txt
+new file mode 100644
+--- /dev/null
++++ b/client/AROS/CMakeLists.txt
+@@ -0,0 +1,2 @@
++add_executable(adt-rdp tf_freerdp.c tf_channels.c native.c input.c clipboard.c clipboard_native.c profile.c vault.c display.c)
++target_link_libraries(adt-rdp PRIVATE freerdp-client freerdp winpr cybergraphics intuition graphics iffparse muimaster OpenSSL::Crypto)

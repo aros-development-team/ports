@@ -1,0 +1,39 @@
+include $(SRCDIR)/config/aros-contrib.cfg
+
+# The platform adapters are currently qualified on x86_64 only.
+ifeq ($(AROS_TARGET_CPU),x86_64)
+#MM- ports-network : ports-network-freerdp
+#MM ports-network-freerdp : includes linklibs compiler-startup workbench-devs-AHI-subsystem contrib-openssl workbench-libs-z ports-network-freerdp-fetch ports-network-freerdp-renderer-fetch
+
+FREERDP_VERSION := 3.32.2
+MUPDF_VERSION := 1.28.5
+FREERDP_SOURCE := $(PORTSDIR)/freerdp/freerdp-$(FREERDP_VERSION)
+MUPDF_SOURCE := $(PORTSDIR)/freerdp/mupdf-$(MUPDF_VERSION)-source
+FREERDP_BUILD := $(GENDIR)/$(CURDIR)/build
+FREERDP_JOBS ?= 4
+
+#MM
+ports-network-freerdp :
+	python3 $(SRCDIR)/$(CURDIR)/build.py \
+	    --source $(FREERDP_SOURCE) --renderer-source $(MUPDF_SOURCE) \
+	    --build-dir $(FREERDP_BUILD) --toolchain $(GENDIR)/config/conf.cmake \
+	    --sdk $(AROS_DEVELOPER) --jobs $(FREERDP_JOBS) \
+	    --install $(AROS_CONTRIB)/Networking/RemoteDesktop
+
+%fetch mmake=ports-network-freerdp-fetch archive=freerdp-$(FREERDP_VERSION) \
+    destination=$(PORTSDIR)/freerdp location=$(PORTSSOURCEDIR) suffixes="tar.gz" \
+    archive_origins=https://github.com/FreeRDP/FreeRDP/releases/download/$(FREERDP_VERSION) \
+    patches_specs=freerdp-$(FREERDP_VERSION)-aros.diff:freerdp-$(FREERDP_VERSION):-p1
+
+%fetch mmake=ports-network-freerdp-renderer-fetch archive=mupdf-$(MUPDF_VERSION)-source \
+    destination=$(PORTSDIR)/freerdp location=$(PORTSSOURCEDIR) suffixes="tar.gz" \
+    archive_origins=https://github.com/ArtifexSoftware/mupdf-downloads/releases/download/$(MUPDF_VERSION) \
+    patches_specs=mupdf-$(MUPDF_VERSION)-aros.diff:mupdf-$(MUPDF_VERSION)-source:-p1
+
+#MM
+ports-network-freerdp-clean :
+	$(RM) $(FREERDP_BUILD)
+	$(RM) $(AROS_CONTRIB)/Networking/RemoteDesktop
+endif
+
+%common

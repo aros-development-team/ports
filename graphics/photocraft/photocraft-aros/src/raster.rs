@@ -7,6 +7,11 @@ use std::collections::HashMap;
 use egui::epaint::textures::{TextureFilter, TexturesDelta};
 use egui::epaint::{ClippedPrimitive, ImageData, ImageDelta, Primitive, TextureId, Vertex};
 
+#[cfg(test)]
+std::thread_local! {
+    static SAMPLE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 struct Texture {
     width: usize,
     height: usize,
@@ -26,6 +31,8 @@ impl Texture {
     /// Samples at normalized `(u, v)`: bilinear for textures asking for it, else nearest.
     #[inline]
     fn sample(&self, u: f32, v: f32) -> [f32; 4] {
+        #[cfg(test)]
+        SAMPLE_COUNT.with(|n| n.set(n.get() + 1));
         let fx = u * self.width as f32 - 0.5;
         let fy = v * self.height as f32 - 0.5;
         if !self.linear {
@@ -176,6 +183,18 @@ fn triangle(frame: &mut [u8], width: usize, clip: [i32; 4], ppp: f32, texture: O
     let cb = b.color.to_array();
     let cc = c.color.to_array();
     let flat_color = ca == cb && cb == cc;
+    // A triangle whose three UVs are equal samples one point of its texture at every pixel
+    // (egui's fills use the atlas's white texel): sample once. With a flat colour, the whole
+    // source colour is the same everywhere too; hoist its modulation as well.
+    let uniform = (a.uv == b.uv && b.uv == c.uv).then(|| texture.map(|t| t.sample(a.uv.x, a.uv.y)));
+    let modulate = |color: [f32; 4], s: [f32; 4]| [color[0] * s[0] / 255.0, color[1] * s[1] / 255.0, color[2] * s[2] / 255.0, color[3] * s[3] / 255.0];
+    let flat_src = match uniform {
+        Some(sample) if flat_color => {
+            let color = [ca[0] as f32, ca[1] as f32, ca[2] as f32, ca[3] as f32];
+            Some(sample.map_or(color, |s| modulate(color, s)))
+        }
+        _ => None,
+    };
     // How each edge function changes per pixel step to the right (d/dx of the expressions below).
     let e0_dx = by - cy;
     let e1_dx = cy - ay;
@@ -191,26 +210,31 @@ fn triangle(frame: &mut [u8], width: usize, clip: [i32; 4], ppp: f32, texture: O
         let row = py as usize * width;
         for px in min_x..max_x {
             if w0 * sign >= 0.0 && w1 * sign >= 0.0 && w2 * sign >= 0.0 {
-                let l0 = w0 * inv_area;
-                let l1 = w1 * inv_area;
-                let l2 = w2 * inv_area;
-                let color = if flat_color {
-                    [ca[0] as f32, ca[1] as f32, ca[2] as f32, ca[3] as f32]
-                } else {
-                    let mut v = [0.0f32; 4];
-                    for i in 0..4 {
-                        v[i] = ca[i] as f32 * l0 + cb[i] as f32 * l1 + cc[i] as f32 * l2;
+                let src = match flat_src {
+                    Some(src) => src,
+                    None => {
+                        let l0 = w0 * inv_area;
+                        let l1 = w1 * inv_area;
+                        let l2 = w2 * inv_area;
+                        let color = if flat_color {
+                            [ca[0] as f32, ca[1] as f32, ca[2] as f32, ca[3] as f32]
+                        } else {
+                            let mut v = [0.0f32; 4];
+                            for i in 0..4 {
+                                v[i] = ca[i] as f32 * l0 + cb[i] as f32 * l1 + cc[i] as f32 * l2;
+                            }
+                            v
+                        };
+                        match (uniform, texture) {
+                            (Some(Some(s)), _) => modulate(color, s),
+                            (_, Some(t)) => {
+                                let u = a.uv.x * l0 + b.uv.x * l1 + c.uv.x * l2;
+                                let v = a.uv.y * l0 + b.uv.y * l1 + c.uv.y * l2;
+                                modulate(color, t.sample(u, v))
+                            }
+                            (_, None) => color,
+                        }
                     }
-                    v
-                };
-                let src = match texture {
-                    Some(t) => {
-                        let u = a.uv.x * l0 + b.uv.x * l1 + c.uv.x * l2;
-                        let v = a.uv.y * l0 + b.uv.y * l1 + c.uv.y * l2;
-                        let s = t.sample(u, v);
-                        [color[0] * s[0] / 255.0, color[1] * s[1] / 255.0, color[2] * s[2] / 255.0, color[3] * s[3] / 255.0]
-                    }
-                    None => color,
                 };
                 let alpha = src[3];
                 if alpha > 0.0 {
@@ -237,3 +261,7 @@ fn triangle(frame: &mut [u8], width: usize, clip: [i32; 4], ppp: f32, texture: O
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/raster.rs"]
+mod tests;

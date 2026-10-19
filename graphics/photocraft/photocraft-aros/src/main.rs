@@ -136,12 +136,18 @@ fn run(window: &Rc<ffi::Window>, shared_window: services::SharedWindow, options:
     let repaint = Arc::new(Repaint { waker: window.waker(), due: Mutex::new(Some(Instant::now())) });
     {
         let repaint = repaint.clone();
+        let ui_thread = std::thread::current().id();
         ctx.set_request_repaint_callback(move |info| {
             let due = Instant::now() + info.delay;
             let mut slot = repaint.due.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             *slot = Some(slot.map_or(due, |d| d.min(due)));
             drop(slot);
-            repaint.waker.wake();
+            // UI-thread requests already update the deadline read before the next wait.
+            // Signalling here would make that wait return immediately, even for a
+            // delayed caret blink. Background requests still need to interrupt it.
+            if std::thread::current().id() != ui_thread {
+                repaint.waker.wake();
+            }
         });
     }
     let quit = Rc::new(Cell::new(false));

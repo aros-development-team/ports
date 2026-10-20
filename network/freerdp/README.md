@@ -33,8 +33,15 @@ username and password, select sharing options, then Connect. A blank account
 can reach an xrdp server's own login screen if its configuration permits it.
 No server address, account or certificate is supplied with this port.
 
-Save profile records the connection and sharing settings under
-`PROGDIR:Profiles`. Load profile restores them. Remember password additionally
+Load profile opens a file requester, initially in `PROGDIR:Profiles`. Save
+updates the current profile, asking for a destination the first time. Save As
+chooses another file and makes it the current profile; replacing an existing
+file asks for confirmation. Saved profiles receive a project icon whose
+Default Tool points to this copy of RemoteDesktop. Double-clicking a profile
+loads its settings. A profile with a saved password asks for the master
+password and connects after unlocking; otherwise the login dialog opens.
+Keep the application at that location or update the icon's Default Tool if
+it is moved. Remember password additionally
 stores an AES-256-GCM encrypted password; saving asks for a master password
 and confirmation, and loading asks for the master password. The master
 password is not stored. PBKDF2-HMAC-SHA256 derives the key with a random salt;
@@ -58,6 +65,14 @@ The menu shortcuts are Right-Amiga+P, Right-Amiga+D and Right-Amiga+Q.
 Re-enter the password or load a saved profile before reconnecting. Command-line
 options outside the fields supported by the dialog are not retained there;
 the dialog represents one shared directory and one printer.
+
+The Input menu provides Send Keys presets for Ctrl+Alt+Delete, Ctrl+Shift+Esc,
+Alt+Tab, Alt+Shift+Tab, Alt+Esc, Alt+F4, Ctrl+Esc, the Windows key, Win+R,
+Win+E, Win+D, Win+L, Win+Tab, Print Screen and Alt+Print Screen. Custom
+combination accepts modifier names followed by a key, such as Win+Shift+S.
+It supports letters, digits, F1-F24, navigation keys and named punctuation.
+Keys are released in reverse order. The remote connection remains active
+while the custom dialog is open.
 
 Sharing is opt-in: text clipboard, audio playback, microphone capture, a
 selected local directory, and either text or PDF/XPS printer mode. The server

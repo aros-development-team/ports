@@ -1132,10 +1132,10 @@ index 0000000..bef74d7
 +#endif
 diff --git a/client/AROS/input.c b/client/AROS/input.c
 new file mode 100644
-index 0000000..84d17d0
+index 0000000..2651f55
 --- /dev/null
 +++ b/client/AROS/input.c
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,212 @@
 +#include "input.h"
 +uint16_t adt_raw_scancode(uint32_t raw)
 +{
@@ -1240,16 +1240,137 @@ index 0000000..84d17d0
 +    };
 +    return raw <= 255 ? codes[raw & 127] : 0;
 +}
++
++#include <ctype.h>
++#include <string.h>
++
++unsigned adt_key_preset(unsigned command, uint16_t keys[ADT_KEY_COMBO_MAX])
++{
++    static const uint16_t presets[][4] = {
++        {0x01d, 0x038, 0x153}, {0x01d, 0x02a, 0x001},
++        {0x038, 0x00f}, {0x038, 0x02a, 0x00f}, {0x038, 0x001},
++        {0x038, 0x03e}, {0x01d, 0x001}, {0x15b},
++        {0x15b, 0x013}, {0x15b, 0x012}, {0x15b, 0x020}, {0x15b, 0x026},
++        {0x15b, 0x00f}, {0x137}, {0x038, 0x137}
++    };
++    if (!keys || command < ADT_KEY_CTRL_ALT_DELETE || command >= ADT_KEY_CUSTOM)
++        return 0;
++    unsigned count = 0;
++    const uint16_t *preset = presets[command - ADT_KEY_CTRL_ALT_DELETE];
++    while (count < 4 && preset[count]) { keys[count] = preset[count]; count++; }
++    return count;
++}
++
++static uint16_t named_key(const char *name)
++{
++    static const struct { const char *name; uint16_t code; } names[] = {
++        {"ctrl",0x01d}, {"control",0x01d}, {"lctrl",0x01d}, {"rctrl",0x11d},
++        {"shift",0x02a}, {"lshift",0x02a}, {"rshift",0x036},
++        {"alt",0x038}, {"lalt",0x038}, {"ralt",0x138}, {"altgr",0x138},
++        {"win",0x15b}, {"windows",0x15b}, {"lwin",0x15b}, {"rwin",0x15c},
++        {"esc",0x001}, {"escape",0x001}, {"tab",0x00f}, {"enter",0x01c},
++        {"return",0x01c}, {"space",0x039}, {"backspace",0x00e},
++        {"delete",0x153}, {"del",0x153}, {"insert",0x152}, {"ins",0x152},
++        {"home",0x147}, {"end",0x14f}, {"pageup",0x149}, {"pgup",0x149},
++        {"pagedown",0x151}, {"pgdn",0x151}, {"up",0x148}, {"down",0x150},
++        {"left",0x14b}, {"right",0x14d}, {"printscreen",0x137}, {"prtsc",0x137},
++        {"menu",0x15d}, {"capslock",0x03a}, {"numlock",0x045}, {"scrolllock",0x046},
++        {"minus",0x00c}, {"equal",0x00d}, {"comma",0x033}, {"period",0x034},
++        {"slash",0x035}, {"backslash",0x02b}, {"semicolon",0x027},
++        {"apostrophe",0x028}, {"grave",0x029}, {"leftbracket",0x01a}, {"rightbracket",0x01b}
++    };
++    static const uint16_t letters[] = {
++        0x1e,0x30,0x2e,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,
++        0x31,0x18,0x19,0x10,0x13,0x1f,0x14,0x16,0x2f,0x11,0x2d,0x15,0x2c
++    };
++    if (name[0] && !name[1]) {
++        if (name[0] >= 'a' && name[0] <= 'z') return letters[name[0]-'a'];
++        if (name[0] == '0') return 0x00b;
++        if (name[0] >= '1' && name[0] <= '9') return 0x002 + name[0]-'1';
++    }
++    if (name[0] == 'f' && name[1] >= '1' && name[1] <= '9') {
++        unsigned n = name[1]-'0';
++        if (name[2] >= '0' && name[2] <= '9' && !name[3]) n = n*10 + name[2]-'0';
++        else if (name[2]) return 0;
++        if (n <= 10) return 0x03a+n;
++        if (n <= 12) return 0x057+n-11;
++        if (n <= 24) return 0x064+n-13;
++    }
++    for (unsigned i=0; i<sizeof(names)/sizeof(names[0]); i++)
++        if (!strcmp(name,names[i].name)) return names[i].code;
++    return 0;
++}
++static int modifier(uint16_t code)
++{
++    return code==0x01d || code==0x11d || code==0x02a || code==0x036 ||
++           code==0x038 || code==0x138 || code==0x15b || code==0x15c;
++}
++unsigned adt_parse_key_combo(const char *text, uint16_t keys[ADT_KEY_COMBO_MAX])
++{
++    if (!text || !keys || strlen(text)>127) return 0;
++    uint16_t parsed[ADT_KEY_COMBO_MAX];
++    unsigned count=0;
++    for (;;) {
++        char name[24]; unsigned length=0;
++        while (*text && *text!='+') {
++            unsigned char c=(unsigned char)*text++;
++            if (isspace(c)) continue;
++            if (length+1>=sizeof(name)) return 0;
++            name[length++]=(char)tolower(c);
++        }
++        name[length]=0;
++        if (!length || count==ADT_KEY_COMBO_MAX) return 0;
++        uint16_t key=named_key(name);
++        if (!key) return 0;
++        for (unsigned i=0;i<count;i++) if (parsed[i]==key) return 0;
++        parsed[count++]=key;
++        if (!*text) break;
++        if (!modifier(key)) return 0;
++        text++;
++    }
++    memcpy(keys,parsed,count*sizeof(*keys));
++    return count;
++}
++int adt_send_key_combo(const uint16_t *keys, unsigned count,
++                      int (*send)(void *, uint16_t, int), void *context)
++{
++    if (!keys || !send || !count || count>ADT_KEY_COMBO_MAX) return 0;
++    for (unsigned i=0;i<count;i++) {
++        if (!keys[i] || keys[i]>0x1ff) return 0;
++        for (unsigned j=0;j<i;j++) if (keys[i]==keys[j]) return 0;
++    }
++    unsigned pressed=0; int result=1;
++    while (pressed<count) {
++        uint16_t key=keys[pressed++];
++        if (!send(context,key,1)) { result=0; break; }
++    }
++    /* A failed send may already have reached the peer. Always attempt releases. */
++    while (pressed) if (!send(context,keys[--pressed],0)) result=0;
++    return result;
++}
 diff --git a/client/AROS/input.h b/client/AROS/input.h
 new file mode 100644
-index 0000000..b3a3a13
+index 0000000..fc36e25
 --- /dev/null
 +++ b/client/AROS/input.h
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,18 @@
 +#ifndef ADT_RDP_INPUT_H
 +#define ADT_RDP_INPUT_H
 +#include <stdint.h>
 +uint16_t adt_raw_scancode(uint32_t raw);
++#define ADT_KEY_COMBO_MAX 8
++enum adt_key_command {
++    ADT_KEY_CTRL_ALT_DELETE = 100, ADT_KEY_CTRL_SHIFT_ESC,
++    ADT_KEY_ALT_TAB, ADT_KEY_ALT_SHIFT_TAB, ADT_KEY_ALT_ESC,
++    ADT_KEY_ALT_F4, ADT_KEY_CTRL_ESC, ADT_KEY_WIN,
++    ADT_KEY_WIN_R, ADT_KEY_WIN_E, ADT_KEY_WIN_D, ADT_KEY_WIN_L,
++    ADT_KEY_WIN_TAB, ADT_KEY_PRINTSCREEN, ADT_KEY_ALT_PRINTSCREEN,
++    ADT_KEY_CUSTOM
++};
++unsigned adt_key_preset(unsigned command, uint16_t keys[ADT_KEY_COMBO_MAX]);
++unsigned adt_parse_key_combo(const char *text, uint16_t keys[ADT_KEY_COMBO_MAX]);
++int adt_send_key_combo(const uint16_t *keys, unsigned count,
++                      int (*send)(void *, uint16_t, int), void *context);
 +#endif
 diff --git a/client/AROS/make-icon.c b/client/AROS/make-icon.c
 new file mode 100644
@@ -1296,15 +1417,20 @@ index 0000000..5e653eb
 +}
 diff --git a/client/AROS/native.c b/client/AROS/native.c
 new file mode 100644
-index 0000000..a1d2d78
+index 0000000..8debecd
 --- /dev/null
 +++ b/client/AROS/native.c
-@@ -0,0 +1,476 @@
+@@ -0,0 +1,686 @@
 +/* ADT AROS native desktop backend. */
 +#include "native.h"
 +#include "profile.h"
 +#include "vault.h"
 +#include <sys/stat.h>
++#include <proto/asl.h>
++#include <libraries/asl.h>
++#include <proto/icon.h>
++#include <workbench/startup.h>
++#include <workbench/workbench.h>
 +#include <stdlib.h>
 +#include <intuition/intuition.h>
 +#include <proto/exec.h>
@@ -1328,13 +1454,33 @@ index 0000000..a1d2d78
 +    struct Screen *screen=LockPubScreen(NULL); if (!screen) return 0;
 +    *width=screen->Width; *height=screen->Height; UnlockPubScreen(NULL,screen); return 1;
 +}
-+struct native_window { struct Window *window; struct Menu *menus; int fullscreen, resize; uint32_t saved_width, saved_height; };
++struct native_window { struct Window *window; struct Menu *menus; void *key_app, *key_win, *key_field, *key_error; int fullscreen, resize; uint32_t saved_width, saved_height; };
++static int poll_key_dialog(struct native_window *n, struct native_event *event);
++static void close_key_dialog(struct native_window *n);
 +static struct NewMenu session_menu[] = {
 +    { NM_TITLE, "Project", NULL, 0, 0, NULL },
 +    { NM_ITEM, "Preferences (reconnect)...", "P", 0, 0, (APTR)NATIVE_MENU_PREFERENCES },
 +    { NM_ITEM, "Disconnect", "D", 0, 0, (APTR)NATIVE_MENU_DISCONNECT },
 +    { NM_ITEM, NM_BARLABEL, NULL, 0, 0, NULL },
 +    { NM_ITEM, "Quit", "Q", 0, 0, (APTR)NATIVE_MENU_QUIT },
++    { NM_TITLE, "Input", NULL, 0, 0, NULL },
++    { NM_ITEM, "Send Keys", NULL, 0, 0, NULL },
++    { NM_SUB, "Ctrl+Alt+Delete", NULL, 0, 0, (APTR)ADT_KEY_CTRL_ALT_DELETE },
++    { NM_SUB, "Ctrl+Shift+Esc", NULL, 0, 0, (APTR)ADT_KEY_CTRL_SHIFT_ESC },
++    { NM_SUB, "Alt+Tab", NULL, 0, 0, (APTR)ADT_KEY_ALT_TAB },
++    { NM_SUB, "Alt+Shift+Tab", NULL, 0, 0, (APTR)ADT_KEY_ALT_SHIFT_TAB },
++    { NM_SUB, "Alt+Esc", NULL, 0, 0, (APTR)ADT_KEY_ALT_ESC },
++    { NM_SUB, "Alt+F4", NULL, 0, 0, (APTR)ADT_KEY_ALT_F4 },
++    { NM_SUB, "Ctrl+Esc", NULL, 0, 0, (APTR)ADT_KEY_CTRL_ESC },
++    { NM_SUB, "Windows key", NULL, 0, 0, (APTR)ADT_KEY_WIN },
++    { NM_SUB, "Win+R", NULL, 0, 0, (APTR)ADT_KEY_WIN_R },
++    { NM_SUB, "Win+E", NULL, 0, 0, (APTR)ADT_KEY_WIN_E },
++    { NM_SUB, "Win+D", NULL, 0, 0, (APTR)ADT_KEY_WIN_D },
++    { NM_SUB, "Win+L", NULL, 0, 0, (APTR)ADT_KEY_WIN_L },
++    { NM_SUB, "Win+Tab", NULL, 0, 0, (APTR)ADT_KEY_WIN_TAB },
++    { NM_SUB, "Print Screen", NULL, 0, 0, (APTR)ADT_KEY_PRINTSCREEN },
++    { NM_SUB, "Alt+Print Screen", NULL, 0, 0, (APTR)ADT_KEY_ALT_PRINTSCREEN },
++    { NM_SUB, "Custom combination...", NULL, 0, 0, (APTR)ADT_KEY_CUSTOM },
 +    { NM_END, NULL, NULL, 0, 0, NULL }
 +};
 +static int attach_menu(struct Window *window, struct Menu *menus)
@@ -1401,6 +1547,7 @@ index 0000000..a1d2d78
 +void native_close(struct native_window *n)
 +{
 +    if (!n) return;
++    close_key_dialog(n);
 +    if (n->window) {
 +        struct Message *message;
 +        while ((message = GetMsg(n->window->UserPort))) ReplyMsg(message);
@@ -1412,6 +1559,7 @@ index 0000000..a1d2d78
 +}
 +int native_poll(struct native_window *n, struct native_event *event)
 +{
++    if (poll_key_dialog(n, event)) return 1;
 +    struct IntuiMessage *msg = (struct IntuiMessage *)GetMsg(n->window->UserPort);
 +    if (!msg) return 0;
 +    event->kind = 0; event->code = msg->Code; event->qualifier = msg->Qualifier;
@@ -1433,7 +1581,9 @@ index 0000000..a1d2d78
 +    case IDCMP_MENUPICK:
 +        if (msg->Code != MENUNULL) {
 +            struct MenuItem *item = ItemAddress(n->menus, msg->Code);
-+            if (item) { event->kind = 8; event->code = (IPTR)GTMENUITEM_USERDATA(item); }
++            if (item && GTMENUITEM_USERDATA(item)) {
++                event->kind = 8; event->code = (IPTR)GTMENUITEM_USERDATA(item);
++            }
 +        }
 +        break;
 +    case IDCMP_CLOSEWINDOW: event->kind = 1; break;
@@ -1498,6 +1648,85 @@ index 0000000..a1d2d78
 +    struct EasyStruct easy={sizeof(easy),0,"Remote Desktop settings","%s","OK"};
 +    IPTR args[]={(IPTR)message}; EasyRequestArgs(NULL,&easy,NULL,(RAWARG)args);
 +}
++static void close_key_dialog(struct native_window *n)
++{
++    if (n->key_app) {
++        SetAttrs(n->key_win, MUIA_Window_Open, FALSE, TAG_DONE);
++        MUI_DisposeObject(n->key_app);
++    }
++    n->key_app=n->key_win=n->key_field=n->key_error=NULL;
++}
++int native_key_dialog(struct native_window *n)
++{
++    if (n->key_app) {
++        SetAttrs(n->key_win, MUIA_Window_Activate, TRUE, TAG_DONE);
++        return 1;
++    }
++    Object *entry=MUI_NewObject(MUIC_String,MUIA_Frame,MUIV_Frame_String,
++        MUIA_CycleChain,TRUE,MUIA_String_MaxLen,128,
++        MUIA_String_Contents,(IPTR)"Ctrl+Alt+Delete",TAG_DONE);
++    Object *send=MUI_MakeObject(MUIO_Button,(IPTR)"Send");
++    Object *cancel=MUI_MakeObject(MUIO_Button,(IPTR)"Cancel");
++    Object *help=label("Modifiers: Ctrl, Alt, Shift, Win (or L/R variants).\n"
++        "Keys: A-Z, 0-9, F1-F24, arrows, Enter, Tab, Esc,\n"
++        "Space, Backspace, Insert, Delete, Home, End,\n"
++        "PageUp, PageDown, PrintScreen, Menu, lock keys.\n"
++        "Example: Win+Shift+S");
++    Object *error=label(" ");
++    if (!entry || !send || !cancel || !help || !error) {
++        if(entry)MUI_DisposeObject(entry);if(send)MUI_DisposeObject(send);
++        if(cancel)MUI_DisposeObject(cancel);if(help)MUI_DisposeObject(help);
++        if(error)MUI_DisposeObject(error);return 0;
++    }
++    SetAttrs(send,MUIA_CycleChain,TRUE,TAG_DONE);
++    SetAttrs(cancel,MUIA_CycleChain,TRUE,TAG_DONE);
++    Object *buttons=MUI_NewObject(MUIC_Group,MUIA_Group_Horiz,TRUE,
++        MUIA_Group_Child,(IPTR)send,MUIA_Group_Child,(IPTR)cancel,TAG_DONE);
++    if (!buttons) {
++        MUI_DisposeObject(entry);MUI_DisposeObject(send);MUI_DisposeObject(cancel);
++        MUI_DisposeObject(help);MUI_DisposeObject(error);return 0;
++    }
++    Object *group=MUI_NewObject(MUIC_Group,MUIA_Group_Child,(IPTR)help,
++        MUIA_Group_Child,(IPTR)entry,MUIA_Group_Child,(IPTR)error,
++        MUIA_Group_Child,(IPTR)buttons,TAG_DONE);
++    if(!group){MUI_DisposeObject(entry);MUI_DisposeObject(help);MUI_DisposeObject(error);MUI_DisposeObject(buttons);return 0;}
++    Object *win=MUI_NewObject(MUIC_Window,MUIA_Window_Title,(IPTR)"Send keys",
++        MUIA_Window_Width,440,MUIA_Window_RootObject,(IPTR)group,TAG_DONE);
++    if(!win){MUI_DisposeObject(group);return 0;}
++    Object *app=MUI_NewObject(MUIC_Application,MUIA_Application_Title,(IPTR)"Send keys",
++        MUIA_Application_Window,(IPTR)win,TAG_DONE);
++    if(!app){MUI_DisposeObject(win);return 0;}
++    n->key_app=app;n->key_win=win;n->key_field=entry;n->key_error=error;
++    DoMethod(entry,MUIM_Notify,MUIA_String_Acknowledge,MUIV_EveryTime,
++        (IPTR)app,2,MUIM_Application_ReturnID,1);
++    DoMethod(send,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,1);
++    DoMethod(cancel,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,2);
++    DoMethod(win,MUIM_Notify,MUIA_Window_CloseRequest,TRUE,(IPTR)app,2,MUIM_Application_ReturnID,2);
++    SetAttrs(win,MUIA_Window_Open,TRUE,MUIA_Window_ActiveObject,(IPTR)entry,TAG_DONE);
++    IPTR opened=0;GetAttr(MUIA_Window_Open,win,&opened);
++    if(!opened){close_key_dialog(n);return 0;}
++    return 1;
++}
++static int poll_key_dialog(struct native_window *n, struct native_event *event)
++{
++    if (!n->key_app) return 0;
++    ULONG signals=0;
++    IPTR id=DoMethod(n->key_app,MUIM_Application_NewInput,(IPTR)&signals);
++    if(id==1){
++        unsigned count=adt_parse_key_combo(field_text(n->key_field),event->keys);
++        if(!count){
++            SetAttrs(n->key_error,MUIA_Text_Contents,
++                (IPTR)"Use modifiers followed by one supported key.",TAG_DONE);
++            return 0;
++        }
++        event->kind=9;event->key_count=count;
++        close_key_dialog(n);return 1;
++    }
++    if(id==2 || id==MUIV_Application_ReturnID_Quit){
++        close_key_dialog(n);event->kind=0;return 1;
++    }
++    return 0;
++}
 +/* The unlocking password exists only in masked widgets and temporary memory. */
 +static void wipe_field(Object *object)
 +{
@@ -1558,6 +1787,89 @@ index 0000000..a1d2d78
 +    if (info) FreeDosObject(DOS_FIB,info);
 +    UnLock(lock); return ok;
 +}
++static char current_profile[768];
++static char workbench_tool[768];
++static int startup_profile;
++
++int native_startup_profile(void *message)
++{
++    struct WBStartup *startup = message;
++    if (!startup || startup->sm_NumArgs < 1) return 0;
++    struct WBArg *tool = &startup->sm_ArgList[0];
++    if (!tool->wa_Lock || !tool->wa_Name ||
++        !NameFromLock(tool->wa_Lock, workbench_tool, sizeof(workbench_tool)) ||
++        !AddPart(workbench_tool, tool->wa_Name, sizeof(workbench_tool))) return 0;
++    if (startup->sm_NumArgs < 2) return 1;
++    if (startup->sm_NumArgs != 2) {
++        native_error("Open one profile at a time."); return 0;
++    }
++    struct WBArg *arg = &startup->sm_ArgList[1];
++    if (!arg->wa_Lock || !arg->wa_Name ||
++        !NameFromLock(arg->wa_Lock, current_profile, sizeof(current_profile)) ||
++        !AddPart(current_profile, arg->wa_Name, sizeof(current_profile))) {
++        current_profile[0] = 0;
++        native_error("Cannot find the selected profile."); return 0;
++    }
++    startup_profile = 1;
++    return 1;
++}
++
++static int profile_request(Object *win, int save, char path[768])
++{
++    char drawer[768], file[768];
++    snprintf(drawer, sizeof(drawer), "%s", *current_profile ? current_profile : "PROGDIR:Profiles/");
++    snprintf(file, sizeof(file), "%s", FilePart(drawer));
++    *FilePart(drawer) = 0;
++    if (save && !*file) strcpy(file, "Untitled.conf");
++    IPTR window = 0;
++    GetAttr(MUIA_Window_Window, win, &window);
++    struct FileRequester *request = AllocAslRequestTags(ASL_FileRequest,
++        ASLFR_Window, window, ASLFR_TitleText, (IPTR)(save ? "Save profile as" : "Load profile"),
++        ASLFR_DoSaveMode, save, ASLFR_DoPatterns, TRUE,
++        ASLFR_InitialPattern, (IPTR)"~(#?.info)",
++        ASLFR_InitialDrawer, (IPTR)drawer, ASLFR_InitialFile, (IPTR)file, TAG_DONE);
++    if (!request) { native_error("Cannot open the file requester."); return 0; }
++    int ok = AslRequest(request, NULL) && *request->fr_File;
++    if (ok) {
++        ok = strlen(request->fr_Drawer) < 768;
++        if (ok) {
++            strcpy(path, request->fr_Drawer);
++            ok = AddPart(path, request->fr_File, 768);
++        }
++    }
++    FreeAslRequest(request);
++    if (ok && save) {
++        BPTR lock = Lock(path, ACCESS_READ);
++        if (lock) {
++            UnLock(lock);
++            struct EasyStruct question = { sizeof(question), 0, "Remote Desktop",
++                "Replace the existing profile?", "Replace|Cancel" };
++            ok = EasyRequestArgs((struct Window *)window, &question, NULL, NULL) == 1;
++        }
++    }
++    return ok;
++}
++
++static int profile_icon(const char *path)
++{
++    struct DiskObject *icon = GetDiskObject(path);
++    if (icon) { FreeDiskObject(icon); return 1; }
++    char tool[768], name[256];
++    if (*workbench_tool) strcpy(tool, workbench_tool);
++    else if (!NameFromLock(GetProgramDir(), tool, sizeof(tool)) ||
++        !GetProgramName(name, sizeof(name)) ||
++        !AddPart(tool, FilePart(name), sizeof(tool))) return 0;
++    icon = GetDefDiskObject(WBPROJECT);
++    if (!icon) return 0;
++    STRPTR old_tool = icon->do_DefaultTool;
++    icon->do_DefaultTool = tool;
++    icon->do_StackSize = 4194304;
++    int ok = PutDiskObject(path, icon);
++    icon->do_DefaultTool = old_tool;
++    FreeDiskObject(icon);
++    return ok;
++}
++
 +static int native_form(char **host, char **user, char **password, char **domain, int editable, struct native_options *options)
 +{
 +    Object *server = field(*host, 0);
@@ -1572,7 +1884,7 @@ index 0000000..a1d2d78
 +        if (cancel) MUI_DisposeObject(cancel); return 0;
 +    }
 +    Object *checks[7] = {0};
-+    Object *profile_name=NULL, *pin=NULL, *load=NULL, *save=NULL, *profiles=NULL, *directory=NULL;
++    Object *profile_name=NULL, *pin=NULL, *load=NULL, *save=NULL, *save_as=NULL, *profiles=NULL, *directory=NULL;
 +    Object *remember=NULL;
 +    Object *sharing = NULL;
 +    if (options) {
@@ -1593,15 +1905,18 @@ index 0000000..a1d2d78
 +        remember=MUI_MakeObject(MUIO_Checkmark,(IPTR)NULL);
 +        DoMethod(sharing,OM_ADDMEMBER,(IPTR)remember);
 +        DoMethod(sharing,OM_ADDMEMBER,(IPTR)label("Remember password"));
-+        profile_name=field("default",0); pin=field(options->fingerprint,0); directory=field(options->directory,0);
++        profile_name=label(*current_profile ? (const char *)FilePart(current_profile) : "Untitled"); pin=field(options->fingerprint,0); directory=field(options->directory,0);
 +        int values[] = { options->clipboard, options->sound, options->microphone,
 +            options->printer, options->fullscreen, options->resize, options->documents };
 +        for (unsigned i = 0; i < 7; i++) SetAttrs(checks[i], MUIA_Selected, values[i], TAG_DONE);
-+        load=MUI_MakeObject(MUIO_Button,(IPTR)"Load profile");
-+        save=MUI_MakeObject(MUIO_Button,(IPTR)"Save profile");
++        load=MUI_MakeObject(MUIO_Button,(IPTR)"Load profile...");
++        save=MUI_MakeObject(MUIO_Button,(IPTR)"Save");
++        save_as=MUI_MakeObject(MUIO_Button,(IPTR)"Save As...");
 +        profiles=MUI_NewObject(MUIC_Group,MUIA_Group_Columns,2,
-+            MUIA_Group_Child,(IPTR)label("Profile name"),MUIA_Group_Child,(IPTR)profile_name,
-+            MUIA_Group_Child,(IPTR)load,MUIA_Group_Child,(IPTR)save,
++            MUIA_Group_Child,(IPTR)label("Profile"),MUIA_Group_Child,(IPTR)profile_name,
++            MUIA_Group_Child,(IPTR)load,
++            MUIA_Group_Child,(IPTR)MUI_NewObject(MUIC_Group,MUIA_Group_Horiz,TRUE,
++                MUIA_Group_Child,(IPTR)save,MUIA_Group_Child,(IPTR)save_as,TAG_DONE),
 +            MUIA_Group_Child,(IPTR)label("SHA-256 pin (optional)"),MUIA_Group_Child,(IPTR)pin,
 +            MUIA_Group_Child,(IPTR)label("Shared folder (blank = off)"),MUIA_Group_Child,(IPTR)directory,TAG_DONE);
 +    }
@@ -1630,24 +1945,30 @@ index 0000000..a1d2d78
 +    if (options) {
 +        DoMethod(load,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,3);
 +        DoMethod(save,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,4);
++        DoMethod(save_as,MUIM_Notify,MUIA_Pressed,FALSE,(IPTR)app,2,MUIM_Application_ReturnID,5);
 +    }
 +    SetAttrs(ok, MUIA_CycleChain, TRUE, TAG_DONE);
 +    SetAttrs(cancel, MUIA_CycleChain, TRUE, TAG_DONE);
 +    if (options) {
 +        SetAttrs(load, MUIA_CycleChain, TRUE, TAG_DONE);
 +        SetAttrs(save, MUIA_CycleChain, TRUE, TAG_DONE);
++        SetAttrs(save_as, MUIA_CycleChain, TRUE, TAG_DONE);
 +        SetAttrs(remember, MUIA_CycleChain, TRUE, TAG_DONE);
 +        for (unsigned i = 0; i < 7; i++)
 +            SetAttrs(checks[i], MUIA_CycleChain, TRUE, TAG_DONE);
 +    }
 +    SetAttrs(win, MUIA_Window_Open, TRUE, MUIA_Window_ActiveObject,
-+             (IPTR)(options ? profile_name : u), TAG_DONE);
++             (IPTR)(options ? load : u), TAG_DONE);
 +    IPTR opened = 0; GetAttr(MUIA_Window_Open, win, &opened);
 +    int result = 0;
++    int initial_load = options && startup_profile;
++    startup_profile = 0;
 +    while (opened) {
 +        ULONG signals = 0; IPTR id = DoMethod(app, MUIM_Application_NewInput, (IPTR)&signals);
++        int launching = initial_load;
++        if (initial_load) { id = 3; initial_load = 0; }
 +        char canonical_directory[260]={0};
-+        if (options && (id==1 || id==4)) {
++        if (options && (id==1 || id==4 || id==5)) {
 +            IPTR text_print=0, document_print=0;
 +            GetAttr(MUIA_Selected,checks[3],&text_print);GetAttr(MUIA_Selected,checks[6],&document_print);
 +            if (text_print && document_print) { native_error("Choose either text or document printer sharing."); continue; }
@@ -1655,10 +1976,13 @@ index 0000000..a1d2d78
 +                native_error("Choose an existing shared folder without commas, or leave it blank to disable folder sharing."); continue;
 +            }
 +        }
-+        if (options && (id==3 || id==4)) {
-+            const char *name=field_text(profile_name);
-+            if (!adt_profile_name_valid(name)) { native_error("Use 1-48 letters, digits, underscores or hyphens for a profile name."); continue; }
-+            char path[128]; snprintf(path,sizeof(path),"PROGDIR:Profiles/%s.conf",name);
++        if (options && (id==3 || id==4 || id==5)) {
++            char path[768];
++            snprintf(path,sizeof(path),"%s",current_profile);
++            if (!launching && (id==3 || id==5 || !*path)) {
++                mkdir("PROGDIR:Profiles",0700);
++                if (!profile_request(win,id!=3,path)) continue;
++            }
 +            struct adt_profile settings={0};
 +            if (id==3) {
 +                if (!adt_profile_load(path,&settings)) { native_error("Cannot load profile: missing file or invalid settings."); continue; }
@@ -1683,7 +2007,10 @@ index 0000000..a1d2d78
 +                int values[]={settings.options.clipboard,settings.options.sound,settings.options.microphone,
 +                    settings.options.printer,settings.options.fullscreen,settings.options.resize,settings.options.documents};
 +                for (unsigned i=0;i<7;i++) SetAttrs(checks[i],MUIA_Selected,values[i],TAG_DONE);
-+                native_error(*settings.password_blob ? "Profile and saved password loaded." : "Profile loaded. Enter your password to connect.");
++                strcpy(current_profile,path);
++                SetAttrs(profile_name,MUIA_Text_Contents,(IPTR)FilePart(path),TAG_DONE);
++                if (launching && *settings.password_blob)
++                    DoMethod(app,MUIM_Application_ReturnID,1);
 +            } else {
 +                snprintf(settings.host,sizeof(settings.host),"%s",field_text(server));
 +                snprintf(settings.user,sizeof(settings.user),"%s",field_text(u));
@@ -1703,8 +2030,12 @@ index 0000000..a1d2d78
 +                    wipe_buffer(unlock,sizeof(unlock));
 +                    if(!sealed){native_error("Cannot save the password. The existing profile has not been changed.");continue;}
 +                }
-+                mkdir("PROGDIR:Profiles",0700);
-+                native_error(adt_profile_save(path,&settings) ? "Profile saved." : "Cannot save settings. Check the pin and that the application folder is writable.");
++                if (!adt_profile_save(path,&settings)) {
++                    native_error("Cannot save the profile. Check the settings and destination."); continue;
++                }
++                strcpy(current_profile,path);
++                SetAttrs(profile_name,MUIA_Text_Contents,(IPTR)FilePart(path),TAG_DONE);
++                if (!profile_icon(path)) native_error("Profile saved, but its icon could not be created.");
 +            }
 +            continue;
 +        }
@@ -1778,25 +2109,28 @@ index 0000000..a1d2d78
 +}
 diff --git a/client/AROS/native.h b/client/AROS/native.h
 new file mode 100644
-index 0000000..b6f6750
+index 0000000..3a99224
 --- /dev/null
 +++ b/client/AROS/native.h
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,28 @@
 +/* Native ABI boundary: do not include WinPR or Exec headers here. */
 +#ifndef ADT_RDP_NATIVE_H
 +#define ADT_RDP_NATIVE_H
 +#include <stdint.h>
++#include "input.h"
 +struct native_window;
 +enum native_menu_action {
 +    NATIVE_MENU_PREFERENCES = 1, NATIVE_MENU_DISCONNECT, NATIVE_MENU_QUIT
 +};
-+struct native_event { uint32_t kind, code, qualifier; int32_t x, y; };
++struct native_event { uint32_t kind, code, qualifier; int32_t x, y; uint16_t keys[ADT_KEY_COMBO_MAX]; unsigned key_count; };
++int native_startup_profile(void *message);
 +int native_desktop_size(uint32_t *width, uint32_t *height);
 +int native_screen_size(uint32_t *width, uint32_t *height);
 +void native_error(const char *message);
 +struct native_window *native_open(uint32_t width, uint32_t height, int fullscreen, int resize);
 +int native_toggle_fullscreen(struct native_window *window, uint32_t *width, uint32_t *height);
 +void native_close(struct native_window *window);
++int native_key_dialog(struct native_window *window);
 +int native_poll(struct native_window *window, struct native_event *event);
 +int native_paint(struct native_window *window, const void *pixels, uint32_t width,
 +                 uint32_t height, uint32_t stride);
@@ -2058,10 +2392,10 @@ index 0000000..d00a5c2
 +#endif /* FREERDP_CLIENT_SAMPLE_CHANNELS_H */
 diff --git a/client/AROS/tf_freerdp.c b/client/AROS/tf_freerdp.c
 new file mode 100644
-index 0000000..c565c80
+index 0000000..8154dc1
 --- /dev/null
 +++ b/client/AROS/tf_freerdp.c
-@@ -0,0 +1,716 @@
+@@ -0,0 +1,743 @@
 +/**
 + * FreeRDP: A Remote Desktop Protocol Implementation
 + * FreeRDP Test UI
@@ -2356,6 +2690,12 @@ index 0000000..c565c80
 +/* RDP main loop.
 + * Connects RDP, loops while running and handles event and dispatch, cleans up
 + * after the connection ends. */
++static int send_combo_key(void *context, uint16_t key, int down)
++{
++    rdpInput *input=(rdpInput *)context;
++    return freerdp_input_send_keyboard_event_ex(input,down,FALSE,key);
++}
++
 +static DWORD WINAPI tf_client_thread_proc(LPVOID arg)
 +{
 +	freerdp* instance = (freerdp*)arg;
@@ -2391,7 +2731,7 @@ index 0000000..c565c80
 +		{
 +			if (ev.kind == 1)
 +				goto disconnect;
-+			if (ev.kind == 6 || ev.kind == 8) {
++			if (ev.kind == 6 || ev.kind == 8 || ev.kind == 9) {
 +				for (unsigned k = 0; k < 128; k++) {
 +					if (((tfContext*)instance->context)->keys[k])
 +						freerdp_input_send_keyboard_event_ex(instance->context->input,
@@ -2402,9 +2742,24 @@ index 0000000..c565c80
 +				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON2, 0, 0);
 +				freerdp_input_send_mouse_event(instance->context->input, PTR_FLAGS_BUTTON3, 0, 0);
 +			}
++            if (ev.kind == 9 || (ev.kind == 8 && ev.code >= ADT_KEY_CTRL_ALT_DELETE && ev.code < ADT_KEY_CUSTOM)) {
++                if (ev.kind == 8) ev.key_count=adt_key_preset(ev.code,ev.keys);
++                if (!adt_send_key_combo(ev.keys,ev.key_count,send_combo_key,instance->context->input)) {
++                    result=ERROR_INTERNAL_ERROR;
++                    goto disconnect;
++                }
++                continue;
++            }
++            if (ev.kind == 8 && ev.code == ADT_KEY_CUSTOM) {
++                if (!native_key_dialog(((tfContext*)instance->context)->window))
++                    WLog_ERR(TAG,"Cannot open Send keys dialog");
++                continue;
++            }
 +            if (ev.kind == 8) {
 +                if (ev.code == NATIVE_MENU_PREFERENCES || ev.code == NATIVE_MENU_DISCONNECT)
 +                    ((tfContext*)instance->context)->return_to_preferences = TRUE;
++                else if (ev.code != NATIVE_MENU_QUIT)
++                    continue;
 +                goto disconnect;
 +            }
 +			if (ev.kind == 7) {
@@ -2439,6 +2794,9 @@ index 0000000..c565c80
 +				}
 +				UINT16 code = adt_raw_scancode(ev.code);
 +				if (code) {
++                    /* A dialog may close before its accepting key is released. */
++                    if ((ev.code & 128) && !((tfContext*)instance->context)->keys[ev.code & 127])
++                        continue;
 +					((tfContext*)instance->context)->keys[ev.code & 127] = !(ev.code & 128);
 +					freerdp_input_send_keyboard_event_ex(instance->context->input,
 +					    !(ev.code & 0x80), FALSE, code);
@@ -2629,7 +2987,10 @@ index 0000000..c565c80
 +{
 +    /* Workbench passes its startup message in argv with argc == 0. */
 +    char* workbench_argv[] = { "adt-rdp", NULL };
-+    if (argc == 0) { argc = 1; argv = workbench_argv; }
++    if (argc == 0) {
++        if (!native_startup_profile(argv)) return 1;
++        argc = 1; argv = workbench_argv;
++    }
 +	/* Serial/file logs must retain the last shutdown stage if a native call blocks. */
 +	setvbuf(stdout, NULL, _IONBF, 0);
 +	setvbuf(stderr, NULL, _IONBF, 0);
@@ -3825,4 +4186,4 @@ new file mode 100644
 +++ b/client/AROS/CMakeLists.txt
 @@ -0,0 +1,2 @@
 +add_executable(adt-rdp tf_freerdp.c tf_channels.c native.c input.c clipboard.c clipboard_native.c profile.c vault.c display.c)
-+target_link_libraries(adt-rdp PRIVATE freerdp-client freerdp winpr cybergraphics intuition gadtools graphics iffparse muimaster OpenSSL::Crypto)
++target_link_libraries(adt-rdp PRIVATE freerdp-client freerdp winpr cybergraphics intuition gadtools asl icon graphics iffparse muimaster OpenSSL::Crypto)

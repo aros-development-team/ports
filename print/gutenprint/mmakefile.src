@@ -1,0 +1,117 @@
+# $Id$
+
+include $(SRCDIR)/config/aros-contrib.cfg
+
+#MM- ports-print : ports-print-gutenprint
+
+#MM- ports-print-gutenprint : \
+#MM     ports-print-gutenprint-driver \
+#MM     ports-print-gutenprint-render \
+#MM     ports-print-gutenprint-prefs \
+#MM     ports-print-gutenprint-tools \
+#MM     ports-print-gutenprint-xml \
+#MM     ports-print-gutenprint-files \
+#MM     ports-print-gutenprint-icons \
+#MM     ports-print-gutenprint-drawericon \
+#MM     ports-print-gutenprint-envpackage
+
+#MM  ports-print-gutenprint-lib : includes linklibs ports-print-gutenprint-fetch
+#MM  ports-print-gutenprint-render : includes linklibs ports-print-gutenprint-lib
+#MM  ports-print-gutenprint-prefs : includes linklibs ports-print-gutenprint-lib
+#MM  ports-print-gutenprint-tools-render : includes linklibs ports-print-gutenprint-lib
+#MM  ports-print-gutenprint-tools-dev : includes linklibs
+#MM  ports-print-gutenprint-xml : ports-print-gutenprint-fetch
+#MM  ports-print-gutenprint-envpackage : workbench-prefs-envarc
+
+REPOSITORIES := https://sourceforge.net/projects/gimp-print/files/gutenprint-5.3/5.3.5
+VERSION      := 5.3.5
+ARCHBASE     := gutenprint-$(VERSION)
+PORTDIR      := $(PORTSDIR)/gutenprint
+SRC          := $(PORTDIR)/$(ARCHBASE)
+STAGE        := $(GENDIR)/$(CURDIR)/stage
+TARGETDIR    := $(AROS_CONTRIB)/Utilities/Print/Gutenprint
+
+%fetch mmake=ports-print-gutenprint-fetch archive=$(ARCHBASE) destination=$(PORTDIR) \
+    location=$(PORTSSOURCEDIR) archive_origins=$(REPOSITORIES) suffixes="tar.xz" \
+    patches_specs=$(ARCHBASE)-aros.diff:$(ARCHBASE):-p1
+
+%create_patch mmake=ports-print-gutenprint-create-patch \
+    archive=$(ARCHBASE) srcdir=$(ARCHBASE) destination=$(PORTDIR) suffixes="tar.xz"
+
+# libgutenprint alone, static, without CUPS, GIMP, GTK and its tools; the
+# printer models' XML goes to the drawer and is found through STP_DATA_PATH.
+GP_OPTS := --disable-shared --enable-static --without-cups --without-gimp2 \
+    --disable-libgutenprintui2 --disable-nls --without-doc --disable-samples \
+    --disable-escputil --without-modules --without-readline --disable-test \
+    --disable-testpattern
+
+%build_with_configure mmake=ports-print-gutenprint-lib package=gutenprint \
+    srcdir=$(SRC) prefix=$(STAGE) gendir=$(GENDIR)/$(CURDIR) \
+    extraoptions="$(GP_OPTS)" \
+    install_env="libdir=$(STAGE)/lib includedir=$(STAGE)/include"
+
+GP_INCLUDES := -I$(STAGE)/include -I$(SRCDIR)/$(CURDIR)/src
+GP_LIB      := $(STAGE)/lib/libgutenprint.a
+
+CORE := core/gpjob core/gpprofile core/gpcolor
+
+# GutenprintRender runs Gutenprint for the driver (public port GUTENPRINT.RENDER)
+%build_prog mmake=ports-print-gutenprint-render progname=GutenprintRender \
+    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/,server/gutenprintrender server/gppreview $(CORE))" \
+    targetdir=$(TARGETDIR) cflags="$(CFLAGS) $(GP_INCLUDES)" \
+    uselibs="mui cybergraphics" ldflags="$(LDFLAGS) $(GP_LIB) -lm"
+
+# GutenprintPrefs: the settings window Printer prefs opens for the driver
+%build_prog mmake=ports-print-gutenprint-prefs progname=GutenprintPrefs \
+    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/,prefs/gutenprintprefs prefs/gpfind core/gpjob core/gpprofile)" \
+    targetdir=$(TARGETDIR) cflags="$(CFLAGS) $(GP_INCLUDES)" \
+    uselibs="mui cybergraphics" ldflags="$(LDFLAGS) $(GP_LIB) -lm"
+
+# gp-render prints a PPM through Gutenprint into a file; gp-query shows what
+# an application sees of a printer.device unit; gp-dumptest prints through
+# printer.device as an application would
+%build_prog mmake=ports-print-gutenprint-tools-render progname=gp-render \
+    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/,tools/gp-render core/gpjob)" \
+    targetdir=$(TARGETDIR)/Tools cflags="$(CFLAGS) $(GP_INCLUDES)" \
+    ldflags="$(LDFLAGS) $(GP_LIB) -lm"
+
+%build_progs mmake=ports-print-gutenprint-tools-dev \
+    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/tools/,gp-query gp-dumptest)" \
+    targetdir=$(TARGETDIR)/Tools
+
+#MM- ports-print-gutenprint-tools : ports-print-gutenprint-tools-render ports-print-gutenprint-tools-dev
+
+# the printer, paper and dither definitions, from the fetched sources
+#MM
+ports-print-gutenprint-xml : $(TARGETDIR)/xml/printers/ps.xml
+
+$(TARGETDIR)/xml/printers/ps.xml : $(SRC)/src/xml/printers/ps.xml
+	@$(ECHO) "Copying    Gutenprint XML data..."
+	@cd $(SRC)/src/xml && find . -name '*.xml' | while read f; do \
+	    $(MKDIR) $(TARGETDIR)/xml/$$(dirname $$f); $(CP) $$f $(TARGETDIR)/xml/$$f; done
+
+#MM- ports-print-gutenprint-files : ports-print-gutenprint-files-doc \
+#MM     ports-print-gutenprint-files-ppd ports-print-gutenprint-files-startup
+%copy_files_q mmake=ports-print-gutenprint-files-doc files=README.md \
+    src=$(SRCDIR)/$(CURDIR) dst=$(TARGETDIR)
+%copy_files_q mmake=ports-print-gutenprint-files-ppd files=Generic.ppd \
+    src=$(SRCDIR)/$(CURDIR)/ppd dst=$(TARGETDIR)/ppd
+%copy_files_q mmake=ports-print-gutenprint-files-startup files=Package-Startup \
+    src=$(SRCDIR)/$(CURDIR)/s dst=$(TARGETDIR)/s
+
+%build_icons mmake=ports-print-gutenprint-icons icons=GutenprintPrefs \
+    dir=$(TARGETDIR) srcdir=$(SRCDIR)/$(CURDIR)/icons
+
+%build_icons mmake=ports-print-gutenprint-drawericon icons=Gutenprint \
+    dir=$(AROS_CONTRIB)/Utilities/Print srcdir=$(SRCDIR)/$(CURDIR)/icons
+
+#MM
+ports-print-gutenprint-envpackage :
+	$(ECHO) "Extras:Utilities/Print/Gutenprint" >$(AROS_PACKAGES)/Gutenprint
+
+#MM
+ports-print-gutenprint-clean :
+	$(RM) $(TARGETDIR)
+	$(RM) $(GENDIR)/$(CURDIR)
+
+%common

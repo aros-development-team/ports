@@ -1,0 +1,46 @@
+diff -u gutenprint-5.3.5/src/main/path.c gutenprint-5.3.5.aros/src/main/path.c
+index 227e1b9..f109f6b 100644
+--- gutenprint-5.3.5/src/main/path.c
++++ gutenprint-5.3.5.aros/src/main/path.c
+@@ -240,7 +240,12 @@ stp_path_split(stp_list_t *list, /* List to add directories to */
+ 
+   while (start)
+     {
++#ifdef __AROS__
++      /* ':' ends an AROS volume name, so AROS paths are separated by ';'. */
++      end = (const char *) strchr(start, ';');
++#else
+       end = (const char *) strchr(start, ':');
++#endif
+       if (!end)
+ 	len = strlen(start) + 1;
+       else
+--- gutenprint-5.3.5/Makefile.in	2026-10-29 15:08:53.970097805 -0500
++++ gutenprint-5.3.5.aros/Makefile.in	2026-10-29 15:08:53.980849701 -0500
+@@ -460,7 +460,7 @@
+ ACLOCAL_AMFLAGS = -I m4 -I m4local
+ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include $(LOCAL_CPPFLAGS) $(GNUCFLAGS) -DPACKAGE_LOCALE_DIR=\"$(PACKAGE_LOCALE_DIR)\" -DPACKAGE_DATA_DIR=\"$(PACKAGE_DATA_DIR)\" -DPACKAGE_LIB_DIR=\"$(PACKAGE_LIB_DIR)\" -DPACKAGE_BIN_DIR=\"$(PACKAGE_BIN_DIR)\" -DPKGMODULEDIR=\"$(PKGMODULEDIR)\" -DPKGXMLDATADIR=\"$(PKGXMLDATADIR)\"
+ BUILT_SOURCES = src/xml/xmli18n-tmp.h
+-SUBDIRS = include src samples test po man doc scripts
++SUBDIRS = include src
+ DISTDIRS = m4 m4extra
+ CONFIGSUMMARYDIR = $(pkglibdir)/@GUTENPRINT_MAJOR_VERSION@.@GUTENPRINT_MINOR_VERSION@
+ 
+--- gutenprint-5.3.5/src/Makefile.in	2026-10-29 15:08:53.972843840 -0500
++++ gutenprint-5.3.5.aros/src/Makefile.in	2026-10-29 15:08:54.001966629 -0500
+@@ -429,14 +429,7 @@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+ AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include $(LOCAL_CPPFLAGS) $(GNUCFLAGS) -DPACKAGE_LOCALE_DIR=\"$(PACKAGE_LOCALE_DIR)\" -DPACKAGE_DATA_DIR=\"$(PACKAGE_DATA_DIR)\" -DPACKAGE_LIB_DIR=\"$(PACKAGE_LIB_DIR)\" -DPACKAGE_BIN_DIR=\"$(PACKAGE_BIN_DIR)\" -DPKGMODULEDIR=\"$(PKGMODULEDIR)\" -DPKGXMLDATADIR=\"$(PKGXMLDATADIR)\"
+-SUBDIRS = \
+-	main					\
+-	xml					\
+-	escputil				\
+-	gutenprintui2				\
+-	gimp2					\
+-	cups					\
+-	testpattern
++SUBDIRS = main
+ 
+ MAINTAINERCLEANFILES = Makefile.in
+ all: all-recursive

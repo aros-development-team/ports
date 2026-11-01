@@ -1,0 +1,2 @@
+; Gutenprint: the driver, its data and GutenprintPrefs live in this drawer.
+Assign GUTENPRINT: "" >NIL:

@@ -1,0 +1,7 @@
+# Vectoroids
+
+Vectoroids is a vector-graphics arcade shooter. This directory supplies the integration maintained in AROS Ports.
+
+The [AROS MetaMake recipe](mmakefile.src) fetches the upstream source and defines its AROS build or packaging steps and destination under `$(AROS_CONTRIB)/Games/Action/Vectoroids`.
+
+Additional package notes: [LEGAL](LEGAL).

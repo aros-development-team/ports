@@ -31,7 +31,7 @@ run it.
   structures with the unit's prefs and the profile's page, PRD_USEPREFS and
   PRD_LOADPREFS read the page again. Reset, save and write are not commands
   here: the profile files belong to GutenprintPrefs. Installed as
-  `Devs/Printers/Gutenprint` of the Extras.
+  `DEVS:Printers/Gutenprint`, next to the other printer drivers.
 - `src/server/` - `GutenprintRender`, the program that runs Gutenprint for the
   driver (public port `GUTENPRINT.RENDER`, started by the driver on first
   use). Settings: `ENV:Gutenprint/Settings`, a `Printer=<model>` line plus
@@ -62,12 +62,15 @@ run it.
 
 The port installs into `Extras:Utilities/Print/Gutenprint` (GutenprintRender,
 GutenprintPrefs, `xml/` with the printer definitions, `ppd/Generic.ppd`, the
-tools) and the driver as `Extras:Devs/Printers/Gutenprint`; the package's
-`s/Package-Startup` assigns `GUTENPRINT:` to the drawer at boot. Select the
-driver `Gutenprint` in Prefs/Printer (copy it next to the other drivers in
-`DEVS:Printers` if Prefs/Printer only lists that drawer) and choose the
-printer model and paper in GutenprintPrefs, opened from Prefs/Printer's
-"Driver settings..." button or directly with `GutenprintPrefs UNIT=<n>`.
+tools) and the driver as `DEVS:Printers/Gutenprint`, next to the other
+printer drivers; the package's `s/Package-Startup` assigns `GUTENPRINT:` to
+the drawer at boot. Select the driver `Gutenprint` in Prefs/Printer and
+choose the printer model and paper in GutenprintPrefs, opened from Prefs/Printer's
+"Advanced..." button or directly with `GutenprintPrefs UNIT=<n>`. A unit
+without a model opens its settings once when a job starts; if none is chosen
+there, a graphics job fails with PDERR_CANCEL, and text sent to the unit is
+dropped without an error, as printer.device has no way yet for a driver to
+fail a text write.
 
 Text (CMD_WRITE, e.g. `Copy file PRT:`) is laid out on pages of the
 printable area in DejaVuSansMono.font at 10 pt (topaz if that font is

@@ -47,6 +47,7 @@
 #include "../core/gpjob.h"
 #include "../core/gpprofile.h"
 #include "gpfind.h"
+#include "gpdest.h"
 
 #define TAB_PAPER    0
 #define TAB_QUALITY  1
@@ -100,7 +101,11 @@ static struct
 {
     Object *app, *win;
     Object *profiles, *add, *copy, *remove, *level;
-    Object *name, *unit, *search, *makers, *models, *model_text, *connection, *device_id;
+    Object *name, *unit, *search, *makers, *models, *model_text, *device_id;
+    /* where the printer's unit prints: the same settings Printer prefs shows */
+    Object *dport, *dport_other, *dport_unit;
+    Object *dsends_label, *dsends_row, *dsends, *dsends_other, *dsends_unit;
+    Object *duri_label, *duri, *dname_label, *dname, *dformat_label, *dformat, *duuid_label, *duuid;
     Object *preview_check;
     Object *pages;
     Object *tab_group[GEN_TABS], *tab_content[GEN_TABS];
@@ -117,6 +122,8 @@ static struct
     char deleted[GP_MAX_PROFILES][64];
     int ndeleted;
     char units[GP_UNITS][64];
+    struct gpdest dest[GP_UNITS], dest_was[GP_UNITS];   /* as edited, as read */
+    int dest_loaded[GP_UNITS];
 
     int nmodels;
     char (*model_driver)[64];
@@ -438,6 +445,212 @@ static void set_status(const char *text)
     set(g.status, MUIA_Text_Contents, (IPTR)text);
 }
 
+/* ---------------------------------------------------------------- destination */
+
+/* Output devices, named without ".device", and what they are called. */
+static const char *const port_device[] = { "parallel", "serial", "printtofile", "usbparallel", "printspool", "ipp", NULL };
+static const char *port_label[] = { "Parallel", "Serial", "Print to file", "USB printer", "Print spooler",
+    "Network printer", "Other device", NULL };
+/* where a print spooler's queue sends its jobs: no spooler */
+static const char *const sends_device[] = { "parallel", "serial", "printtofile", "usbparallel", "ipp", NULL };
+static const char *sends_label[] = { "Parallel", "Serial", "Print to file", "USB printer", "Network printer",
+    "Other device", NULL };
+
+static int device_index(const char *const *list, const char *device)
+{
+    int i;
+
+    for (i = 0; list[i] != NULL; i++)
+        if (strcmp(list[i], device) == 0)
+            return i;
+    return i;       /* "Other device" */
+}
+
+static int unit_of(const char *name);
+
+static int dest_unit(void)
+{
+    struct gp_profile *p = cur();
+
+    return p != NULL ? unit_of(p->name) : -1;
+}
+
+static int is_network(const char *uri)
+{
+    return strncmp(uri, "ipp://", 6) == 0 || strncmp(uri, "socket://", 9) == 0;
+}
+
+static const char *format_for(const char *driver)
+{
+    return strncmp(driver, "ps", 2) == 0 ? "application/postscript" : "application/octet-stream";
+}
+
+/* The unit's settings as the system has them, read once. A printer set up before
+   GutenprintPrefs followed them kept its address in the profile: it becomes the
+   unit's network printer, written on Use or Save, and leaves the profile. */
+static struct gpdest *dest_get(int u)
+{
+    int i;
+
+    if (u < 0 || u >= GP_UNITS)
+        return NULL;
+    if (!g.dest_loaded[u])
+    {
+        gpdest_load(u, &g.dest[u]);
+        g.dest_was[u] = g.dest[u];
+        g.dest_loaded[u] = 1;
+        for (i = 0; i < g.nprofiles; i++)
+        {
+            struct gp_profile *p = &g.profile[i];
+
+            if (strcmp(g.units[u], p->name) != 0 || !is_network(p->connection))
+                continue;
+            if (!g.dest[u].has_printer)
+                gpdest_network(&g.dest[u], u, p->connection, p->name, "", format_for(p->model));
+            p->connection[0] = '\0';
+        }
+    }
+    return &g.dest[u];
+}
+
+static void show_dest(void)
+{
+    struct gpdest *d = dest_get(dest_unit());
+    int port = d != NULL ? device_index(port_device, d->port) : 0;
+    int sends = d != NULL ? device_index(sends_device, d->sends) : 0;
+    int on = d != NULL;
+
+    g.quiet++;
+    set(g.dport, MUIA_Disabled, !on);
+    set(g.dport_unit, MUIA_Disabled, !on);
+    nnset(g.dport, MUIA_Cycle_Active, port);
+    set(g.dport_other, MUIA_ShowMe, on && port_device[port] == NULL);
+    nnset(g.dport_other, MUIA_String_Contents, (IPTR)(on && port_device[port] == NULL ? d->port : ""));
+    nnset(g.dport_unit, MUIA_String_Integer, on ? d->port_unit : 0);
+    set(g.dsends_label, MUIA_ShowMe, on && d->has_sends);
+    set(g.dsends_row, MUIA_ShowMe, on && d->has_sends);
+    if (on && d->has_sends)
+    {
+        nnset(g.dsends, MUIA_Cycle_Active, sends);
+        set(g.dsends_other, MUIA_ShowMe, sends_device[sends] == NULL);
+        nnset(g.dsends_other, MUIA_String_Contents, (IPTR)(sends_device[sends] == NULL ? d->sends : ""));
+        nnset(g.dsends_unit, MUIA_String_Integer, d->sends_unit);
+    }
+    set(g.duri_label, MUIA_ShowMe, on && d->has_printer);
+    set(g.duri, MUIA_ShowMe, on && d->has_printer);
+    set(g.dname_label, MUIA_ShowMe, on && d->has_printer);
+    set(g.dname, MUIA_ShowMe, on && d->has_printer);
+    set(g.dformat_label, MUIA_ShowMe, on && d->has_printer);
+    set(g.dformat, MUIA_ShowMe, on && d->has_printer);
+    set(g.duuid_label, MUIA_ShowMe, on && d->has_printer);
+    set(g.duuid, MUIA_ShowMe, on && d->has_printer);
+    if (on && d->has_printer)
+    {
+        nnset(g.duri, MUIA_String_Contents, (IPTR)d->uri);
+        nnset(g.dname, MUIA_String_Contents, (IPTR)d->name);
+        nnset(g.dformat, MUIA_String_Contents, (IPTR)d->format);
+        set(g.duuid, MUIA_Text_Contents, (IPTR)(d->uuid[0] ? d->uuid : "-"));
+    }
+    g.quiet--;
+}
+
+static const char *string_of(Object *o)
+{
+    char *s = NULL;
+
+    get(o, MUIA_String_Contents, &s);
+    return s != NULL ? s : "";
+}
+
+static int integer_of(Object *o)
+{
+    IPTR v = 0;
+
+    get(o, MUIA_String_Integer, &v);
+    return (int)v;
+}
+
+/* The controls changed: what the unit is to print to. Another device brings its own settings. */
+static void edit_dest(void)
+{
+    struct gpdest *d = dest_get(dest_unit());
+    IPTR port = 0, sends = 0;
+    char device[64];
+    int unit;
+
+    if (d == NULL || g.quiet)
+        return;
+    get(g.dport, MUIA_Cycle_Active, &port);
+    snprintf(device, sizeof(device), "%s", port_device[port] != NULL ? port_device[port] : string_of(g.dport_other));
+    unit = integer_of(g.dport_unit);
+    /* a spooler queue or network unit of its own: unit numbers go together unless changed */
+    if (strcmp(device, d->port) != 0 && (strcmp(device, "printspool") == 0 || strcmp(device, "ipp") == 0))
+        unit = dest_unit();
+    if (strcmp(device, d->port) != 0 || unit != d->port_unit)
+    {
+        snprintf(d->port, sizeof(d->port), "%s", device);
+        d->port_unit = unit;
+        gpdest_follow(d);
+        show_dest();
+        return;
+    }
+    if (d->has_sends)
+    {
+        get(g.dsends, MUIA_Cycle_Active, &sends);
+        snprintf(device, sizeof(device), "%s", sends_device[sends] != NULL ? sends_device[sends] : string_of(g.dsends_other));
+        unit = integer_of(g.dsends_unit);
+        /* a queue made to print on a network printer: unit numbers go together unless changed */
+        if (strcmp(device, "ipp") == 0 && strcmp(d->sends, "ipp") != 0)
+            unit = d->port_unit;
+        if (strcmp(device, d->sends) != 0 || unit != d->sends_unit)
+        {
+            snprintf(d->sends, sizeof(d->sends), "%s", device);
+            d->sends_unit = unit;
+            gpdest_follow_sends(d);
+            show_dest();
+            return;
+        }
+    }
+    if (d->has_printer)
+    {
+        const char *uri = string_of(g.duri);
+
+        /* another address: the old printer's ID does not go with it */
+        if (strcmp(uri, d->uri) != 0)
+        {
+            d->uuid[0] = '\0';
+            set(g.duuid, MUIA_Text_Contents, (IPTR)"-");
+        }
+        snprintf(d->uri, sizeof(d->uri), "%s", uri);
+        snprintf(d->name, sizeof(d->name), "%s", string_of(g.dname));
+        snprintf(d->format, sizeof(d->format), "%s", string_of(g.dformat));
+    }
+}
+
+/* The network printer of the current printer's unit, "" when it prints elsewhere. */
+static const char *dest_uri(void)
+{
+    struct gpdest *d = dest_get(dest_unit());
+
+    return d != NULL && d->has_printer ? d->uri : "";
+}
+
+/* Writes every unit's changed settings; 0, or 1 with a reason in why. */
+static int store_dests(int save, char *why, size_t why_size)
+{
+    int u;
+
+    for (u = 0; u < GP_UNITS; u++)
+    {
+        if (!g.dest_loaded[u])
+            continue;
+        if (gpdest_store(u, &g.dest[u], &g.dest_was[u], save, why, why_size) != 0)
+            return 1;
+        g.dest_was[u] = g.dest[u];
+    }
+    return 0;
+}
+
 /* stp_vars_t for the current profile, its options applied; NULL without a model. */
 static stp_vars_t *profile_vars(const struct gp_profile *p)
 {
@@ -526,11 +739,6 @@ static void set_picture(Object *group, Object **pic, const char *path)
     DoMethod(group, MUIM_Group_ExitChange);
 }
 
-static int is_network(const char *connection)
-{
-    return strncmp(connection, "ipp://", 6) == 0 || strncmp(connection, "socket://", 9) == 0;
-}
-
 static void show_profile(void)
 {
     struct gp_profile *p = cur();
@@ -540,16 +748,24 @@ static void show_profile(void)
     g.quiet++;
     set(g.name, MUIA_String_Contents, (IPTR)(p != NULL ? p->name : ""));
     set(g.unit, MUIA_Cycle_Active, u + 1);
-    set(g.connection, MUIA_String_Contents, (IPTR)(p != NULL ? p->connection : ""));
     set(g.device_id, MUIA_Text_Contents, (IPTR)(p != NULL && p->device_id[0] ? p->device_id : "-"));
     set(g.preview_check, MUIA_Selected, p != NULL && p->preview);
     snprintf(text, sizeof(text), "%s", p != NULL ? model_long_name(p->model) : "");
     set(g.model_text, MUIA_Text_Contents, (IPTR)text);
     set_picture(g.pic_group, &g.pic, p != NULL ? p->picture : NULL);
-    snprintf(text, sizeof(text), "\33b%s\33n\n%s", p != NULL ? p->name : "",
-        p == NULL ? "" : p->connection[0] ? p->connection : "Connection set in Printer prefs");
-    set(g.about, MUIA_Text_Contents, (IPTR)text);
     g.quiet--;
+    show_dest();
+    {
+        struct gpdest *d = dest_get(u);
+
+        if (d == NULL)
+            snprintf(text, sizeof(text), "\33b%s\33n\nNot on a printer unit", p != NULL ? p->name : "");
+        else if (d->has_printer)
+            snprintf(text, sizeof(text), "\33b%s\33n\nUnit %d: %s", p->name, u, d->name[0] ? d->name : d->uri);
+        else
+            snprintf(text, sizeof(text), "\33b%s\33n\nUnit %d: %s %d", p->name, u, d->port, d->port_unit);
+        set(g.about, MUIA_Text_Contents, (IPTR)text);
+    }
     select_maker_of_current();
 }
 
@@ -1139,6 +1355,15 @@ AROS_UFH3(IPTR, maker_func, AROS_UFHA(struct Hook *, hook, A0),
     AROS_USERFUNC_EXIT
 }
 
+/* Sets a printer's model. Gutenprint's PostScript models render nothing without
+   a PPD file, so one that has none gets the generic one. */
+static void set_model(struct gp_profile *p, const char *driver)
+{
+    snprintf(p->model, sizeof(p->model), "%s", driver);
+    if (strncmp(driver, "ps", 2) == 0 && gpprofile_get(p, "PPDFile") == NULL)
+        gpprofile_set(p, "PPDFile", "GUTENPRINT:ppd/Generic.ppd");
+}
+
 AROS_UFH3(IPTR, model_func, AROS_UFHA(struct Hook *, hook, A0),
     AROS_UFHA(Object *, obj, A2), AROS_UFHA(IPTR *, msg, A1))
 {
@@ -1152,7 +1377,7 @@ AROS_UFH3(IPTR, model_func, AROS_UFHA(struct Hook *, hook, A0),
     get(g.models, MUIA_List_Active, &active);
     if ((LONG)active < 0 || (LONG)active >= g.nfiltered)
         return 0;
-    snprintf(p->model, sizeof(p->model), "%s", g.model_driver[g.filtered[active]]);
+    set_model(p, g.model_driver[g.filtered[active]]);
     show_profile();
     push_rebuild();
     return 0;
@@ -1209,11 +1434,12 @@ AROS_UFH3(IPTR, unit_func, AROS_UFHA(struct Hook *, hook, A0),
     if (active > 0)
         snprintf(g.units[active - 1], sizeof(g.units[0]), "%s", p->name);
     fill_profile_list();
+    show_profile();
     return 0;
     AROS_USERFUNC_EXIT
 }
 
-enum { MISC_ADD = 1, MISC_COPY, MISC_REMOVE, MISC_LEVEL, MISC_DEFAULTS, MISC_CONNECTION,
+enum { MISC_ADD = 1, MISC_COPY, MISC_REMOVE, MISC_LEVEL, MISC_DEFAULTS, MISC_DEST,
     MISC_FIND, MISC_FOUND_SELECT, MISC_FOUND_USE, MISC_FOUND_CANCEL, MISC_FOUND_STATUS,
     MISC_STATUS, MISC_STATUS_REFRESH, MISC_STATUS_CLOSE, MISC_PREVIEW };
 
@@ -1286,22 +1512,17 @@ static const char *model_for(const struct gp_found *f)
     return NULL;
 }
 
-/* Fills a printer's connection, picture, model and paper in from a network printer
+/* Fills a printer's picture, model and paper in from a network printer
    found; returns the Gutenprint model chosen, NULL when there is none. */
 static const char *adopt_found(struct gp_profile *p, const struct gp_found *f)
 {
     const char *driver, *paper;
 
-    snprintf(p->connection, sizeof(p->connection), "%s", f->uri);
     snprintf(p->device_id, sizeof(p->device_id), "MDL:%s;CMD:%s;", f->model, f->formats);
     snprintf(p->picture, sizeof(p->picture), "%s", f->picture);
     driver = model_for(f);
     if (driver != NULL)
-    {
-        snprintf(p->model, sizeof(p->model), "%s", driver);
-        if (strcmp(driver, "ps2") == 0)
-            gpprofile_set(p, "PPDFile", "GUTENPRINT:ppd/Generic.ppd");
-    }
+        set_model(p, driver);
     paper = gpfind_page_size(f->paper);
     if (paper != NULL)
         gpprofile_set(p, "PageSize", paper);
@@ -1345,6 +1566,9 @@ static void use_found(int i)
             snprintf(g.units[k], sizeof(g.units[k]), "%s", p->name);
             u = k;
         }
+    if (u >= 0)
+        gpdest_network(dest_get(u), u, f->uri, f->model[0] ? f->model : f->name, f->uuid,
+            format_for(driver != NULL ? driver : ""));
     fill_profile_list();
     show_profile();
     push_rebuild();
@@ -1354,7 +1578,7 @@ static void use_found(int i)
     else if (u < 0)
         snprintf(text, sizeof(text), "%s: bind it to a printer.device unit, then Use or Save.", p->name);
     else
-        snprintf(text, sizeof(text), "%s on unit %d through the network: Use or Save to print to it.", p->name, u);
+        snprintf(text, sizeof(text), "%s on unit %d: Use or Save sets it to print through print queue %d.", p->name, u, u);
     set_status(text);
 }
 
@@ -1410,7 +1634,7 @@ static void open_status(const char *uri, const char *name, const char *picture)
 
     if (uri == NULL || strncmp(uri, "ipp://", 6) != 0)
     {
-        set_status("Status is for printers on the network (an ipp:// connection).");
+        set_status("Status is for a printer on the network (ipp://).");
         return;
     }
     snprintf(g.status_uri, sizeof(g.status_uri), "%s", uri);
@@ -1538,7 +1762,7 @@ AROS_UFH3(IPTR, misc_func, AROS_UFHA(struct Hook *, hook, A0),
     }
     case MISC_STATUS:
         if (p != NULL)
-            open_status(p->connection, p->name, p->picture);
+            open_status(dest_uri(), p->name, p->picture);
         break;
     case MISC_STATUS_REFRESH:
         refresh_status();
@@ -1546,14 +1770,8 @@ AROS_UFH3(IPTR, misc_func, AROS_UFHA(struct Hook *, hook, A0),
     case MISC_STATUS_CLOSE:
         set(g.swin, MUIA_Window_Open, FALSE);
         break;
-    case MISC_CONNECTION:
-        if (p != NULL && !g.quiet)
-        {
-            char *s = NULL;
-
-            get(g.connection, MUIA_String_Contents, &s);
-            snprintf(p->connection, sizeof(p->connection), "%s", s != NULL ? s : "");
-        }
+    case MISC_DEST:
+        edit_dest();
         break;
     case MISC_PREVIEW:
         if (p != NULL && !g.quiet)
@@ -1617,9 +1835,9 @@ AROS_UFH3(IPTR, rexx_func, AROS_UFHA(struct Hook *, hook, A0),
         find_printers();
         return g.nfound > 0 ? 0 : 5;
     case RX_STATUS:
-        if (p == NULL || strncmp(p->connection, "ipp://", 6) != 0)
+        if (p == NULL || strncmp(dest_uri(), "ipp://", 6) != 0)
             return 10;
-        open_status(p->connection, p->name, p->picture);
+        open_status(dest_uri(), p->name, p->picture);
         return 0;
     case RX_CHOOSE:
         i = atoi((const char *)args[0]);
@@ -1642,7 +1860,7 @@ AROS_UFH3(IPTR, rexx_func, AROS_UFHA(struct Hook *, hook, A0),
     case RX_MODEL:
         if (p == NULL || stp_get_printer_by_driver((const char *)args[0]) == NULL)
             return 10;
-        snprintf(p->model, sizeof(p->model), "%s", (const char *)args[0]);
+        set_model(p, (const char *)args[0]);
         show_profile();
         push_rebuild();
         return 0;
@@ -1917,9 +2135,39 @@ static Object *build_window(void)
                                 End), MUIA_CycleChain, TRUE, End),
                             End),
                         Child, (IPTR)(ColGroup(2),
-                            Child, (IPTR)Label2("Connection"),
-                            Child, (IPTR)(g.connection = StringObject, StringFrame, MUIA_CycleChain, TRUE,
+                            Child, (IPTR)Label1("Prints to"),
+                            Child, (IPTR)(HGroup,
+                                Child, (IPTR)(g.dport = CycleObject, MUIA_Cycle_Entries, (IPTR)port_label,
+                                    MUIA_CycleChain, TRUE, End),
+                                Child, (IPTR)(g.dport_other = StringObject, StringFrame, MUIA_ShowMe, FALSE,
+                                    MUIA_String_MaxLen, 32, MUIA_CycleChain, TRUE, End),
+                                Child, (IPTR)Label2("Unit"),
+                                Child, (IPTR)(g.dport_unit = StringObject, StringFrame, MUIA_Weight, 15,
+                                    MUIA_String_Accept, (IPTR)"0123456789", MUIA_String_Integer, 0,
+                                    MUIA_CycleChain, TRUE, End),
+                                End),
+                            Child, (IPTR)(g.dsends_label = Label1("Queue sends to")),
+                            Child, (IPTR)(g.dsends_row = HGroup,
+                                Child, (IPTR)(g.dsends = CycleObject, MUIA_Cycle_Entries, (IPTR)sends_label,
+                                    MUIA_CycleChain, TRUE, End),
+                                Child, (IPTR)(g.dsends_other = StringObject, StringFrame, MUIA_ShowMe, FALSE,
+                                    MUIA_String_MaxLen, 32, MUIA_CycleChain, TRUE, End),
+                                Child, (IPTR)Label2("Unit"),
+                                Child, (IPTR)(g.dsends_unit = StringObject, StringFrame, MUIA_Weight, 15,
+                                    MUIA_String_Accept, (IPTR)"0123456789", MUIA_String_Integer, 0,
+                                    MUIA_CycleChain, TRUE, End),
+                                End),
+                            Child, (IPTR)(g.duri_label = Label2("Network printer")),
+                            Child, (IPTR)(g.duri = StringObject, StringFrame, MUIA_CycleChain, TRUE,
                                 MUIA_String_MaxLen, 255, End),
+                            Child, (IPTR)(g.dname_label = Label2("Printer name")),
+                            Child, (IPTR)(g.dname = StringObject, StringFrame, MUIA_CycleChain, TRUE,
+                                MUIA_String_MaxLen, 255, End),
+                            Child, (IPTR)(g.dformat_label = Label2("Format")),
+                            Child, (IPTR)(g.dformat = StringObject, StringFrame, MUIA_CycleChain, TRUE,
+                                MUIA_String_MaxLen, 255, End),
+                            Child, (IPTR)(g.duuid_label = Label2("Printer ID")),
+                            Child, (IPTR)(g.duuid = TextObject, TextFrame, MUIA_Text_SetMin, FALSE, End),
                             Child, (IPTR)Label2("Device ID"),
                             Child, (IPTR)(g.device_id = TextObject, TextFrame, MUIA_Text_SetMin, FALSE, End),
                             Child, (IPTR)Label1("Preview"),
@@ -2044,10 +2292,16 @@ static int setup_headless(const char *uri, const char *formats, int unit, int sa
     if (f.name[0] == '\0')
         snprintf(f.name, sizeof(f.name), "%s", f.model[0] ? f.model : "Network printer");
 
-    /* The printer already set up for this connection, or a new one named after it. */
-    for (i = 0; i < g.nprofiles; i++)
-        if (strcmp(g.profile[i].connection, uri) == 0)
-            p = &g.profile[i];
+    /* The printer on a unit that prints to this address already, or a new one named after it. */
+    for (k = 0; k < GP_UNITS && p == NULL; k++)
+    {
+        struct gpdest *d = g.units[k][0] ? dest_get(k) : NULL;
+
+        if (d != NULL && d->has_printer && strcmp(d->uri, uri) == 0)
+            for (i = 0; i < g.nprofiles; i++)
+                if (strcmp(g.profile[i].name, g.units[k]) == 0)
+                    p = &g.profile[i];
+    }
     if (p == NULL)
     {
         if (g.nprofiles == GP_MAX_PROFILES)
@@ -2092,14 +2346,15 @@ static int setup_headless(const char *uri, const char *formats, int unit, int sa
     }
     if (save)
         save_to(GP_ENVARC_DIR);     /* fails harmlessly on a read-only disk */
-    format = strncmp(driver, "ps", 2) == 0 ? "application/postscript" : "application/octet-stream";
-    if (gpfind_setup_unit(unit, uri, p->name, format, save, why, sizeof(why)) != 0
-        && gpfind_setup_unit(unit, uri, p->name, format, 0, why, sizeof(why)) != 0)
+    format = format_for(driver);
+    gpdest_network(dest_get(unit), unit, uri, p->name, f.uuid, format);
+    /* on a read-only disk, until reboot */
+    if (store_dests(save, why, sizeof(why)) != 0 && store_dests(0, why, sizeof(why)) != 0)
     {
         printf("GutenprintPrefs: %s\n", why);
         return 10;
     }
-    printf("GutenprintPrefs: %s is printer %d (%s)\n", p->name, unit, driver);
+    printf("GutenprintPrefs: %s is printer %d (%s), print queue %d\n", p->name, unit, driver, unit);
     return 0;
 }
 
@@ -2223,7 +2478,15 @@ int main(void)
     notify_misc(g.remove, MUIA_Pressed, FALSE, MISC_REMOVE);
     notify_misc(g.level, MUIA_Cycle_Active, MUIV_EveryTime, MISC_LEVEL);
     notify_misc(g.defaults, MUIA_Pressed, FALSE, MISC_DEFAULTS);
-    notify_misc(g.connection, MUIA_String_Contents, MUIV_EveryTime, MISC_CONNECTION);
+    notify_misc(g.dport, MUIA_Cycle_Active, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dport_other, MUIA_String_Acknowledge, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dport_unit, MUIA_String_Acknowledge, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dsends, MUIA_Cycle_Active, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dsends_other, MUIA_String_Acknowledge, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dsends_unit, MUIA_String_Acknowledge, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.duri, MUIA_String_Contents, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dname, MUIA_String_Contents, MUIV_EveryTime, MISC_DEST);
+    notify_misc(g.dformat, MUIA_String_Contents, MUIV_EveryTime, MISC_DEST);
     notify_misc(g.preview_check, MUIA_Selected, MUIV_EveryTime, MISC_PREVIEW);
     notify_misc(g.find, MUIA_Pressed, FALSE, MISC_FIND);
     notify_misc(g.flist, MUIA_List_Active, MUIV_EveryTime, MISC_FOUND_SELECT);
@@ -2293,30 +2556,10 @@ int main(void)
             }
             {
                 char why[160];
-                int u, failed = 0;
 
-                for (u = 0; u < GP_UNITS && !failed; u++)
+                if (store_dests(id == 1, why, sizeof(why)) != 0)
                 {
-                    struct gp_profile *bound = NULL;
-                    int k;
-
-                    for (k = 0; k < g.nprofiles; k++)
-                        if (g.units[u][0] && strcmp(g.profile[k].name, g.units[u]) == 0)
-                            bound = &g.profile[k];
-                    if (bound == NULL || !is_network(bound->connection))
-                        continue;
-                    if (gpfind_setup_unit(u, bound->connection, bound->name,
-                            strncmp(bound->model, "ps", 2) == 0 ? "application/postscript" : "application/octet-stream",
-                            id == 1, why, sizeof(why)) != 0)
-                    {
-                        set_status(why);
-                        failed = 1;
-                    }
-                    else
-                        printf("GutenprintPrefs: unit %d prints to %s through ipp.device\n", u, bound->connection);
-                }
-                if (failed)
-                {
+                    set_status(why);
                     rc = 10;
                     break;
                 }

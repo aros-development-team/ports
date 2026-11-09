@@ -63,9 +63,9 @@ CORE := core/gpjob core/gpprofile core/gpcolor
 
 # GutenprintPrefs: the settings window Printer prefs opens for the driver
 %build_prog mmake=ports-print-gutenprint-prefs progname=GutenprintPrefs \
-    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/,prefs/gutenprintprefs prefs/gpfind core/gpjob core/gpprofile)" \
+    files="$(addprefix $(SRCDIR)/$(CURDIR)/src/,prefs/gutenprintprefs prefs/gpfind prefs/gpdest core/gpjob core/gpprofile)" \
     targetdir=$(TARGETDIR) cflags="$(CFLAGS) $(GP_INCLUDES)" \
-    uselibs="mui cybergraphics" ldflags="$(LDFLAGS) $(GP_LIB) -lm"
+    uselibs="mui cybergraphics iffparse" ldflags="$(LDFLAGS) $(GP_LIB) -lm"
 
 # gp-render prints a PPM through Gutenprint into a file; gp-query shows what
 # an application sees of a printer.device unit; gp-dumptest prints through

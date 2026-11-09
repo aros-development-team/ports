@@ -192,6 +192,8 @@ static LONG gp_ImageWidth, gp_ImageHeight, gp_Row;
 static LONG gp_PlaceLeft, gp_PlaceTop, gp_PlaceWidth, gp_PlaceHeight;
 static ULONG gp_JobID;
 static BOOL gp_JobOpen;
+static BOOL gp_Asked;           /* this job asked for a printer model already */
+static BOOL gp_NoModel;         /* ... and got none: the job is dropped */
 
 static LONG gp_Init(struct PrinterData *pd)
 {
@@ -216,6 +218,7 @@ static VOID gp_Expunge(VOID)
 
 static LONG gp_Call(struct GPMsg *m);
 static LONG gp_Geometry(void);
+static LONG gp_JobGeometry(void);
 static LONG gp_TextFlush(void);
 static void gp_TextFree(void);
 
@@ -226,6 +229,7 @@ static LONG gp_Open(union printerIO *ior)
        every close. */
     gp_JobID = GetUniqueID();
     gp_JobOpen = FALSE;
+    gp_Asked = gp_NoModel = FALSE;
     gp_AreaWidth = gp_AreaHeight = 0;
     /* The printer is known from the first moment the application can look:
        its page goes into the extended data and the preferences now. */
@@ -343,10 +347,17 @@ static LONG gp_Call(struct GPMsg *m)
 
 static LONG gp_RenderPreInit(struct IODRPReq *io, LONG flags)
 {
-    (void)io;
     (void)flags;
+    /* printer.device also asks once as the unit starts, with no dump: a printer
+       without a model must still open, or its settings (PRD_EDITPREFS), where
+       the model is chosen, could never be reached. */
+    if (io == NULL)
+    {
+        gp_Geometry();
+        return PDERR_NOERR;
+    }
     /* Asked again for every dump: the profile may have changed since open. */
-    return gp_Geometry();
+    return gp_JobGeometry();
 }
 
 static LONG gp_RenderInit(struct IODRPReq *io, LONG width, LONG height)
@@ -610,7 +621,35 @@ static LONG gp_EditPrefs(void)
         bug("[Gutenprint] unit %lu: cannot run %s\n", (unsigned long)unit, GP_PREFS);
         return IOERR_OPENFAIL;
     }
-    return gp_Geometry();
+    /* The page as the editor left it; a printer still without a model edited
+       fine, and refuses to print until it has one. */
+    gp_NoModel = FALSE;
+    gp_Geometry();
+    return PDERR_NOERR;
+}
+
+/* The page for a job. A printer without a model asks for one, once per job, in
+   its own settings; when none is chosen the job is dropped. */
+static LONG gp_JobGeometry(void)
+{
+    LONG err;
+
+    if (gp_NoModel)
+        return PDERR_CANCEL;
+    err = gp_Geometry();
+    if (err != PDERR_NOERR && !gp_Asked)
+    {
+        gp_Asked = TRUE;
+        bug("[Gutenprint] unit %ld: no printer model yet, asking for one\n", (long)PD->pd_UnitNumber);
+        if (gp_EditPrefs() == PDERR_NOERR)
+            err = gp_Geometry();
+    }
+    if (err != PDERR_NOERR)
+    {
+        gp_NoModel = TRUE;
+        bug("[Gutenprint] unit %ld: no printer model chosen, the job is dropped\n", (long)PD->pd_UnitNumber);
+    }
+    return err;
 }
 
 /* The V44 preferences commands. The profile files belong to GutenprintPrefs,
@@ -623,6 +662,7 @@ static LONG gp_DoPreferences(union printerIO *ior, LONG command)
         return gp_ReadPrefs((struct IOPrefsReq *)ior);
     case PRD_LOADPREFS:
     case PRD_USEPREFS:
+        gp_NoModel = FALSE;
         return gp_Geometry();
     case PRD_EDITPREFS:
         return gp_EditPrefs();
@@ -650,7 +690,7 @@ static BOOL gp_TextStart(void)
 
     if (gp_Text != NULL)
         return TRUE;
-    if (gp_AreaWidth <= 0 && gp_Geometry() != PDERR_NOERR)
+    if (gp_AreaWidth <= 0 && gp_JobGeometry() != PDERR_NOERR)
         return FALSE;
     if (gp_TextFont == NULL)
     {

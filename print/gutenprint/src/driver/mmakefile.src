@@ -2,13 +2,14 @@
 
 include $(SRCDIR)/config/aros-contrib.cfg
 
-# The printer.device driver: takes the page dumps and hands them to GutenprintRender
+# The printer.device driver: takes the page dumps and hands them to GutenprintRender.
+# It goes with the other printer drivers, where printer.device and Printer prefs look.
 USER_CFLAGS  := -D__GRAPHICS_NOLIBBASE__
 USER_LDFLAGS := -static
 
 #MM  ports-print-gutenprint-driver : includes linklibs
 
 %build_module_simple mmake=ports-print-gutenprint-driver modname=Gutenprint \
-    modtype=printer files=gutenprint moduledir=$(AROS_CONTRIB)/Devs/Printers
+    modtype=printer files=gutenprint moduledir=$(AROS_DEVS)/Printers
 
 %common
